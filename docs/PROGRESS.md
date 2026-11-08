@@ -76,7 +76,8 @@ check for its subsystem in `SmokeRunner`.
 
 Measured on the M5 dev Mac (release build): demo running with no window
 0% CPU; Settings open on General (demo card) ~1–2%; on Sound (live
-spectrum, 30 fps) ~0.2%. Cold compile of EdgeLight.metal ~280 ms.
+spectrum, 30 fps) ~0.2%. EdgeLight.metal compiles in ~280 ms cold; Metal's
+shader cache answers later launches in ~1 ms.
 
 Logs: `~/Library/Logs/Ahenk/Ahenk.log` (rolls at 1 MB, keeps 3) and the unified
 log, subsystem `com.sinanmertsener.Ahenk`. Settings:
