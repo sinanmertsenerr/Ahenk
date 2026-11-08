@@ -94,6 +94,24 @@ enum QuickMenu {
             menu.addItem(.separator())
         }
 
+        // Until macOS has been asked, the light cannot hear the music: a
+        // hint that asks (only when chosen).
+        let audio = environment.audio
+        if placement == .menuBar, audio.needsPermission {
+            let allow = ClosureMenuItem(title: "Allow Listening…".l10n) { [weak audio] in
+                audio?.requestPermission()
+            }
+            allow.image = symbol("waveform")
+            let detail = "So the light can move with the beat".l10n
+            if #available(macOS 14.4, *) {
+                allow.subtitle = detail
+            } else {
+                allow.toolTip = detail
+            }
+            menu.addItem(allow)
+            menu.addItem(.separator())
+        }
+
         for toggle in QuickToggle.allCases {
             let item = ClosureMenuItem(title: toggle.title) { [weak settings] in
                 settings?.flip(toggle)
@@ -195,6 +213,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         QuickMenu.populate(menu, environment: environment, placement: .menuBar)
+        // For the next time the menu opens (read without a prompt).
+        environment.audio.refreshPermission()
     }
 }
 

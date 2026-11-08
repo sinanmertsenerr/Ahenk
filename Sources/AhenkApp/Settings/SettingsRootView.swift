@@ -48,7 +48,7 @@ struct SettingsDetail: View {
         case .player: PlayerPane(settings: settings)
         case .lyrics: LyricsPane(settings: settings)
         case .wallpaper: WallpaperPane(settings: settings)
-        case .sound: SoundPane(model: environment.nowPlaying, settings: settings)
+        case .sound: SoundPane(audio: environment.audio, apps: environment.services.apps, settings: settings)
         case .stickers: StickersPane(settings: settings)
         case .about: AboutPane()
         }

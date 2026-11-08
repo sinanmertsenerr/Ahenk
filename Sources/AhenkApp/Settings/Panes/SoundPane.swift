@@ -2,7 +2,8 @@ import AhenkKit
 import SwiftUI
 
 struct SoundPane: View {
-    let model: NowPlayingModel
+    let audio: AudioTapEngine
+    let apps: AppDirectory
     @Bindable var settings: AppSettings
 
     var body: some View {
@@ -10,15 +11,46 @@ struct SoundPane: View {
             pane: .sound,
             summary: "Ahenk listens only to the sound of the music app, never to the microphone, and records nothing.".l10n
         ) {
+            Section {
+                LabeledContent("Status".l10n) {
+                    Text(audio.statusText(appName: apps.name(for:)))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
+                }
+                if !audio.isDemo {
+                    LabeledContent("System audio access".l10n) {
+                        HStack(spacing: 10) {
+                            Text(audio.permission.title)
+                                .foregroundStyle(.secondary)
+                            switch audio.permission {
+                            case .notDetermined, .unknown:
+                                Button("Allow Listening…".l10n) { audio.requestPermission() }
+                            case .denied:
+                                Button("Open System Settings…".l10n) { audio.openPrivacySettings() }
+                            case .authorized:
+                                EmptyView()
+                            }
+                        }
+                    }
+                }
+            } header: {
+                Text("Listening".l10n)
+            } footer: {
+                if audio.permission == .denied, !audio.isDemo {
+                    Text("Turn Ahenk on under Privacy & Security › Screen & System Audio Recording › System Audio Recording Only, then come back.".l10n)
+                } else {
+                    Text("macOS asks once whether Ahenk may hear your Mac's sound. Ahenk hears only the app that plays your music, never the microphone; the sound is analyzed in memory and never recorded or saved. Videos and podcasts do not move the light.".l10n)
+                }
+            }
+
             Section("Beat".l10n) {
                 SliderRow(
                     title: "Sensitivity".l10n, value: $settings.audio.sensitivity,
                     range: AudioAnalysisSettings.sensitivityRange, step: 0.05, format: ValueFormat.multiplier
                 )
-                LabeledContent("Live spectrum".l10n) {
-                    SpectrumView(model: model)
-                        .frame(width: 230, height: 24)
-                }
+                AudioMonitor(audio: audio, idleText: audio.monitorIdleText)
+                    .frame(height: AudioMonitorView.height)
+                    .accessibilityLabel("Live spectrum".l10n)
             }
 
             Section("Sound Effects".l10n) {
@@ -57,89 +89,50 @@ struct SoundPane: View {
                 Text("Equalizer".l10n)
             }
         }
+        .onAppear { audio.refreshPermission() }
     }
 }
 
-/// Live bars from the current audio features.
-///
-/// Drawn by a leaf AppKit view that redraws itself: a SwiftUI timeline in
-/// this long Form would re-lay out the whole window on every frame (tens of
-/// percent CPU). Runs only while music plays and the window is visible.
-struct SpectrumView: NSViewRepresentable {
-    let model: NowPlayingModel
-
-    func makeNSView(context: Context) -> SpectrumBarsView {
-        let view = SpectrumBarsView()
-        view.features = { [weak model] in
-            guard let model, model.isPlaying else { return nil }
-            return model.featureSource?.currentFeatures()
+extension AudioCapturePermission {
+    @MainActor
+    var title: String {
+        switch self {
+        case .authorized: "Allowed".l10n
+        case .denied: "Denied".l10n
+        case .notDetermined: "Not asked yet".l10n
+        case .unknown: "Unknown".l10n
         }
-        return view
-    }
-
-    func updateNSView(_ view: SpectrumBarsView, context: Context) {
-        view.isActive = model.isPlaying
-        view.idleText = "Waiting for music".l10n
-        view.bpmText = { bpm in L10n.format("%@ BPM", ValueFormat.number(Double(bpm), digits: 0)) }
     }
 }
 
-final class SpectrumBarsView: NSView {
-    var features: () -> AudioFeatures? = { nil }
-    var idleText = "" { didSet { needsDisplay = true } }
-    var bpmText: (Float) -> String = { _ in "" }
-    var isActive = false { didSet { if isActive != oldValue { updateTimer() } } }
-
-    private var timer: Timer?
-    private static let barCount = AudioFeatures.spectrumCount
-    private static let labelWidth: CGFloat = 70
-
-    override var intrinsicContentSize: NSSize { NSSize(width: 230, height: 24) }
-    override var isFlipped: Bool { true }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        updateTimer()
-    }
-
-    private func updateTimer() {
-        let shouldRun = isActive && window != nil
-        if shouldRun, timer == nil {
-            let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
-                guard let self, let window = self.window, window.occlusionState.contains(.visible) else { return }
-                self.needsDisplay = true
+extension AudioTapEngine {
+    /// "Listening to Spotify", "Waiting for music", …
+    func statusText(appName: (String) -> String) -> String {
+        if !isDemo {
+            switch permission {
+            case .denied: return "Not allowed in System Settings".l10n
+            case .notDetermined: return "Waiting for your permission".l10n
+            case .unknown, .authorized: break
             }
-            RunLoop.main.add(timer, forMode: .common)
-            self.timer = timer
-        } else if !shouldRun {
-            timer?.invalidate()
-            timer = nil
         }
-        needsDisplay = true
+        switch status.state {
+        case .idle: return "Waiting for music".l10n
+        case .notMusic: return "Not listening: what plays is not music".l10n
+        case .needsPermission: return "Waiting for your permission".l10n
+        case .denied: return "Not allowed in System Settings".l10n
+        case .retrying: return "Could not start listening; trying again".l10n
+        case .listening(.demo): return "Listening to the demo beat".l10n
+        case .listening(.everything): return "Listening to every app (the music app's sound was not found)".l10n
+        case .listening(.app(let target)):
+            let name = target.bundleIdentifier.map(appName) ?? target.source.title
+            return L10n.format("Listening to %@", name)
+        }
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        let current = isActive ? features() : nil
-        let barsWidth = bounds.width - Self.labelWidth - 8
-        let slot = barsWidth / CGFloat(Self.barCount)
-        NSColor.controlAccentColor.setFill()
-        for band in 0..<Self.barCount {
-            let level = CGFloat(current?.spectrum[band] ?? 0)
-            let height = max(2, level * bounds.height)
-            let rect = NSRect(x: CGFloat(band) * slot + 1, y: bounds.height - height, width: max(2, slot - 3), height: height)
-            NSBezierPath(roundedRect: rect, xRadius: 1.5, yRadius: 1.5).fill()
-        }
-        let text = current.map { bpmText($0.bpm) } ?? idleText
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular),
-            .foregroundColor: NSColor.secondaryLabelColor,
-        ]
-        let size = (text as NSString).size(withAttributes: attributes)
-        let origin = NSPoint(x: bounds.width - size.width, y: (bounds.height - size.height) / 2)
-        (text as NSString).draw(at: origin, withAttributes: attributes)
-    }
-
-    deinit {
-        timer?.invalidate()
+    /// Shown over the monitor while nothing is analysed.
+    var monitorIdleText: String {
+        if !isDemo, permission == .denied || permission == .notDetermined { return "Listening is not allowed yet".l10n }
+        if case .notMusic = status.state { return "Not music".l10n }
+        return "Waiting for music".l10n
     }
 }
