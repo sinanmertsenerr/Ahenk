@@ -210,12 +210,19 @@ final class SmokeRunner {
             guard Date() < deadline else { throw SmokeFailure("The model did not receive song, cover and lyrics within 5 s") }
             try await Task.sleep(for: .milliseconds(20))
         }
-        guard let features = model.featureSource?.currentFeatures(), !features.isSilent else {
-            throw SmokeFailure("No audio features while playing")
+        // The demo beat plays through the audio engine's analysis.
+        environment.audio.start(hub: services.hub, settings: environment.settings)
+        guard let source = model.featureSource, source === environment.audio.store else {
+            throw SmokeFailure("the model does not read the audio engine's features")
+        }
+        let featureDeadline = Date().addingTimeInterval(3)
+        while source.currentFeatures().isSilent {
+            guard Date() < featureDeadline else { throw SmokeFailure("No audio features from the demo beat within 3 s") }
+            try await Task.sleep(for: .milliseconds(20))
         }
         let title = model.snapshot?.track.title ?? "?"
         guard services.state.activeID?.source == .demo else { throw SmokeFailure("the hub does not follow the demo") }
-        return "\u{201C}\(title)\u{201D} through the hub, with cover, \(model.lyrics?.lines.count ?? 0) lyric lines and live features"
+        return "\u{201C}\(title)\u{201D} through the hub, with cover, \(model.lyrics?.lines.count ?? 0) lyric lines and live features from the analyzed demo beat"
     }
 
     /// Decodes, crops and colours generated covers through the real

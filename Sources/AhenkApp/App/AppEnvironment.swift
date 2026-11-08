@@ -12,6 +12,8 @@ final class AppEnvironment {
     let nowPlaying: NowPlayingModel
     /// The hub and every source (or the demo alone in `--demo`/`--smoke`).
     let services: NowPlayingServices
+    /// Listening and the audio features (`audio.store` is `services.features`).
+    let audio: AudioTapEngine
     /// Present in `--demo` and `--smoke`.
     let demo: DemoProvider?
     /// Step 9 replaces the placeholder with the real Clear Desk.
@@ -24,6 +26,8 @@ final class AppEnvironment {
         self.settings = settings
         self.demo = demo
         self.nowPlaying = NowPlayingModel()
+        let audio = AudioTapEngine(demo: demo)
+        self.audio = audio
         if let demo {
             // The second demo player starts two songs later.
             let second = options.demoConflict
@@ -32,9 +36,9 @@ final class AppEnvironment {
                     id: "demo-b", bundleIdentifier: "com.sinanmertsener.Ahenk.demo-b"
                 )
                 : nil
-            services = .demo(demo, second: second, settings: settings)
+            services = .demo(demo, second: second, settings: settings, features: audio.store)
         } else {
-            services = .live(settings: settings)
+            services = .live(settings: settings, features: audio.store)
         }
     }
 

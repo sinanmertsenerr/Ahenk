@@ -56,6 +56,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment.nowPlaying.attach(
             provider: services.hub, artwork: services.artwork, lyrics: services.lyrics, features: services.features
         )
+        // Listens to the followed player's app while music plays.
+        environment.audio.start(hub: services.hub, settings: settings)
 
         observers.append(ChangeObserver({ settings.general.language }) { [weak self] language in
             guard let self else { return }
@@ -127,6 +129,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         // Later steps restore the user's desktop here (wallpaper, hidden apps).
+        // Removes the process tap and its private aggregate device.
+        environment.audio.stop()
         environment.nowPlaying.detach()
         // Ends the MediaRemote adapter child process.
         environment.services.stop()

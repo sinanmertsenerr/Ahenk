@@ -96,8 +96,8 @@ final class NowPlayingServices {
         adapterHealth = isDemo ? .stopped : (mediaRemote == nil ? .missing : .stopped)
     }
 
-    /// Every real source.
-    static func live(settings: AppSettings) -> NowPlayingServices {
+    /// Every real source. `features` is the audio engine's store.
+    static func live(settings: AppSettings, features: any AudioFeatureSource) -> NowPlayingServices {
         let resolver = ResolverBox()
         let mediaRemote = AdapterLocator.invocation().map { invocation in
             MediaRemoteProvider(adapter: MediaRemoteAdapter(invocation: invocation), resolver: { resolver.resolver })
@@ -125,7 +125,7 @@ final class NowPlayingServices {
 
         return NowPlayingServices(
             hub: NowPlayingHub(inputs: inputs, configuration: configuration(settings)),
-            artwork: pipeline, lyrics: nil, features: nil,
+            artwork: pipeline, lyrics: nil, features: features,
             recentlyPlayed: RecentlyPlayedStore(fileURL: RecentlyPlayedStore.standardURL),
             isDemo: false, mediaRemote: mediaRemote, appleMusic: appleMusic, spotify: spotify,
             resolver: resolver, storefront: storefront, diskCache: disk
@@ -134,13 +134,14 @@ final class NowPlayingServices {
 
     /// The invented demo songs (`--demo`, `--smoke`). `second` adds another
     /// demo player so the "several sources play" question can be seen.
-    static func demo(_ demo: DemoProvider, second: DemoProvider?, settings: AppSettings) -> NowPlayingServices {
+    /// `features` is the audio engine's store, fed by the demo beat.
+    static func demo(_ demo: DemoProvider, second: DemoProvider?, settings: AppSettings, features: any AudioFeatureSource) -> NowPlayingServices {
         var inputs: [HubInput] = [.provider(demo, priority: HubInput.dedicatedPriority)]
         if let second { inputs.append(.provider(second, id: "demo-b", priority: HubInput.dedicatedPriority)) }
         return NowPlayingServices(
             hub: NowPlayingHub(inputs: inputs, configuration: configuration(settings)),
             artwork: RoutingArtworkProvider(routes: [.demo: demo], fallback: nil),
-            lyrics: demo, features: demo,
+            lyrics: demo, features: features,
             recentlyPlayed: RecentlyPlayedStore(fileURL: nil),
             isDemo: true, mediaRemote: nil, appleMusic: nil, spotify: nil,
             resolver: ResolverBox(), storefront: StorefrontBox(nil), diskCache: nil
