@@ -1,0 +1,32 @@
+# SwiftPM
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+
+# Build output: assembled app bundle, entitlements copies, archives
+dist/
+*.app
+*.dmg
+*.zip
+
+# mediaremote-adapter build output (Scripts/build-adapter.sh)
+Vendor/mediaremote-adapter/build/
+
+# macOS
+.DS_Store
+
+# Editors and local tooling
+.vscode/
+.idea/
+.history/
+.claude/
+
+# Local planning notes. PLAN.md points at private reference material on the
+# author's Mac, so it stays out of the public repository.
+docs/PLAN.md
