@@ -66,20 +66,31 @@ enum QuickMenu {
         menu.autoenablesItems = false
         let settings = environment.settings
 
+        let services = environment.services
         if let snapshot = environment.nowPlaying.snapshot {
             let header = environment.options.usesDemoContent ? "Now Playing (Demo)".l10n : "Now Playing".l10n
             menu.addItem(NSMenuItem.sectionHeader(title: header))
             let song = NSMenuItem(title: snapshot.track.title, action: nil, keyEquivalent: "")
             song.isEnabled = false
-            if #available(macOS 14.4, *), !snapshot.track.artist.isEmpty {
-                song.subtitle = snapshot.track.artist
-            } else if !snapshot.track.artist.isEmpty {
-                song.title = "\(snapshot.track.title) \u{2014} \(snapshot.track.artist)"
+            // "Artist · Spotify": where it plays, next to who sings.
+            let source = services.state.activeID.map(services.displayName(for:))
+            let detail = [snapshot.track.artist, source ?? ""].filter { !$0.isEmpty }.joined(separator: " \u{00B7} ")
+            if #available(macOS 14.4, *), !detail.isEmpty {
+                song.subtitle = detail
+            } else if !detail.isEmpty {
+                song.title = "\(snapshot.track.title) \u{2014} \(detail)"
             }
             if let artwork = environment.nowPlaying.artworkImage {
                 song.image = MenuBarIcon.rounded(artwork, size: 32, radius: 6)
             }
             menu.addItem(song)
+            menu.addItem(.separator())
+        }
+
+        if let conflict = services.state.conflict {
+            for item in conflictItems(conflict, services: services) {
+                menu.addItem(item)
+            }
             menu.addItem(.separator())
         }
 
@@ -117,6 +128,27 @@ enum QuickMenu {
         menu.addItem(quit)
     }
 
+    /// "Which one should Ahenk follow?" and one item per playing player
+    /// (its name, its song); choosing one follows it and, if set, pauses
+    /// the others.
+    static func conflictItems(_ conflict: PlaybackConflict, services: NowPlayingServices) -> [NSMenuItem] {
+        var items = [NSMenuItem.sectionHeader(title: "Which one should Ahenk follow?".l10n)]
+        for player in conflict.players {
+            let item = ClosureMenuItem(title: services.displayName(for: player)) { [weak services] in
+                services?.choose(player)
+            }
+            item.state = player == services.state.activeID ? .on : .off
+            if let snapshot = services.state.player(player)?.snapshot, #available(macOS 14.4, *) {
+                item.subtitle = [snapshot.track.title, snapshot.track.artist].filter { !$0.isEmpty }.joined(separator: " \u{2014} ")
+            }
+            if let bundle = player.bundleIdentifier, let icon = services.apps.icon(for: bundle) {
+                item.image = MenuBarIcon.rounded(icon, size: 18, radius: 0)
+            }
+            items.append(item)
+        }
+        return items
+    }
+
     private static func symbol(_ name: String) -> NSImage? {
         NSImage(systemSymbolName: name, accessibilityDescription: nil)
     }
@@ -128,6 +160,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private let environment: AppEnvironment
     private var statusItem: NSStatusItem?
     private var titleObserver: ChangeObserver<String?>?
+    private var conflictObserver: ChangeObserver<Bool>?
 
     init(environment: AppEnvironment) {
         self.environment = environment
@@ -147,6 +180,10 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             self?.statusItem?.button?.title = title.map { " \($0)" } ?? ""
         }
         statusItem?.button?.title = menuBarTitle.map { " \($0)" } ?? ""
+        // A dot on the icon while several sources play: the menu asks.
+        conflictObserver = ChangeObserver({ [weak self] in self?.environment.services.state.conflict != nil }) { [weak self] waiting in
+            self?.statusItem?.button?.image = waiting ? MenuBarIcon.attention : MenuBarIcon.image
+        }
     }
 
     private var menuBarTitle: String? {

@@ -22,6 +22,24 @@ enum MenuBarIcon {
         return image
     }()
 
+    /// The glyph with a dot in the top-right corner: Ahenk has a question
+    /// (several sources are playing).
+    static let attention: NSImage = {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
+            MenuBarIcon.image.draw(in: rect)
+            // Cut a gap around the dot so it reads apart from the outline.
+            NSGraphicsContext.current?.compositingOperation = .clear
+            NSBezierPath(ovalIn: NSRect(x: 11, y: 10.5, width: 8.5, height: 8.5)).fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+            NSColor.black.setFill()
+            NSBezierPath(ovalIn: NSRect(x: 12.5, y: 12, width: 5.5, height: 5.5)).fill()
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "Ahenk"
+        return image
+    }()
+
     /// `image` drawn at `size` with rounded corners, for menu rows.
     static func rounded(_ image: NSImage, size: CGFloat = 18, radius: CGFloat = 4) -> NSImage {
         NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in

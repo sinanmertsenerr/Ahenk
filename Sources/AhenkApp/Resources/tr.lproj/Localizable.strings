@@ -35,6 +35,7 @@
 "Minimize" = "Simge Durumuna Küçült";
 "Close" = "Kapat";
 "Bring All to Front" = "Tümünü Öne Getir";
+"Which one should Ahenk follow?" = "Ahenk hangisini izlesin?";
 
 /* MARK: Settings sidebar */
 "General" = "Genel";
@@ -84,6 +85,30 @@
 "Other Apps" = "Diğer Uygulamalar";
 "Files on This Mac" = "Bu Mac'teki Dosyalar";
 "Demo" = "Demo";
+"Following now" = "Şu an izlenen";
+"Nothing is playing" = "Hiçbir şey çalmıyor";
+"Music Apps" = "Müzik Uygulamaları";
+"With Automation, Ahenk reads the song, its cover, shuffle, repeat and favorites straight from the app and sends the commands you choose. Without it, Ahenk still shows what plays." = "Otomasyon izniyle Ahenk şarkıyı, kapağını, karıştırma, tekrar ve favori bilgisini doğrudan uygulamadan okur ve seçtiğiniz komutları gönderir. Bu izin olmadan da neyin çaldığını göstermeye devam eder.";
+"Allow Access…" = "Erişime İzin Ver…";
+"Open System Settings…" = "Sistem Ayarları'nı Aç…";
+"Not installed" = "Yüklü değil";
+"Not running" = "Açık değil";
+"Playing" = "Çalıyor";
+"Paused" = "Duraklatıldı";
+"Full access" = "Tam erişim";
+"Limited: song and play state only" = "Sınırlı: yalnızca şarkı ve çalma durumu";
+"Automation is off for Ahenk" = "Ahenk için Otomasyon kapalı";
+"Checking…" = "Denetleniyor…";
+"Browsers and Other Apps" = "Tarayıcılar ve Diğer Uygulamalar";
+"Browsers and other apps report what plays through macOS. A browser does not say which site is playing, so Ahenk guesses it from the song's details." = "Tarayıcılar ve diğer uygulamalar, neyin çaldığını macOS aracılığıyla bildirir. Tarayıcı hangi sitenin çaldığını söylemediği için Ahenk bunu şarkının bilgilerinden tahmin eder.";
+"System Now Playing" = "Sistemin Şu An Çalıyor bilgisi";
+"Nothing else is playing." = "Başka bir şey çalmıyor.";
+"Working" = "Çalışıyor";
+"Starting…" = "Başlatılıyor…";
+"Restarting…" = "Yeniden başlatılıyor…";
+"Not available" = "Kullanılamıyor";
+"Not part of this build" = "Bu derlemede yok";
+"Stopped" = "Durduruldu";
 "Demo %@" = "Demo %@";
 "Browser Extension" = "Tarayıcı Eklentisi";
 "Allow the browser extension to connect" = "Tarayıcı eklentisinin bağlanmasına izin ver";
