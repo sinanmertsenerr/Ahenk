@@ -58,6 +58,9 @@ final class AppleScriptRunner: ScriptRunning, @unchecked Sendable {
             guard created.compileAndReturnError(&error) else {
                 return .failure(Self.error(from: error))
             }
+            // Reads repeat; commands carry arguments (a seek target), so
+            // keep the cache small instead of growing with every seek.
+            if compiled.count >= 32 { compiled.removeAll() }
             compiled[source] = created
             script = created
         }
