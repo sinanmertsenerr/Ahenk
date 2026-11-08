@@ -54,6 +54,12 @@ struct BeatTracker: Sendable {
         beatIndex = index
     }
 
+    /// Continues the beat counter from `index` (a new analyzer replacing
+    /// one that already counted beats).
+    mutating func continueCounting(from index: Int) {
+        beatIndex = max(beatIndex, index)
+    }
+
     /// Forgets the tempo but keeps the beat counter (and the last beat, so
     /// a pulse in progress can finish).
     mutating func unlock() {

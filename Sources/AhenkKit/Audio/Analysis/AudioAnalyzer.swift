@@ -109,7 +109,9 @@ public final class AudioAnalyzer {
     private var onsetPeak: Float = 1
     private let onsetPeakDecay: Float
 
-    public init(sampleRate: Double) {
+    /// `firstBeatIndex` continues the beat counter of an analyzer this one
+    /// replaces, so `beatIndex` never goes backwards for readers.
+    public init(sampleRate: Double, firstBeatIndex: Int = 0) {
         precondition(sampleRate >= 8_000 && sampleRate <= 384_000, "Unsupported sample rate \(sampleRate)")
         self.sampleRate = sampleRate
         // ~43 ms window: 2048 at 44.1/48 kHz.
@@ -160,6 +162,8 @@ public final class AudioAnalyzer {
         kickStatistics = RunningStatistics(timeConstant: 0.25, frameInterval: interval, initialMean: -140)
         // The onset reference halves in about four seconds.
         onsetPeakDecay = Float(pow(0.5, interval / 4))
+        tracker.continueCounting(from: firstBeatIndex)
+        frame.features.beatIndex = firstBeatIndex
     }
 
     deinit {

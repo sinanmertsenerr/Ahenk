@@ -125,4 +125,29 @@ struct AudioPipelineTests {
         pipeline.configure(sampleRate: 44_100)
         #expect(pipeline.analyzer !== first && pipeline.analyzer?.sampleRate == 44_100)
     }
+
+    @Test("The beat counter never goes backwards, not even with a new sample rate")
+    func beatCounterContinues() {
+        let pipeline = makePipeline()
+        let end = play(SyntheticSignal.kickTrain(bpm: 120, seconds: 4, sampleRate: Self.rate).samples, through: pipeline)
+        let counted = pipeline.store.features(at: end).beatIndex
+        #expect(counted >= 6)
+        pipeline.stop(at: end)
+        pipeline.configure(sampleRate: 44_100)
+        #expect(pipeline.analyzer?.frame.features.beatIndex == counted)
+        pipeline.setGate(open: true, at: end)
+        var now = end
+        let kicks = SyntheticSignal.kickTrain(bpm: 120, seconds: 2, sampleRate: 44_100).samples
+        kicks.withUnsafeBufferPointer { buffer in
+            var offset = 0
+            while offset < buffer.count {
+                let count = min(441, buffer.count - offset)
+                pipeline.ring.writer.write(buffer.baseAddress! + offset, count: count)
+                offset += count
+                now += Double(count) / 44_100
+                pipeline.pump(now: now)
+            }
+        }
+        #expect(pipeline.store.features(at: now).beatIndex > counted)
+    }
 }

@@ -63,7 +63,8 @@ public final class AudioAnalysisPipeline: @unchecked Sendable {
     /// its tempo) if the rate did not change.
     public func configure(sampleRate: Double) {
         if analyzer?.sampleRate != sampleRate {
-            analyzer = AudioAnalyzer(sampleRate: sampleRate)
+            let counted = max(analyzer?.frame.features.beatIndex ?? 0, store.latestFrame().features.beatIndex)
+            analyzer = AudioAnalyzer(sampleRate: sampleRate, firstBeatIndex: counted)
             clockOffset = nil
         }
         ring.reader.skipAll()
