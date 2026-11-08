@@ -228,3 +228,194 @@ system state (SMAppService, Step 11), not a stored setting.
   smoke.json or use `./Scripts/smoke.sh`, which exits non-zero.
 - Two Ahenk processes writing the same log file at the moment it rolls over
   can leave one of them writing into `Ahenk.1.log` until it restarts.
+
+## Step 2 — Now Playing hub (done, 2026-11-08)
+
+### What exists
+
+```
+Sources/AhenkKit/
+  Models/      NowPlayingSnapshot (+ ContentKind, PlaybackCapabilities, artwork bytes, pid), TrackMatching
+  NowPlaying/
+    MediaRemote/ AdapterPayload, NowPlayingStreamDecoder (+ LineSplitter), MediaRemoteCommand/Request,
+                 MediaRemoteAdapter (perl child processes), MediaRemoteProvider (restart with backoff, health)
+    Scripting/   ScriptValue, ScriptRunning, AppPresenceMonitoring, ScriptedPlayerProvider<Player>,
+                 AppleMusicPlayer (+ AppleMusicPlayerInfo), SpotifyPlayer (+ SpotifyPlaybackEvent)
+    Sources/     KnownApps (bundle IDs, incl. the "Search" browser com.officecommun.search), SourceResolver,
+                 WebSiteInference (site guess for browser playback)
+    Hub/         HubTypes (PlayerID, HubConfiguration, HubState, HubEvent, PlaybackExpectation), HubCore (pure rules),
+                 NowPlayingHub (driver; a NowPlayingProvider itself), IntroSkipPolicy ("start at 0:15")
+    Artwork/     ArtworkPipeline (+ ArtworkPolicy), ArtworkImage (decode, square crop, letterbox trim, digests),
+                 ArtworkCaches (disk cache in ~/Library/Caches/Ahenk/Artwork, memory LRU, HTTPFetching)
+    RecentlyPlayedStore (Continue Playing: 50 songs in ~/Library/Application Support/Ahenk/RecentlyPlayed.json)
+  Catalog/     ITunesSearch (search, match scoring, artwork sizes), SpotifyOEmbed
+  Color/       OKLab, PaletteExtractor (k-means in OKLab), Palette (+ onDark/onLight/vivid/backdrop)
+  Bridge/      BrowserBridge protocol, BrowserTabReport, BrowserProvider (stub until Step 7), LocalPlaybackProvider (stub)
+Sources/AhenkApp/NowPlaying/
+  NowPlayingServices (builds and runs everything; observable state for Settings and menus),
+  AdapterLocator (bundle; `swift run` falls back to Vendor/), AppleScriptRunner (NSAppleScript + AEDeterminePermission),
+  RunningApps (+ BrowserRegistry, AppDirectory), MusicNotificationBridge, NowPlayingModel (follows the hub)
+Tests/AhenkKitTests/          166 tests in 22 suites (was 76): hub rules and driver, adapter payloads/decoder/process
+                              (fake /bin/sh adapters), scripted providers (fake runner and presence), palettes from
+                              generated images, artwork pipeline (fake HTTP), catalog matching, Continue Playing
+```
+
+Data flow: providers → `HubInput` → `NowPlayingHub` (`HubCore`) → `NowPlayingModel` (song, cover,
+lyrics, features for the UI) and `NowPlayingServices.state` (players, the followed one, the
+conflict). Every published snapshot is offered to Continue Playing (`RecentlyPlayedStore`:
+songs only, i.e. `.music` or `.unknown`, deduplicated, newest first, 50 kept); hub events
+drive "start at 0:15".
+
+| Provider (id) | Sees | Commands | Permission |
+|---|---|---|---|
+| `MediaRemoteProvider` (`mediaremote`) | whatever app owns the system Now Playing (one at a time) | adapter `send/seek/shuffle/repeat`, which reach that owner | none |
+| `AppleMusicProvider` (`apple-music`) | `com.apple.Music.playerInfo` always; AppleScript reads with Automation (position, persistent ID, shuffle, repeat, favourite, raw artwork) | AppleScript | Automation |
+| `SpotifyProvider` (`spotify`) | `com.spotify.client.PlaybackStateChanged` always (with position); AppleScript adds artwork URL, shuffle, repeat | AppleScript (no like, repeat on/off only) | Automation |
+| `BrowserProvider` (`browser`) | nothing until Step 7 | the bridge | — |
+| `LocalPlaybackProvider` (`local`) | nothing until Step 9 | — | — |
+| `DemoProvider` (`demo`, `demo-b`) | invented songs | all | — |
+
+Hub rules (`HubCore`, all unit-tested): reports that describe the same `PlayerID` (source +
+owning app bundle + instance) merge, the music app's own provider first, the system report
+filling a missing position/shuffle/artwork; automatic follows the player that started playing
+most recently (a song change is not a start; a pause shorter than 2.5 s keeps the start time);
+nothing playing keeps the last followed player; pinned follows only its source; ignored sources
+are dropped; two or more players playing together for 3 s raise a `PlaybackConflict` (automatic
+mode with "ask" on) shown in the menu bar menu with a dot on the icon; the answer is followed
+until something else starts and, with "pause the previous source" on, the others are paused; a
+followed player that goes quiet stays 1.2 s (no flash between songs); after a command the
+expected state shows at once and holds 2 s or until the player confirms it; each command goes
+to the most authoritative provider whose snapshot supports it. Snapshots are published only on
+noticeable change (song, state, seek > 0.5 s, shuffle, repeat, like, artwork, commands).
+
+### Build, run, verify
+
+```sh
+swift build && swift test             # 166 tests, no warnings
+./Scripts/make-app.sh && ./Scripts/smoke.sh
+open -n dist/Ahenk.app                # live: follows the system Now Playing, no prompts
+open -n dist/Ahenk.app --args --demo-conflict   # two demo players → the question after 3 s
+open -n dist/Ahenk.app --args --settings sources
+```
+
+New smoke checks (all `ok`): `adapterRun` (the bundled adapter answers `get` once; reports
+only the kind of source, never the song), `sources` (bundle mapping, site inference, browsers
+found), `hub` (rules on invented players), `nowPlaying` (demo through the hub: song, cover,
+lyrics, features), `artwork` (generated 800 px cover → 600 px, ≥ 3 colours, text variants
+≥ 4.5:1, offline), `recentlyPlayed` (dedupe and reload). `menus` also builds the conflict
+question in both languages. `--smoke --snapshots` also writes `menubar-icon*.png`.
+
+Live check on this Mac (read-only, 2026-11-08): with a paused video in the Search browser, the
+normal launch followed it (`otherApp`, `com.officecommun.search`), Settings › Sources showed
+"System Now Playing: Working" and Apple Music / Spotify "Not running"; no prompt appeared; the
+adapter child exited with Ahenk. Idle (nothing playing): Ahenk 0.0 % CPU, ~75 MB; adapter
+child 0.0 % CPU, ~26 MB.
+
+### Decisions
+
+- **Automation never prompts by itself.** Permission is read with
+  `AEDeterminePermissionToAutomateTarget(askUserIfNeeded: false)` when the app is running
+  (again on Ahenk activation, when Sources opens and every 2 min while not granted). Only
+  **Allow Access…** in Settings › Sources asks (`services.requestAccess`); Step 11's
+  onboarding should call the same. Without it, the apps' own notifications still give the
+  song and play state, and commands go through the system's Now Playing when that app owns it.
+- **Never launching Music or Spotify.** No script runs unless `NSRunningApplication` says the
+  app runs (checked right before each run), and every script is wrapped in
+  `if application id "…" is running then … end if`, which AppleScript evaluates without
+  launching anything. Both apps ship a static `.sdef`, so compiling never launches them.
+  Scripts run on one serial queue with `with timeout of 4 seconds`; -1743 marks the source
+  denied and stops reading.
+- **AppleScript, not ScriptingBridge.** NSAppleScript results are converted from typed Apple
+  Event descriptors into `ScriptValue` (numbers stay numbers, so no locale-dependent decimal
+  text), which keeps the parsing testable with fixtures and needs no generated headers.
+- **Distributed notifications are delivered immediately** (`suspensionBehavior:
+  .deliverImmediately`); AppKit otherwise holds them while Ahenk is in the background.
+- **The adapter sees one player.** MediaRemote reports only the session owner, so the
+  dedicated providers (and Step 7's bridge) are what make conflicts visible. The adapter runs
+  `stream --micros` (artwork included), restarts with backoff (0.5 s → 30 s, then 60 s and
+  health `unavailable` after 5 silent failures) and is terminated in
+  `applicationWillTerminate`. A child process reports its exit only after its output was read
+  to the end.
+- **Site guessing is conservative.** Browsers do not say which page plays; a site is named only
+  from explicit markers (a " - YouTube Music"-style title suffix, a host name, the brand as the
+  artist). Otherwise the player is `otherApp` with the browser's name and a content kind from
+  the metadata (wide thumbnail → video; artist + album → music).
+- **One song, two names.** Providers identify songs differently (a persistent ID, an adapter
+  identifier, a metadata key), so `isSameTrack` = same source and (same id or same normalized
+  title/artist with compatible album and duration ±3 s). Folding is locale-neutral and maps the
+  Turkish ı to i.
+- **Artwork.** Order: bytes from the source, the cover URL, Spotify oEmbed by track ID (640 px
+  variant), then Apple's catalog when the cover is smaller than 90 % of the requested size (or
+  missing) and the policy allows it (music only; never videos, podcasts, adverts, demo or
+  local). Catalog matches need equal core titles and artists and a duration within 8 s. Misses
+  are remembered 3 days, failures not at all. The chosen cover is also stored under
+  `ArtworkPipeline.coverKey(for:)` for Continue Playing. Non-square images lose letterbox
+  bars and are cropped square.
+- **Palettes in OKLab**: k-means (k = 8, fixed seed) on ≤ 48 × 48 px, colourful clusters by
+  area first, greys last, padded to 3 with shades. `onDark`/`onLight` reach 4.5:1 by moving
+  only lightness; `vivid` lifts colours for light. `Palette` encodes only `colors`.
+- **Shared API changes** (all call sites and tests updated): `NowPlayingSnapshot` gained
+  `processIdentifier`, `instanceIdentifier`, `isPositionKnown`, `capabilities`, `contentKind`,
+  `artworkData`, `artworkIdentifier` (all defaulted) and `differsNoticeably`;
+  `isSameTrack` now falls back to metadata; `Palette.colors` is a `let`; `ArtworkProvider`
+  gained `artwork(for: NowPlayingSnapshot, …)` with a default; `DemoProvider.init` takes
+  `id` and `bundleIdentifier`; `LaunchOptions.demoConflict` (`--demo-conflict`).
+- **Settings window title** is "Ahenk Settings" / "Ahenk Ayarları" (follows the language);
+  SwiftUI's title bridging never set it, so it is set on the NSWindow directly.
+
+### For Step 3 (audio engine)
+
+- **What to tap:** the followed player is `environment.nowPlaying.snapshot` (main actor,
+  observable) or `environment.services.hub.snapshots()` (any thread). Use
+  `snapshot.bundleIdentifier`: the owning app (`com.apple.Music`, `com.spotify.client`, or the
+  browser: `com.officecommun.search`, `com.google.Chrome`, `com.apple.Safari`, …).
+  `processIdentifier` is the process that published Now Playing (the app for Music/Spotify,
+  the browser's main process for Chromium); resolve audio processes at tap time, PIDs churn.
+  Chromium plays audio from helper processes (match by bundle-ID prefix plus ancestry, as in
+  DynamicIsland's `AudioProcessResolver`); Safari plays from `com.apple.WebKit.GPU`, which is
+  shared by every WebKit app and is not a child of Safari.
+- **When to listen:** `snapshot.isPlaying`, and only music: react to `contentKind == .music`
+  (consider `.unknown` too: unlabelled players are mostly music); `.video`, `.podcast`,
+  `.advertisement` must not move the light. Hub events (`.playbackChanged`,
+  `.trackChanged`, `.activePlayerChanged`) say when to retarget the tap.
+- `services.features` is `nil` in live mode (the demo's in `--demo`); plug the engine's
+  `AudioFeatureSource` there and pass it to `nowPlaying.attach` in `AppDelegate.startServices`.
+
+### For later steps
+
+- **Step 5:** `hub.perform(_:)` / `perform(_:on:)` (respect `snapshot.capabilities`),
+  `services.choose(_:)`, `hub.pausePlayers(except:)` for the source picker; Continue Playing
+  from `services.recentlyPlayed.changes()`, covers from `ArtworkPipeline.storedCover(for:)`;
+  `ITunesSearch` is ready for albums and search; `services.displayName(for:)` names players.
+- **Step 6:** `services.lyrics` is `nil` in live mode; put the lyrics chain there.
+- **Step 7:** implement `BrowserBridge` and pass it to `BrowserProvider(bridge:)` in
+  `NowPlayingServices.live`. Tabs are players (`instance` = tab ID). The adapter's guess for
+  the same song has another `PlayerID` (e.g. `otherApp` in the same browser), so while the
+  bridge reports a browser, drop the adapter's reports for that browser, or the hub will see
+  two players and ask. Replace the "browser does not say which site" footnote.
+- **Step 9:** `LocalPlaybackProvider` is the stub to fill; covers for `.local` come from file
+  metadata (the catalog policy skips them).
+
+### Known gaps and risks
+
+- Apple Music and Spotify scripting are verified with fixtures only: no Automation grant
+  exists on this Mac and the rules forbid prompting. First real use: open Music or Spotify,
+  Settings › Sources › Allow Access…, then check the log (`[apple-music]`, `[spotify]`).
+- With the adapter alone, two players in browsers (or a browser and another app) cannot be
+  seen at once: no conflict question until Step 7.
+- Browser playback mostly shows as the browser's name (`otherApp`) until Step 7.
+- MediaRemote has no "unlike" (only like/ban); Spotify has no like at all.
+- A catalog cover can belong to another release of the same song (same title, artist and
+  length).
+- The status item is drawn by the system, so its badge cannot be captured with `winshot`;
+  `--smoke --snapshots` exports the icons instead.
+- If Ahenk is killed with SIGKILL, the adapter child lives until its next write fails
+  (SIGPIPE).
+
+### Deviations from PLAN.md
+
+- ScriptingBridge is not used (AppleScript through NSAppleScript; see Decisions).
+- Extra launch argument `--demo-conflict`; extra folders `NowPlaying/{MediaRemote,Scripting,Hub,
+  Sources,Artwork}`, `Catalog/`, `Bridge/` in AhenkKit.
+- The menu bar shows the current song in the menu (title, "artist · source", cover); the
+  title next to the icon still follows `general.showSongTitleInMenuBar`.
