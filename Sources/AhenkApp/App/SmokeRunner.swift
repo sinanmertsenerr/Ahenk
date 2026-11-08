@@ -35,6 +35,7 @@ final class SmokeRunner {
         await report.check("nowPlaying") { try await self.checkNowPlaying() }
         await report.check("artwork") { try await self.checkArtwork() }
         await report.check("recentlyPlayed") { try self.checkRecentlyPlayed() }
+        await report.check("audio") { try self.checkAudio() }
         await report.check("metal") { try self.checkMetal() }
         await report.check("menus") { try self.checkMenus() }
         await report.check("settingsWindow") { try await self.checkSettingsWindow() }
@@ -263,6 +264,70 @@ final class SmokeRunner {
         guard reloaded == ["One", "Two"] else { throw SmokeFailure("reloaded \(reloaded)") }
         let live = environment.services.recentlyPlayed.fileURL == nil ? "in memory for the demo" : "on disk"
         return "deduplicated, newest first, survives a reload; the running list is \(live)"
+    }
+
+    /// The analysis on generated audio: a 120 BPM kick train must read as
+    /// 120 BPM with every settled beat within 50 ms, silence must gate, a
+    /// high sine must light the high band, and samples written to the ring
+    /// must reach the store. Reads the system audio permission silently
+    /// (no prompt, no tap).
+    private func checkAudio() throws -> String {
+        let rate = 48_000.0
+        let seconds = 10.0
+        let (kicks, truth) = SyntheticSignal.kickTrain(bpm: 120, seconds: seconds, sampleRate: rate)
+        let analyzer = AudioAnalyzer(sampleRate: rate)
+        var beats: [BeatEvent] = []
+        analyzer.onBeat = { beats.append($0) }
+        let started = ContinuousClock.now
+        kicks.withUnsafeBufferPointer { buffer in
+            var offset = 0
+            while offset < buffer.count {
+                let count = min(512, buffer.count - offset)
+                analyzer.process(buffer.baseAddress! + offset, count: count)
+                offset += count
+            }
+        }
+        let elapsed = started.duration(to: .now)
+        let milliseconds = Double(elapsed.components.seconds) * 1000 + Double(elapsed.components.attoseconds) / 1e15
+        let bpm = analyzer.frame.features.bpm
+        guard abs(bpm - 120) <= 2 else { throw SmokeFailure("a 120 BPM kick train read as \(bpm) BPM") }
+        let settled = beats.filter { $0.time >= 6 }
+        let worst = settled.map { beat in truth.map { abs($0 - beat.time) }.min() ?? 1 }.max() ?? 1
+        guard settled.count >= 7, worst <= 0.05 else {
+            throw SmokeFailure("\(settled.count) settled beats, worst off by \(Int(worst * 1000)) ms")
+        }
+        analyzer.process(SyntheticSignal.silence(seconds: 1, sampleRate: rate))
+        guard analyzer.frame.features.isSilent, analyzer.frame.features.energy == 0 else { throw SmokeFailure("silence was not gated") }
+
+        let tone = AudioAnalyzer(sampleRate: rate)
+        tone.process(SyntheticSignal.sine(frequency: 8_000, seconds: 1, sampleRate: rate))
+        let bands = tone.frame.features.bands
+        guard bands.high > 0.9, bands.bass < 0.05 else { throw SmokeFailure("an 8 kHz sine gave bands \(bands)") }
+
+        // Ring → analyzer → store, on the host clock.
+        let store = AudioFeatureStore()
+        let pipeline = AudioAnalysisPipeline(store: store, ringCapacity: 1 << 15)
+        pipeline.configure(sampleRate: rate)
+        var now = AudioClock.now()
+        pipeline.setGate(open: true, at: now)
+        let music = DemoAudioSynth(sampleRate: rate).render(seconds: 1)
+        music.withUnsafeBufferPointer { buffer in
+            var offset = 0
+            while offset < buffer.count {
+                let count = min(480, buffer.count - offset)
+                pipeline.ring.writer.write(buffer.baseAddress! + offset, count: count)
+                offset += count
+                now += Double(count) / rate
+                pipeline.pump(now: now)
+            }
+        }
+        guard !store.features(at: now).isSilent else { throw SmokeFailure("samples in the ring did not reach the store") }
+
+        let permission = SystemAudioPermission.status()
+        let speed = Int((seconds * 1000 / max(milliseconds, 0.001)).rounded())
+        return "120 BPM kick train read as \(String(format: "%.1f", bpm)) BPM, beats within \(Int((worst * 1000).rounded())) ms, "
+            + "\(Int(seconds)) s analysed in \(Int(milliseconds.rounded())) ms (\(speed)× real time); silence gated, bands sane, "
+            + "ring to store works; system audio access \(permission.rawValue) (read without a prompt)"
     }
 
     private func checkMetal() throws -> String {
