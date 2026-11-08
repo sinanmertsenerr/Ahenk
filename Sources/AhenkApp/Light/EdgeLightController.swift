@@ -92,7 +92,6 @@ final class EdgeLightController {
     func start() {
         guard !isStarted else { return }
         isStarted = true
-        power.start()
         let settings = self.settings
         let nowPlaying = self.nowPlaying
         let power = self.power
@@ -148,7 +147,6 @@ final class EdgeLightController {
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         screenObserver = nil
         desktop.stop()
-        power.stop()
         previewEnd?.cancel()
         teardown?.cancel()
         tearDownLight()

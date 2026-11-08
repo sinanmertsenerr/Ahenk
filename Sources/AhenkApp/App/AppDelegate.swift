@@ -58,6 +58,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         // Listens to the followed player's app while music plays.
         environment.audio.start(hub: services.hub, settings: settings)
+        // Battery, Low Power Mode and heat make drawing lighter.
+        environment.power.start()
         // The edge light follows the music, the cover and the settings.
         environment.light.start()
         scheduleDemoCommands()
@@ -133,6 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Later steps restore the user's desktop here (wallpaper, hidden apps).
         environment.light.stop()
+        environment.power.stop()
         // Removes the process tap and its private aggregate device.
         environment.audio.stop()
         environment.nowPlaying.detach()
