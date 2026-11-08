@@ -10,6 +10,8 @@ import Foundation
 ///   pane in every language (default `~/Library/Logs/Ahenk/snapshots`).
 /// - `--demo-conflict`: like `--demo`, with a second demo player so the
 ///   "several sources are playing" question shows up.
+/// - `--demo-pause-after <s>` / `--demo-resume-after <s>`: in demo mode,
+///   pause (resume) the demo song that many seconds after launch.
 /// - `--settings [pane]` / `--settings=pane`: open Settings at launch.
 /// - `--allow-multiple`: skip the single-instance hand-off (development).
 ///
@@ -28,6 +30,10 @@ public struct LaunchOptions: Equatable, Sendable {
     public var allowsMultipleInstances = false
     /// A second demo player plays alongside the first (`--demo-conflict`).
     public var demoConflict = false
+    /// Seconds after launch to pause the demo song (`--demo-pause-after`).
+    public var demoPauseAfter: Double?
+    /// Seconds after launch to resume it (`--demo-resume-after`).
+    public var demoResumeAfter: Double?
 
     /// Demo content is used in both `--demo` and `--smoke`.
     public var usesDemoContent: Bool { mode != .normal }
@@ -54,6 +60,10 @@ public struct LaunchOptions: Equatable, Sendable {
                 snapshotDirectory = inlineValue ?? Self.popValue(&remaining) ?? ""
             case "--allow-multiple":
                 allowsMultipleInstances = true
+            case "--demo-pause-after":
+                demoPauseAfter = Self.seconds(inlineValue ?? Self.popValue(&remaining))
+            case "--demo-resume-after":
+                demoResumeAfter = Self.seconds(inlineValue ?? Self.popValue(&remaining))
             default:
                 continue
             }
@@ -66,6 +76,12 @@ public struct LaunchOptions: Equatable, Sendable {
             return (argument, nil)
         }
         return (String(argument[..<equals]), String(argument[argument.index(after: equals)...]))
+    }
+
+    /// A non-negative, finite number of seconds, or `nil`.
+    private static func seconds(_ text: String?) -> Double? {
+        guard let text, let value = Double(text), value.isFinite, value >= 0 else { return nil }
+        return value
     }
 
     /// Consumes the next argument when it is a value rather than another flag.

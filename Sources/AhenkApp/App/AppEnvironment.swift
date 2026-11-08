@@ -14,12 +14,18 @@ final class AppEnvironment {
     let services: NowPlayingServices
     /// Listening and the audio features (`audio.store` is `services.features`).
     let audio: AudioTapEngine
+    /// Battery, Low Power Mode and heat (lighter drawing).
+    let power = PowerMonitor()
     /// Present in `--demo` and `--smoke`.
     let demo: DemoProvider?
     /// Step 9 replaces the placeholder with the real Clear Desk.
     var clearDesk: DeskClearing = UnavailableDeskClearing()
 
     private(set) lazy var settingsWindow = SettingsWindowController(environment: self)
+    /// The edge light on every screen (started with the services).
+    private(set) lazy var light = EdgeLightController(
+        settings: settings, nowPlaying: nowPlaying, features: audio.store, power: power
+    )
 
     private init(options: LaunchOptions, settings: AppSettings, demo: DemoProvider?) {
         self.options = options

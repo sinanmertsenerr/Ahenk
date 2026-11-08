@@ -45,6 +45,16 @@ struct LaunchOptionsTests {
         #expect(parse("--snapshots").snapshotDirectory == "")
     }
 
+    @Test("Demo pause and resume times")
+    func demoCommands() {
+        let options = parse("--demo", "--demo-pause-after", "6", "--demo-resume-after=12.5")
+        #expect(options.demoPauseAfter == 6 && options.demoResumeAfter == 12.5)
+        #expect(parse("--demo").demoPauseAfter == nil)
+        #expect(parse("--demo-pause-after", "soon").demoPauseAfter == nil)
+        #expect(parse("--demo-pause-after", "-3").demoPauseAfter == nil, "a negative number reads as a flag, not a value")
+        #expect(parse("--demo-pause-after=-3").demoPauseAfter == nil)
+    }
+
     @Test("Unknown and system arguments are ignored")
     func ignoresUnknown() {
         let options = parse("-NSDocumentRevisionsDebugMode", "YES", "--frobnicate", "-psn_0_12345", "--demo")

@@ -58,6 +58,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         // Listens to the followed player's app while music plays.
         environment.audio.start(hub: services.hub, settings: settings)
+        // The edge light follows the music, the cover and the settings.
+        environment.light.start()
+        scheduleDemoCommands()
 
         observers.append(ChangeObserver({ settings.general.language }) { [weak self] language in
             guard let self else { return }
@@ -129,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         // Later steps restore the user's desktop here (wallpaper, hidden apps).
+        environment.light.stop()
         // Removes the process tap and its private aggregate device.
         environment.audio.stop()
         environment.nowPlaying.detach()
@@ -136,6 +140,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment.services.stop()
         log.notice("Quitting")
         Log.flush()
+    }
+
+    /// `--demo-pause-after` / `--demo-resume-after`: pause and resume the
+    /// demo song by itself (to watch the light fade out, stop drawing and
+    /// come back without touching anything).
+    private func scheduleDemoCommands() {
+        guard let demo = environment.demo else { return }
+        let options = environment.options
+        for (delay, command) in [(options.demoPauseAfter, PlaybackCommand.pause), (options.demoResumeAfter, .play)] {
+            guard let delay else { continue }
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [log] in
+                log.notice("Demo: \(command == .pause ? "pausing" : "resuming") (launch argument)")
+                Task { await demo.perform(command) }
+            }
+        }
     }
 
     // MARK: Helpers

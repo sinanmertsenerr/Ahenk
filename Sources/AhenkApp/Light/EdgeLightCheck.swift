@@ -27,7 +27,8 @@ enum EdgeLightCheck {
 
     /// Every style at three moments of the demo beat on a miniature notched
     /// screen: finite values, real light, and nothing outside the band.
-    /// Also each position setting.
+    /// Also each position setting, and one frame drawn into the strip layers
+    /// of a window that is never shown.
     static func run(renderer: EdgeLightRenderer, palette: Palette, snapshots: URL?) throws -> String {
         let shape = EdgeShape.display(width: 360, height: 232, notch: CGRect(x: 150, y: 214, width: 60, height: 18))
         let colors = LightColors(colors: palette.vivid).slots
@@ -52,8 +53,9 @@ enum EdgeLightCheck {
         }
         let elapsed = started.duration(to: .now)
         let milliseconds = Double(elapsed.components.seconds) * 1000 + Double(elapsed.components.attoseconds) / 1e15
+        let strips = try drawIntoStrips(renderer: renderer, colors: colors)
         return "\(LightStyle.allCases.count) styles and \(LightPosition.allCases.count - 1) positions: \(frames) frames rendered offscreen "
-            + "in \(Int(milliseconds.rounded())) ms, finite, lit only inside the band"
+            + "in \(Int(milliseconds.rounded())) ms, finite, lit only inside the band; \(strips)"
     }
 
     private static func render(
@@ -92,6 +94,49 @@ enum EdgeLightCheck {
                 }
             }
         }
+    }
+
+    /// The real path: a light window for the main screen (never ordered
+    /// in), its strip layers laid out for the default look, one frame drawn
+    /// into each strip's surfaces and set as the layer's contents.
+    private static func drawIntoStrips(renderer: EdgeLightRenderer, colors: [SRGBColor]) throws -> String {
+        guard let nsScreen = NSScreen.main ?? NSScreen.screens.first, let screen = LightScreen(nsScreen) else {
+            throw SmokeReport.Skip("no screen")
+        }
+        let look = LightLook(settings: LightSettings())
+        let metrics = EdgeMetrics(shape: screen.shape, band: look.band)
+        let layout = EdgeLayout.strips(for: metrics, position: .allEdges)
+        let overlay = EdgeLightOverlay(screen: screen)
+        defer { overlay.close() }
+        overlay.layout(layout, resolutionScale: 1)
+        guard let commands = renderer.queue.makeCommandBuffer() else { throw SmokeFailure("no command buffer") }
+        var drawn = 0
+        var pixels = 0
+        var frames: [(CALayer, IOSurface)] = []
+        for strip in overlay.strips {
+            guard let ring = SurfaceRing(device: renderer.device, width: strip.pixelWidth, height: strip.pixelHeight),
+                  let (surface, texture) = ring.acquire()
+            else { throw SmokeFailure("no surface for the \(strip.place.rawValue) strip") }
+            let uniforms = EdgeLightUniforms(
+                metrics: metrics, strip: strip.rect, pixelScale: Double(texture.width) / strip.rect.width, look: look,
+                colors: colors, isRainbow: false, motion: LightMotion(), features: DemoBeat.features(at: 1), time: 1,
+                opacity: 1, quality: .full, seed: screen.seed
+            )
+            try renderer.encode(uniforms, into: texture, commandBuffer: commands)
+            frames.append((strip.layer, surface))
+            drawn += 1
+            pixels += texture.width * texture.height
+        }
+        commands.commit()
+        commands.waitUntilCompleted()
+        if let error = commands.error { throw error }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (layer, surface) in frames { layer.contents = surface }
+        CATransaction.commit()
+        let share = EdgeLayout.area(of: layout) / (screen.frame.width * screen.frame.height)
+        return "\(screen.name) \(Int(screen.frame.width))×\(Int(screen.frame.height))\(screen.shape.notch == nil ? "" : " with a notch"): "
+            + "\(drawn) strips drawn (\(pixels / 1000) k pixels, \(Int((share * 100).rounded())) % of the screen)"
     }
 }
 
