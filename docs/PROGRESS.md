@@ -419,3 +419,197 @@ child 0.0 % CPU, ~26 MB.
   Sources,Artwork}`, `Catalog/`, `Bridge/` in AhenkKit.
 - The menu bar shows the current song in the menu (title, "artist · source", cover); the
   title next to the icon still follows `general.showSongTitleInMenuBar`.
+
+## Step 3 — Audio analysis (done, 2026-11-09)
+
+### What exists
+
+```
+Sources/AhenkAtomics/         C target: acquire/release loads and stores, fetch-add, a seqlock (static inline)
+Sources/AhenkKit/Audio/
+  AudioFeatures              the contract: energy, AudioBands (5), spectrum (SIMD32), onset, beat, beatPhase,
+                             beatIndex, bpm, tempoConfidence, isSilent; AudioFeatureSource (+ features(at:)); AudioClock
+  AudioRingBuffer            single-producer/single-consumer ring of mono samples (I/O thread → analysis queue)
+  SeqlockBox, AudioFeatureStore (+ AudioFeatureFrame, activity observation)
+  AudioAnalysisPipeline      ring → analyzer → store: music gate, sensitivity, presentation delay, digital-silence meter
+  SyntheticSignal            kick trains, a kick/snare/hat pattern, sines, seeded noise (tests and --smoke)
+  Analysis/                  AudioAnalyzer, BandLayout, TempoEstimator, BeatTracker, Envelopes
+  Capture/                   AudioCapturePolicy (+ AudioCapturePermission, AudioTapTarget, AudioTapRequest,
+                             AudioCaptureState), AudioProcessMatcher (+ AudioProcess)
+Sources/AhenkKit/Demo/DemoAudioSynth   the demo's 120 BPM beat as sound (pure function of the song position)
+Sources/AhenkApp/Audio/
+  AudioTapEngine             main-actor façade: store, ticker, permission, status; owned by AppEnvironment (`audio`)
+  AudioCaptureController     the policy and every HAL call on a control queue; a 100 Hz pump on an analysis queue
+  ProcessTapSession          CATapDescription + private aggregate device + a C IOProc (mono mixdown into the ring)
+  CoreAudioQueries           process list (PID, bundle, responsible PID, parents), devices, output latency
+  SystemAudioPermission      TCC preflight (silent) and request (button only), System Settings link
+  AudioFeatureTicker         display-link publisher for UI on the main thread; DemoAudioFeed (synth → ring)
+Sources/AhenkApp/Settings/AudioMonitorView   Settings › Sound monitor (Core Animation layers)
+Tests/AhenkKitTests/          220 tests in 29 suites (was 166/22): analyzer, ring, store, pipeline, policy, matcher
+```
+
+Data flow: process tap IOProc (Core Audio's real-time thread) → `AudioRingBuffer` → analysis
+queue pump every 10 ms → `AudioAnalyzer` → `AudioAnalysisPipeline` (host clock, gate, sensitivity,
+output delay) → `AudioFeatureStore` (seqlock) → any reader: `services.features`,
+`nowPlaying.featureSource`, `audio.store` are the same object. `--demo`/`--smoke` replace the tap
+with `DemoAudioFeed` (the synth at real-time pace into the same ring); no permission involved.
+
+### Build, run, verify
+
+```sh
+swift build && swift test             # 220 tests, no warnings
+./Scripts/make-app.sh && ./Scripts/smoke.sh
+open -n dist/Ahenk.app --args --demo --settings sound     # live monitor on the demo beat
+open -n dist/Ahenk.app --args --settings sound            # live: permission row, Allow Listening…
+```
+
+BPM/beat tests (`AudioAnalyzerTests`): "Kick trains: tempo within ±2 BPM and every beat within
+±50 ms" (70, 90, 120, 128, 140, 174 BPM at 48 kHz; measured: within 0.3 BPM, beats within ~5 ms),
+"A kick + snare + hi-hat pattern reads as its quarter notes" (95, 120, 150), "The tempo is the same
+at 44.1 kHz and 96 kHz", "The demo synthesizer reads as 120 BPM on the beat", "Kicks under noise
+still lock to the tempo", "Kicks trigger beats before the tempo is known". Silence and bands:
+"Silence turns isSilent on within the gate time and sound turns it off at once", "A low sine
+lights the low bands, a high sine the high band", "A steady tone has no tempo and no beats",
+"White noise does not produce a beat storm" (≤ 4 beats in 16 s, none predicted, no tempo).
+Ring buffer: "Writes and reads wrap around the end in order", "One writer thread and one reader
+thread pass every sample in order". Store: "Readers on other threads never see a torn frame".
+
+New smoke check `audio`: a 120 BPM kick train reads as 119.9 BPM with settled beats within 3 ms;
+10 s of audio analysed in 6 ms (~1500× real time); silence gates; an 8 kHz sine lights `high`;
+the demo beat passes ring → pipeline → store; the permission is read without a prompt
+(`notDetermined` on this Mac). `nowPlaying` now waits for live features from the analyzed demo beat.
+
+Measured on the M5 (release build): live, nothing playing: **0.0 % CPU**, ~75 MB (no tap, no timer,
+no listener); `--demo` without a window 1.3 % (synth ~0.6 %, analysis ~0.3 %; a real tap has no
+synth); `--demo` with Settings › Sound open 2.6 % (the monitor was 12 % when drawn with
+CoreGraphics/CoreText per frame; Core Animation layers brought it to ~1 %).
+
+### For Step 4 (edge light)
+
+- **Reading per frame.** Keep `environment.audio.store` (or `services.features`) as
+  `any AudioFeatureSource` and call `features(at: targetTimestamp)` once per rendered frame from the
+  render thread, with the display link's target timestamp (`AudioClock` = the
+  `CACurrentMediaTime()` / `CADisplayLink.targetTimestamp` base); `currentFeatures()` reads "now".
+  Lock-free (a two-slot seqlock; readers never wait, even if the writer is preempted),
+  allocation-free, ~1 µs. `beat` and `beatPhase` are computed at the moment you ask, so they are
+  smooth at 60 or 120 Hz although frames are published every ~10 ms.
+- **Values** (all smoothed already; do not smooth again unless you want slower motion):
+
+  | Field | Range | Meaning, smoothing |
+  |---|---|---|
+  | `energy` | 0…1 | loudness on an adaptive 24 dB window (typ. 0.6–0.9 in music); attack 25 ms, release 220 ms |
+  | `bands.subBass/bass/lowMid/mid/high` | 0…1 | 20–60, 60–250, 250–500, 500–2k, 2k–16k Hz on one shared 30 dB reference (a bass line lights `bass`, a hat `high`); 15/160 ms; `bands.packed` = SIMD8 for a shader |
+  | `spectrum[0..<32]` | 0…1 | log bands 30 Hz–16 kHz (+4.5 dB/oct display tilt), 42 dB window; 10/110 ms |
+  | `onset` | 0…1 | attack flash (kick, snare, pluck); instant attack, 70 ms release |
+  | `beat` | 0…1 | the beat's strength (0.4–1) at the beat, then `exp(-t/τ)`, τ = 0.25 × beat length clamped to 70–200 ms (120 ms while unlocked) |
+  | `beatPhase` | 0..<1 | position in the beat (0 on it); 0 while the tempo is unknown |
+  | `beatIndex` | Int | +1 per beat, never reset (not even by silence or a new song): `beatIndex != last` is a new beat |
+  | `bpm` | 0 or 60…200 | 0 until locked (~2.5 s into a song) |
+  | `tempoConfidence` | 0…1 | ≥ 0.35 locked: beats are predicted on the grid (announced 30 ms early, phase-corrected by onsets); below that, beats come from kicks |
+  | `isSilent` | Bool | every level and `beat` are exactly 0 |
+
+- **Silence and play state.** `isSilent` turns true at once when the followed player pauses or
+  plays something that is not music (the engine closes its gate on the hub event), and ~0.35 s
+  after the sound stops otherwise. Fade out on it (with `nowPlaying.isPlaying` as a hint), then stop
+  your display link. To wake without polling, observe `store.observeActivity { active in … }`
+  (called on the analysis queue when silent ↔ active) or subscribe to `audio.ticker`, which already
+  sleeps while silent.
+- **Timing is already compensated.** Frames are delayed to the default output's latency (Bluetooth
+  headphones: 100–250 ms) and predicted beats are announced 30 ms early, so
+  `features(at: targetTimestamp)` lands on the sound; do not add your own offset.
+- **Sensitivity** (Settings › Sound) is already applied (levels × gain, clamped to 1).
+- **Demo.** `--demo` features are the analyzer's view of `DemoAudioSynth` (120 BPM, locks after
+  ~2.5 s, real-looking spectrum). For exact offscreen frames use `DemoBeat.features(at:)` as
+  `MetalProbe` does. `MetalProbe` passes `features.energy` as the shader's `level`.
+- **UI at display rate** (main thread): `environment.audio.ticker.subscribe(framesPerSecond:) { f in … }`
+  — one display link for all subscribers, paused while silent; keep the returned subscription.
+  Do not drive SwiftUI per frame (Step 1); use leaf AppKit/Core Animation views like
+  `AudioMonitorView`.
+
+### Decisions
+
+- **Atomics in C.** `Synchronization.Atomic` needs macOS 15; the `AhenkAtomics` target wraps the
+  compiler's builtins (`__atomic_*`) in static inline functions, imported `internal` by AhenkKit.
+- **Real-time path.** The IOProc is a C function whose context holds only raw pointers (the ring's
+  writer view and a scratch buffer): no locks, no allocation, no ARC. It averages every channel of
+  every buffer to mono with vDSP and writes to the SPSC ring (drops and counts on overflow). The
+  analysis queue pumps every 10 ms only while a tap or the demo feed runs.
+- **Analysis.** Hann window ~43 ms (2048 at 44.1/48 kHz, 4096 at 88.2/96 kHz), hop a quarter
+  window (~10.7 ms, ~94 frames/s); vDSP real FFT, power normalized so a full-scale sine is 0 dB.
+  Levels are drawn on adaptive dB windows (fast up, ~1 dB/s down, held through silence). Onsets:
+  spectral flux of the floored band levels with an adaptive threshold and one frame of look-ahead
+  (onset latency compensated, calibrated on kick trains). Kicks: a 40–150 Hz rise ≥ 6.5 dB that
+  also lifts the whole spectrum (noise rarely does). Silence gate: below −60 dBFS for 0.35 s, open
+  above −54 dBFS; 2.5 s of silence forgets the tempo; a new song (hub `trackChanged`) does too.
+- **Tempo without octave errors.** Every tempo 60–200 BPM (0.5 BPM steps, parabolic refinement)
+  lays its beat grid over the last 8 s of the onset envelope at its best phase; score =
+  explained share of onset peaks × fill² (grid points that hit an onset; weaker beats of an accent
+  pattern still count, empty points do not) × a one-octave preference around 120 BPM. Confidence =
+  how far the winner stands out from the average candidate. The tracker locks at ≥ 0.35, follows
+  small tempo changes, needs three agreeing estimates for a new tempo, re-phases after two misses,
+  unlocks after ~2 s of low confidence.
+- **Whose sound.** `AudioProcessMatcher`: the app's PIDs and bundle, processes the app is
+  responsible for (`responsibility_get_pid_responsible_for_pid`, looked up at run time; this is
+  how WebKit's GPU process, which plays Safari's and the Search browser's audio, is found),
+  descendants (Chromium/Electron/Firefox helpers) and the publishing PID; never by name
+  similarity, never Ahenk. Resolved anew on every change and whenever the process list changes.
+- **Fallbacks.** Nothing found for 2.5 s, or 3 s of digital silence while the player plays (looked
+  up again once) then 6 s → a tap on everything but Ahenk's processes, until the player changes.
+  A failed build backs off 2/5/15/30 s. A tap that stops delivering for 2 s is rebuilt.
+- **Microphone safety.** The aggregate device is clocked by the default output only if it has no
+  input streams; otherwise by an output-only device (built-in speakers first). A device with a
+  microphone never joins Ahenk's aggregate, so starting it can never start a microphone.
+- **Taps are private and unmuted** (`isPrivate`, `muteBehavior = .unmuted`); the music is never
+  silenced, nothing is recorded or saved; the samples live in the ring until analysed.
+- **Music only.** The gate opens for `.music` and `.unknown` content (except on YouTube); videos,
+  podcasts and adverts never move the light. Pausing closes the gate at once; the tap stays 8 s
+  (no rebuild for a short pause), then everything stops.
+- **Permission.** TCC's preflight (silent) is read at launch, on activation, when Settings › Sound
+  appears and when the menu opens; TCC's request is called only by **Allow Listening…** (Settings ›
+  Sound, and the menu bar menu while not asked yet: the first-run hint). Denied → "Open System
+  Settings…" (`Privacy_AudioCapture`). Turkish strings use macOS's own names for that pane.
+- **Presentation delay** = the default output's latency (device + stream latency, safety offset,
+  buffer), clamped to 0.5 s; frames wait in a 64-frame queue until heard.
+
+### Deviations from PLAN.md
+
+- Extra C target `AhenkAtomics` (see Decisions).
+- **Shared API changes** (all call sites and tests updated): `AudioFeatures` reshaped
+  (`level` → `energy`; `bass/mid/treble` → `bands: AudioBands` with five bands; `bands: SIMD16` →
+  `spectrum: SIMD32`; new `tempoConfidence`; `bandCount` → `spectrumCount`);
+  `AudioFeatureSource.features(at:)` added with a default; `NowPlayingServices.live/demo` take
+  `features:`; `AppEnvironment.audio` added. `DemoProvider` still answers `currentFeatures()` with
+  `DemoBeat` (tests), but the app's demo features now come from the analyzed synth.
+- The "first-run hint" is the menu bar menu item (onboarding is Step 11; it should call
+  `environment.audio.requestPermission()`).
+- macOS 26's `CATapDescription.bundleIDs` / `processRestoreEnabled` are not used: one code path
+  (process objects + a process-list listener) for 14.2 and later.
+
+### Known gaps and risks
+
+- **No real tap has run on this Mac.** Ahenk's system audio permission is "not asked yet" and the
+  rules forbid triggering the prompt, so `ProcessTapSession` (ported from DynamicIsland's working
+  tap), the listeners and the latency read are verified only up to compiling and the smoke
+  checks. First real use: press **Allow Listening…**, play a song, and check the log
+  (`[audio] Listening to com.spotify.client (1 process), 48000 Hz, output latency … ms`) and the
+  monitor in Settings › Sound.
+- The TCC and responsibility functions are private API looked up at run time. If TCC's go away the
+  state reads "unknown" and the user must press Allow Listening… after every launch (that choice is
+  not stored).
+- Tuned on synthetic patterns: real songs with a half-time feel may lock at half or double tempo
+  (then the pulse comes every other beat or twice per beat); `onset` and kicks still follow the
+  drums.
+- The fallback tap on everything hears other apps too (a notification, a video elsewhere).
+- When the default output has a microphone (a USB headset), the tap is clocked by another output
+  device; whether it then still hears audio routed to the headset is untested.
+- Chromium starts its audio-service process when playback starts; until the process-list listener
+  sees it, the tap waits (up to 2.5 s before the fallback).
+- The output latency comes from the HAL; some Bluetooth devices may report it wrong (the delay is
+  clamped to 0.5 s).
+
+### What the user must do once
+
+Open Ahenk normally (`open -n dist/Ahenk.app` or the installed app), play music, then press
+**Allow Listening…** in Settings › Sound (or in the menu bar menu) and allow it in macOS's dialog.
+If it was denied: System Settings › Privacy & Security › Screen & System Audio Recording › System
+Audio Recording Only › turn on Ahenk. The grant survives rebuilds (stable signing identity).
