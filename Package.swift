@@ -12,10 +12,15 @@ let package = Package(
         .executable(name: "Ahenk", targets: ["AhenkApp"]),
     ],
     targets: [
+        // Lock-free atomics and a seqlock for the real-time audio path, as
+        // static inline C (Swift's Synchronization.Atomic needs macOS 15).
+        // Imported by AhenkKit only, never re-exported.
+        .target(name: "AhenkAtomics"),
         // Pure logic: settings, models, protocols, demo content, DSP. No AppKit
         // or SwiftUI. Strict Swift 6 concurrency; every type is unit-tested.
         .target(
             name: "AhenkKit",
+            dependencies: ["AhenkAtomics"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         // AppKit + SwiftUI app. Swift 5 mode at the UI interop boundary; the
