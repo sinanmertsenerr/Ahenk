@@ -40,6 +40,9 @@ final class AudioCaptureController: @unchecked Sendable {
     private var policy: AudioCapturePolicy
     private var session: AnyObject?
     private var built: (request: AudioTapRequest, scope: TapScope?)?
+    /// The player the running analysis belongs to; a new tap for the same
+    /// player keeps the analysis (and its tempo) going.
+    private var analysisTarget: AudioTapTarget?
     private var appliedGeneration = 0
     private var deadline: DispatchSourceTimer?
     private var listeners: [(address: AudioObjectPropertyAddress, block: AudioObjectPropertyListenerBlock)] = []
@@ -129,7 +132,8 @@ final class AudioCaptureController: @unchecked Sendable {
         appliedGeneration = policy.resolveGeneration
         if forceRebuild {
             forceRebuild = false
-            if built != nil { teardownSession() }
+            // A new output: a new aggregate device, the same analysis.
+            if built?.request != .demo { stopTap() }
         }
         switch request {
         case nil:
@@ -176,9 +180,13 @@ final class AudioCaptureController: @unchecked Sendable {
     }
 
     private func build(_ request: AudioTapRequest, scope: TapScope, now: Double) {
-        teardownSession()
+        // Same player, new processes or a new output: swap the tap only.
+        let keepsAnalysis = analysisTarget != nil && analysisTarget == request.target
+        stopTap()
+        if !keepsAnalysis { stopAnalysis() }
         guard #available(macOS 14.2, *) else {
             status.lastFailure = "process taps need macOS 14.2"
+            stopAnalysis()
             policy.noteTapFailed(now: now)
             return
         }
@@ -188,7 +196,7 @@ final class AudioCaptureController: @unchecked Sendable {
             built = (request, scope)
             status.lastFailure = nil
             policy.noteTapStarted(now: now)
-            startAnalysis(sampleRate: session.sampleRate, delay: session.outputLatency, feed: nil)
+            startAnalysis(sampleRate: session.sampleRate, delay: session.outputLatency, feed: nil, target: request.target)
             installListeners()
             let what: String
             switch scope {
@@ -198,6 +206,7 @@ final class AudioCaptureController: @unchecked Sendable {
             log.notice("Listening to \(what), \(Int(session.sampleRate)) Hz, output latency \(Int(session.outputLatency * 1000)) ms, clock \(session.clockDeviceUID)")
         } catch {
             built = nil
+            stopAnalysis()
             status.lastFailure = String(describing: error)
             log.error("Could not start listening to \(request.target?.description ?? "?"): \(error)")
             policy.noteTapFailed(now: now)
@@ -208,22 +217,33 @@ final class AudioCaptureController: @unchecked Sendable {
         guard let demo else { return }
         built = (.demo, nil)
         policy.noteTapStarted(now: now)
-        startAnalysis(sampleRate: DemoAudioFeed.sampleRate, delay: 0, feed: DemoAudioFeed(provider: demo))
+        startAnalysis(sampleRate: DemoAudioFeed.sampleRate, delay: 0, feed: DemoAudioFeed(provider: demo), target: nil)
         log.info("Listening to the demo beat")
     }
 
-    private func teardownSession() {
+    /// Stops the tap (or the demo feed's slot) but leaves the analysis.
+    private func stopTap() {
         if #available(macOS 14.2, *), let tap = session as? ProcessTapSession {
             tap.stop()
         }
         session = nil
         built = nil
+    }
+
+    /// Stops the pump and publishes silence.
+    private func stopAnalysis() {
+        analysisTarget = nil
         analysis.async { [self] in
             pump?.cancel()
             pump = nil
             demoFeed = nil
             pipeline.stop(at: AudioClock.now())
         }
+    }
+
+    private func teardownSession() {
+        stopTap()
+        stopAnalysis()
     }
 
     private func teardown() {
@@ -233,8 +253,9 @@ final class AudioCaptureController: @unchecked Sendable {
 
     // MARK: Analysis (analysis queue)
 
-    private func startAnalysis(sampleRate: Double, delay: Double, feed: DemoAudioFeed?) {
+    private func startAnalysis(sampleRate: Double, delay: Double, feed: DemoAudioFeed?, target: AudioTapTarget?) {
         let gate = policy.isGateOpen
+        analysisTarget = target
         analysis.async { [self] in
             pipeline.configure(sampleRate: sampleRate)
             pipeline.presentationDelay = delay
