@@ -10,9 +10,10 @@ follows the music apps on your Mac, music sites in the browser, any app that
 shows what is playing, and your own files.
 
 > Status: in development. In place: settings, menu bar, Settings window,
-> demo mode, and the now-playing hub that follows Apple Music, Spotify,
-> browsers and any app that shows what is playing. The features arrive step
-> by step; see [docs/PROGRESS.md](docs/PROGRESS.md).
+> demo mode, the now-playing hub that follows Apple Music, Spotify, browsers
+> and any app that shows what is playing, the analysis that hears the beat,
+> and the edge light around every screen in 22 styles. The features arrive
+> step by step; see [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ### Requirements
 
@@ -57,9 +58,11 @@ Dock simgesi. Mac'inizdeki müzik uygulamalarını, tarayıcıdaki müzik
 sitelerini, çalan şarkıyı gösteren her uygulamayı ve kendi dosyalarınızı izler.
 
 > Durum: geliştiriliyor. Hazır olanlar: ayarlar, menü çubuğu, Ayarlar
-> penceresi, demo modu ve Apple Music'i, Spotify'ı, tarayıcıları ve çalan
-> şarkıyı gösteren her uygulamayı izleyen "şu an çalıyor" merkezi. Özellikler
-> adım adım geliyor; ayrıntılar [docs/PROGRESS.md](docs/PROGRESS.md) dosyasında.
+> penceresi, demo modu, Apple Music'i, Spotify'ı, tarayıcıları ve çalan
+> şarkıyı gösteren her uygulamayı izleyen "şu an çalıyor" merkezi, ritmi
+> duyan ses analizi ve her ekranın kenarında 22 farklı stille parlayan kenar
+> ışığı. Özellikler adım adım geliyor; ayrıntılar
+> [docs/PROGRESS.md](docs/PROGRESS.md) dosyasında.
 
 ### Gereksinimler
 

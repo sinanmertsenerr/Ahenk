@@ -613,3 +613,165 @@ Open Ahenk normally (`open -n dist/Ahenk.app` or the installed app), play music,
 **Allow Listening…** in Settings › Sound (or in the menu bar menu) and allow it in macOS's dialog.
 If it was denied: System Settings › Privacy & Security › Screen & System Audio Recording › System
 Audio Recording Only › turn on Ahenk. The grant survives rebuilds (stable signing identity).
+
+## Step 4 — Edge light (done, 2026-11-09)
+
+### What exists
+
+```
+Sources/AhenkKit/Light/
+  EdgeShape            a display's outline: corner radii (notched MacBook panels round their top corners, 10 pt;
+                       6 pt minimum elsewhere), the notch (from the menu bar's auxiliary areas)
+  EdgeGeometry         EdgeMetrics (band depth, perimeter coordinate radius, wrap, corner arm), EdgeField (the shader's
+                       distance, perimeter coordinate and masks in Swift), EdgeLayout (the strips per position)
+  EdgeAtlas            a screen's strips packed into one surface: shelves, tall strips turned, transparent gutters
+  LightLook            the look from the settings (line, halo, band, preview scale); shader numbers of styles/positions
+  LightFade            fades: music (in 0.8 s, out 1.6 s), presence of one display (in 0.6 s, out 0.45 s)
+  LightFramePolicy     60 fps full / 30 fps light at half resolution / paused, from power state and visibility
+  LightColors          four colour slots (album vivid palette, custom, rainbow) + PaletteCrossfade (OKLab, 1.5 s)
+  LightMotion          drift clock, travel (kicks push it), loudness swell, the last four beats (+ made-up soft beats)
+  EdgeLightUniforms    the 432-byte uniform struct, every offset checked against the compiled shader
+  EdgeLightRenderer    device, queue, library, pipeline per pixel format; strip and atlas passes; offscreen float images
+Sources/AhenkApp/Light/
+  EdgeLightController  every input → per-screen state; status for Settings (`environment.light`)
+  EdgeLightOverlay     EdgeLightWindow (one per display) + its strip layers
+  EdgeLightRenderLoop  render thread, one display link per screen, one atlas pass and one CA transaction per frame
+  SurfaceRing          three IOSurfaces a screen's atlas is drawn into in turn
+  LightScreen          NSScreen → UUID, name, frame, shape, refresh rate
+  DesktopWatcher       frontmost app ("only on the desktop") and full-screen displays
+  LightPreviewView     the Settings gallery's live tiles + LightPreviewClock (one 30 fps link while visible)
+  EdgeLightCheck       the smoke checks; MetalShaders (+ EdgeLightShader: the shared renderer, compiled once)
+Sources/AhenkApp/Support/PowerMonitor    battery (IOPS notification), Low Power Mode, thermal state (`environment.power`)
+Sources/AhenkApp/Resources/Shaders/EdgeLight.metal   geometry + 22 styles (runtime-compiled, ~100 ms cold)
+Tests/AhenkKitTests/          258 tests in 36 suites (was 220/29): geometry, atlas, fades, frame policy, colours,
+                              motion, uniforms vs shader reflection, offscreen renders of every style and position
+```
+
+Styles (`LightStyle`, shader number in brackets): Soft Glow [0] halo flowing in the cover's colours with fine
+sparkles (the default, as in the reference videos); Pulse [1] every beat flashes the edge in the next colour and
+sends a ring inwards; Breathe [2] one colour, slowly breathing; Wave [3] the inner edge rolls in waves that kicks
+send on; Spectrum [4] 32-band bars, bass at the bottom middle, treble at the top; Snake [5] a comet with a white-hot
+head; Twin Snakes [6] two comets that flare where they meet; Lava [7] molten blobs; Aurora [8] folded curtains with
+faint rays; Rainbow [9] concentric rainbow stripes; Neon Tube [10] a glass tube per side with bends and flicker;
+Plasma [11]; Fire [12] flames in the cover's warmest colour; Embers [13] rising sparks; Snow [14] flakes that settle
+on the bottom edge; Hearts [15] upright hearts that beat; Fireworks [16] a burst per beat; Sparkles [17] four-point
+stars; Bubbles [18]; Lightning [19] a bolt per beat; Rain [20] slanting streaks with splashes; Starfield [21] stars
+streaming out, warping on kicks.
+
+Data flow: settings, `nowPlaying` (playing music, cover palette), `audio.store.observeActivity`, `power`, screens,
+`DesktopWatcher` → `EdgeLightController` (main) → per-screen `EdgeLightScreenState` → `EdgeLightRenderLoop` (render
+thread): display link tick → `features(at: targetTimestamp)` → `LightMotion`, `LightFade`s, `PaletteCrossfade` →
+uniforms per atlas slot → one render pass into a `SurfaceRing` surface → wait for the GPU → one CA transaction sets
+that surface on every strip layer (each shows its slot through `contentsRect`, turned slots turned back).
+
+### Build, run, verify
+
+```sh
+swift build && swift test             # 258 tests, no warnings
+./Scripts/make-app.sh && ./Scripts/smoke.sh
+./Scripts/smoke.sh --snapshots        # also light-<style>.png: each style at three moments of the demo beat
+AHENK_LIGHT_PREVIEW_DIR=/tmp/light swift test --filter EdgeLightRenderTests   # PNGs from the render tests
+open -n dist/Ahenk.app --args --demo                      # the light around every screen
+open -n dist/Ahenk.app --args --demo --demo-pause-after 4 --demo-resume-after 18   # fade out, stop, come back
+open -n dist/Ahenk.app --args --demo --settings light     # the gallery
+```
+
+Smoke checks: `metal` (compile the bundled shader, every uniform offset equals the shader's reflection, 432
+bytes) and `edgeLight` (22 styles × 3 moments + 3 positions rendered offscreen into float targets: finite, real light,
+nothing outside the band, ~300 ms; then a light window for the main screen is built but never shown and one frame
+is drawn into its atlas and set on its strip layers) and `lightSwitch` (the real controller runs with every display
+switched off in the in-memory settings, so nothing appears; the menu bar's Edge Light item turns it off and on and
+its status follows).
+
+Measured on the M5 (release build, demo, Soft Glow, one 1512 × 982 notched display, load average ~2.6): light on
+at 60 fps 5.1–5.5 % CPU for the whole app vs 1.25–1.5 % with the light off, so **the light costs ~3.9 %** (Fire
+~4.4 %); Optimized Mode (30 fps, half resolution) ~1.8 %; **after a pause 0.00 %** (the fade-out ends 1.6 s after
+the pause, then no display link, no timer). Settings › Edge Light open with the gallery adds ~2 %. Memory: footprint
+77 MB with the light running (13 MB light off, 35 MB after the pause). The four strips cover 22 % of the screen (the
+top strip includes the notch).
+
+### Decisions
+
+- **Draw only the band, in one atlas, through IOSurfaces.** Each screen's light lives in a few strips along the
+  edges (`EdgeLayout`), never a full-screen layer. The strips started as one `CAMetalLayer` each: ~8 % CPU at 60 fps,
+  mostly per-drawable presentation bookkeeping (frame pacing, shared events, presented callbacks), which a constant
+  frame did not trigger (4.0 %). Plain layers showing IOSurfaces brought it to ~5 %; drawing all strips into one
+  atlas surface in one render pass, shown on every strip layer in one transaction, to ~3.9 %. The render thread
+  waits for the GPU (~1 ms) before swapping, so the window server never shows a half-drawn surface; a ring of three
+  surfaces skips a frame if all are still on screen. `contentsRect` counts y from the bottom of the image; a turned
+  slot's row starts at the strip's bottom end and its top edge is the strip's left edge (measured, and covered by
+  the atlas render test).
+- **A render thread.** One thread with a run loop carries every screen's display link and all encoding, so a busy
+  main thread (SwiftUI re-laying out Settings) never makes the light stutter. The main thread only sends state; the
+  thread reports a screen that finished fading out, and the main thread then orders its window out.
+- **Window level: right below the Dock** (`CGWindowLevelForKey(.dockWindow) - 1`): above every app window as the
+  plan asks, but under the Dock, the menu bar, menus and alerts, so their text stays readable over the glow (the
+  Dock's and the menu bar's glass blur the light behind them). `.canJoinAllSpaces`, `.stationary`, `.ignoresCycle`;
+  `.fullScreenAuxiliary` only when the light should not step aside for full-screen apps.
+- **Full screen:** native full-screen Spaces never show the window unless `.fullScreenAuxiliary` is set; borderless
+  "full-screen" windows (games, slideshows) are caught by `DesktopWatcher`, which compares on-screen windows' bounds
+  with the displays (CGWindowList: bounds, owners and layers only, no window contents, no permission) on app
+  activation and Space changes, once more 0.8 s later. **Only on the desktop** = the Finder or Ahenk is the active
+  app (Ahenk too, so the light shows while its settings are changed).
+- **When it shines:** music the light reacts to (`AudioCapturePolicy.reactsTo`: music, or unlabelled content except
+  on YouTube) is playing per the hub, or the analysis hears sound. Without the system audio permission the light still
+  shows while music plays, drifting, with made-up soft beats every ~1.9 s; videos and podcasts never light it.
+- **Changes show themselves.** Changing how the light looks (style, position, line, glow, intensity, speed, colours,
+  displays) while nothing plays shows it for 3.5 s with the demo beat; turning it on does too.
+- **Geometry.** No API gives a panel's corner radius: notched built-in displays get 10 pt top corners (MacBook panels
+  are rounded at the top), every corner at least 6 pt; the notch's lower corners are 30 % of its height and a 6 pt
+  smooth minimum rounds the junction with the top edge, so the light wraps the notch. The perimeter coordinate uses a
+  corner radius of at least the band (no seam on the corner diagonals); particles are placed in that coordinate's own
+  (polar) frame or at true screen points (`outlinePoint`), so they stay round and upright in corners. Patterns along
+  the edge use whole numbers of periods per lap and noise blends across the coordinate's seam; `travel` wraps at one
+  lap (only integer multiples are used), `drift` at 4096 s.
+- **Colours:** the album palette's `vivid` variants in four slots (1 → aaaa, 2 → abab, 3 → abcb), crossfaded in OKLab
+  over 1.5 s; the last palette stays while a new song's cover loads. Output is premultiplied with colour slightly
+  above alpha, so the light brightens what is under it.
+- **Previews:** the gallery tiles are AppKit views driven by one 30 fps display link that runs only while a tile is on
+  screen (window occlusion) and scrolled into view, at one pixel per point, through the shared renderer
+  (`EdgeLightShader.shared`, compiled once off the main thread); SwiftUI never re-renders per frame.
+
+### Deviations from PLAN.md
+
+- AhenkKit now imports Metal (no AppKit): `EdgeLightRenderer` lives there so the tests can render every style
+  offscreen against the real shader (loaded from the repository path). The app loads the same source from its bundle.
+- No `CAMetalLayer`/`MTKView` on screen: strips are plain layers showing IOSurfaces (see Decisions), for CPU.
+- The light sits below the Dock and the menu bar (still above every app window).
+- Extra launch arguments `--demo-pause-after <s>` and `--demo-resume-after <s>`.
+- **Shared API changes** (call sites and tests updated): `MetalProbe` and the app's 64-byte `EdgeLightUniforms` are
+  gone (AhenkKit's `EdgeLightUniforms` replaces it); the smoke check `metal` now compiles and compares the layout, and
+  `edgeLight` is new; `AppEnvironment` gains `power` and `light`; `LaunchOptions` gains `demoPauseAfter` and
+  `demoResumeAfter`; `LightPane` takes the controller.
+
+### For Step 5 (desktop player)
+
+- **Levels:** the light's windows are at Dock − 1, above the desktop widgets you will add (just above the desktop
+  icons). A widget at a screen edge gets the glow over it; that is intended.
+- **Colours:** `environment.light.colors` (`LightColors`, four slots) is what the light draws with right now; for
+  the player use `nowPlaying.artwork?.palette` (`onDark`/`backdrop` for text and glass) so both match the cover.
+- **Power:** `environment.power` (battery, Low Power Mode, heat) is started by the app delegate; follow
+  `LightFramePolicy`'s pattern (lighter on battery/Optimized Mode/heat, nothing when hidden).
+- **Live visuals:** draw them as AppKit/Core Animation leaf views; if one needs Metal, reuse
+  `EdgeLightShader.shared.renderer.device` and prefer IOSurface contents over a `CAMetalLayer` for small, always
+  animating layers (measured above).
+- **Play/pause:** the light follows the hub by itself (playing music → fade in; pause → fade out and stop), so player
+  commands need no light code. `--demo-pause-after` / `--demo-resume-after` exercise the transitions without UI.
+- **Only on the desktop:** clicking a desktop widget makes Ahenk the active app, which counts as "the desktop", so
+  the light stays on.
+
+### Known gaps and risks
+
+- Tested on one display (the built-in, notched one). Several displays, hot-plugging and resolution changes are
+  handled (`didChangeScreenParametersNotification` rebuilds windows and display links) but were not tried on hardware.
+- The 10 pt panel radius is an estimate (no API); it looks right on this Mac.
+- Full-screen stepping aside was not tried live (it would take over the user's screen): native full-screen Spaces rely
+  on the collection behaviour, borderless full-screen windows on the bounds check.
+- "Only on the desktop" counts the Finder as the desktop even while Finder windows are open.
+- No real tap has run (as in Step 3): with real music and no permission the light drifts with made-up beats; it
+  follows the real beat after **Allow Listening…**.
+- CPU numbers vary by ±0.5 % between runs on this busy Mac.
+- A settings change lays out the strip layers on the main thread while the render thread swaps their contents; one
+  frame may show the old layout.
+- `waitUntilCompleted` on the render thread: a stuck GPU would stall the light (not the app).
+- The gallery's tiles cost ~2 % CPU while Settings › Edge Light is visible.
