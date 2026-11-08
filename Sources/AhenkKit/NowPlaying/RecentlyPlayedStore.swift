@@ -24,8 +24,9 @@ public struct RecentlyPlayedItem: Codable, Hashable, Sendable, Identifiable {
 /// in `~/Library/Application Support/Ahenk/RecentlyPlayed.json`.
 ///
 /// A song that plays again moves to the top. The same song from two
-/// providers (a persistent ID and a metadata key) counts once. Adverts and
-/// songs without a title are not recorded.
+/// providers (a persistent ID and a metadata key) counts once. Only music
+/// (and players that do not say what they play) is recorded: no plain
+/// videos, podcasts or adverts, and nothing without a title.
 public final class RecentlyPlayedStore: Sendable {
     public static let capacity = 50
     public static let fileName = "RecentlyPlayed.json"
@@ -78,7 +79,7 @@ public final class RecentlyPlayedStore: Sendable {
     /// Notes that `snapshot` is playing. Cheap to call on every update:
     /// nothing changes while the same song stays on top.
     public func notePlaying(_ snapshot: NowPlayingSnapshot, at date: Date = Date()) {
-        guard snapshot.isPlaying, snapshot.contentKind != .advertisement else { return }
+        guard snapshot.isPlaying, snapshot.contentKind == .music || snapshot.contentKind == .unknown else { return }
         record(snapshot.track, bundleIdentifier: snapshot.bundleIdentifier, at: date)
     }
 

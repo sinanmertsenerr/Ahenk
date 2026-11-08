@@ -44,12 +44,14 @@ struct RecentlyPlayedStoreTests {
         #expect(store.items.last?.track.title == "Song 10")
     }
 
-    @Test("Only playing songs with a title; never adverts")
+    @Test("Only playing music with a title; never adverts, videos or podcasts")
     func filtering() {
         let store = RecentlyPlayedStore(fileURL: nil)
-        var advert = playing(track("A word from a sponsor"))
-        advert.contentKind = .advertisement
-        store.notePlaying(advert)
+        for kind in [ContentKind.advertisement, .video, .podcast] {
+            var other = playing(track("Not a song (\(kind.rawValue))"))
+            other.contentKind = kind
+            store.notePlaying(other)
+        }
         var paused = playing(track("Paused"))
         paused.playbackRate = 0
         store.notePlaying(paused)
@@ -58,6 +60,10 @@ struct RecentlyPlayedStoreTests {
         store.notePlaying(playing(track("Real")))
         store.notePlaying(playing(track("Real")))
         #expect(store.items.count == 1)
+        var unlabelled = playing(track("Unlabelled"))
+        unlabelled.contentKind = .unknown
+        store.notePlaying(unlabelled)
+        #expect(store.items.count == 2, "players that do not say what they play still count")
     }
 
     @Test("Persists to disk and reads back leniently")
