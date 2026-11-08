@@ -146,3 +146,11 @@ func collect<T: Sendable>(_ stream: AsyncStream<T>, count: Int, timeout: Duratio
     task.cancel()
     return box.withLock { $0.items }
 }
+
+/// Collects values from any thread.
+final class Recorder<Value: Sendable>: Sendable {
+    private let lock = OSAllocatedUnfairLock(initialState: [Value]())
+
+    func append(_ value: Value) { lock.withLock { $0.append(value) } }
+    var values: [Value] { lock.withLock { $0 } }
+}
