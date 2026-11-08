@@ -1,0 +1,218 @@
+import AhenkKit
+import AppKit
+
+/// A menu item that runs a closure.
+final class ClosureMenuItem: NSMenuItem {
+    private let handler: () -> Void
+
+    init(title: String, keyEquivalent: String = "", handler: @escaping () -> Void) {
+        self.handler = handler
+        super.init(title: title, action: #selector(run), keyEquivalent: keyEquivalent)
+        target = self
+    }
+
+    @available(*, unavailable)
+    required init(coder: NSCoder) {
+        fatalError("ClosureMenuItem is never decoded")
+    }
+
+    @objc private func run() {
+        handler()
+    }
+}
+
+extension QuickToggle {
+    /// Menu title (English key).
+    @MainActor
+    var title: String {
+        switch self {
+        case .edgeLight: "Edge Light".l10n
+        case .desktopPlayer: "Desktop Player".l10n
+        case .lyrics: "Lyrics".l10n
+        case .liveWallpaper: "Live Wallpaper".l10n
+        case .dockArt: "Dock Art".l10n
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .edgeLight: "light.max"
+        case .desktopPlayer: "play.rectangle"
+        case .lyrics: "quote.bubble"
+        case .liveWallpaper: "photo.on.rectangle.angled"
+        case .dockArt: "dock.rectangle"
+        }
+    }
+}
+
+/// The quick-toggle menu shown by the menu bar extra and the Dock icon.
+/// Rebuilt every time it opens, so it always reflects the current settings,
+/// song and language.
+@MainActor
+enum QuickMenu {
+    enum Placement {
+        case menuBar
+        /// The system adds Quit and the app's windows to the Dock menu.
+        case dock
+    }
+
+    /// Every SF Symbol the menus use (checked by `--smoke`).
+    static var symbolNames: [String] {
+        QuickToggle.allCases.map(\.symbolName) + ["moon", "gearshape", "power"]
+    }
+
+    static func populate(_ menu: NSMenu, environment: AppEnvironment, placement: Placement) {
+        menu.removeAllItems()
+        menu.autoenablesItems = false
+        let settings = environment.settings
+
+        if let snapshot = environment.nowPlaying.snapshot {
+            let header = environment.options.usesDemoContent ? "Now Playing (Demo)".l10n : "Now Playing".l10n
+            menu.addItem(NSMenuItem.sectionHeader(title: header))
+            let song = NSMenuItem(title: snapshot.track.title, action: nil, keyEquivalent: "")
+            song.isEnabled = false
+            if #available(macOS 14.4, *), !snapshot.track.artist.isEmpty {
+                song.subtitle = snapshot.track.artist
+            } else if !snapshot.track.artist.isEmpty {
+                song.title = "\(snapshot.track.title) \u{2014} \(snapshot.track.artist)"
+            }
+            if let artwork = environment.nowPlaying.artworkImage {
+                song.image = MenuBarIcon.rounded(artwork, size: 32, radius: 6)
+            }
+            menu.addItem(song)
+            menu.addItem(.separator())
+        }
+
+        for toggle in QuickToggle.allCases {
+            let item = ClosureMenuItem(title: toggle.title) { [weak settings] in
+                settings?.flip(toggle)
+            }
+            item.state = settings.isOn(toggle) ? .on : .off
+            item.image = symbol(toggle.symbolName)
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+
+        let desk = environment.clearDesk
+        let clearDesk = ClosureMenuItem(title: "Clear Desk".l10n) { desk.toggle() }
+        clearDesk.isEnabled = desk.isAvailable
+        clearDesk.state = desk.isActive ? .on : .off
+        clearDesk.image = symbol("moon")
+        if !desk.isAvailable {
+            clearDesk.toolTip = "Hides every other app with one click and brings them back with another.".l10n
+        }
+        menu.addItem(clearDesk)
+
+        guard placement == .menuBar else { return }
+        menu.addItem(.separator())
+        let settingsItem = ClosureMenuItem(title: "Settings…".l10n, keyEquivalent: ",") { [weak environment] in
+            environment?.showSettings()
+        }
+        settingsItem.image = symbol("gearshape")
+        menu.addItem(settingsItem)
+        let quit = ClosureMenuItem(title: "Quit Ahenk".l10n, keyEquivalent: "q") {
+            NSApp.terminate(nil)
+        }
+        quit.image = symbol("power")
+        menu.addItem(quit)
+    }
+
+    private static func symbol(_ name: String) -> NSImage? {
+        NSImage(systemSymbolName: name, accessibilityDescription: nil)
+    }
+}
+
+/// Owns the menu bar extra.
+@MainActor
+final class StatusMenuController: NSObject, NSMenuDelegate {
+    private let environment: AppEnvironment
+    private var statusItem: NSStatusItem?
+    private var titleObserver: ChangeObserver<String?>?
+
+    init(environment: AppEnvironment) {
+        self.environment = environment
+    }
+
+    func install() {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item.button?.image = MenuBarIcon.image
+        item.button?.imagePosition = .imageLeading
+        item.button?.setAccessibilityTitle("Ahenk")
+        let menu = NSMenu()
+        menu.delegate = self
+        item.menu = menu
+        statusItem = item
+        // Optional song title next to the icon (General › Menu bar).
+        titleObserver = ChangeObserver({ [weak self] in self?.menuBarTitle }) { [weak self] title in
+            self?.statusItem?.button?.title = title.map { " \($0)" } ?? ""
+        }
+        statusItem?.button?.title = menuBarTitle.map { " \($0)" } ?? ""
+    }
+
+    private var menuBarTitle: String? {
+        guard environment.settings.general.showSongTitleInMenuBar,
+              let track = environment.nowPlaying.snapshot?.track
+        else { return nil }
+        return track.title
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        QuickMenu.populate(menu, environment: environment, placement: .menuBar)
+    }
+}
+
+/// The app's main menu (shown while Ahenk is the active app).
+@MainActor
+enum MainMenu {
+    static func build(environment: AppEnvironment) -> NSMenu {
+        let main = NSMenu()
+
+        let app = NSMenu()
+        app.addItem(ClosureMenuItem(title: "About Ahenk".l10n) { [weak environment] in
+            environment?.showSettings(.about)
+        })
+        app.addItem(.separator())
+        app.addItem(ClosureMenuItem(title: "Settings…".l10n, keyEquivalent: ",") { [weak environment] in
+            environment?.showSettings()
+        })
+        app.addItem(.separator())
+        app.addItem(withTitle: "Hide Ahenk".l10n, action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        let hideOthers = app.addItem(
+            withTitle: "Hide Others".l10n,
+            action: #selector(NSApplication.hideOtherApplications(_:)),
+            keyEquivalent: "h"
+        )
+        hideOthers.keyEquivalentModifierMask = [.command, .option]
+        app.addItem(withTitle: "Show All".l10n, action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
+        app.addItem(.separator())
+        app.addItem(withTitle: "Quit Ahenk".l10n, action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        add(app, title: "Ahenk", to: main)
+
+        let edit = NSMenu(title: "Edit".l10n)
+        edit.addItem(withTitle: "Undo".l10n, action: Selector(("undo:")), keyEquivalent: "z")
+        let redo = edit.addItem(withTitle: "Redo".l10n, action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut".l10n, action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy".l10n, action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste".l10n, action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All".l10n, action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        add(edit, title: edit.title, to: main)
+
+        let window = NSMenu(title: "Window".l10n)
+        window.addItem(withTitle: "Minimize".l10n, action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        window.addItem(withTitle: "Close".l10n, action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        window.addItem(.separator())
+        window.addItem(withTitle: "Bring All to Front".l10n, action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
+        add(window, title: window.title, to: main)
+        NSApp.windowsMenu = window
+
+        return main
+    }
+
+    private static func add(_ submenu: NSMenu, title: String, to main: NSMenu) {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.submenu = submenu
+        main.addItem(item)
+    }
+}
