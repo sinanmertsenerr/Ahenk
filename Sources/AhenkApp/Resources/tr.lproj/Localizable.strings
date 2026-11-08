@@ -1,0 +1,245 @@
+/*
+  Ahenk, Turkish UI strings.
+
+  Keys are the English text used in the code (see Support/L10n.swift).
+  LocalizationCoverageTests fail when a key used in the app is missing here,
+  when an entry is no longer used, when format specifiers differ, or when a
+  suffix is glued onto a placeholder ("%@'da"): rephrase instead, because
+  the right suffix depends on the word.
+*/
+
+/* MARK: Menus */
+"Now Playing" = "Şu An Çalıyor";
+"Now Playing (Demo)" = "Şu An Çalıyor (Demo)";
+"Edge Light" = "Kenar Işığı";
+"Desktop Player" = "Masaüstü Oynatıcı";
+"Lyrics" = "Şarkı Sözleri";
+"Live Wallpaper" = "Canlı Duvar Kâğıdı";
+"Dock Art" = "Dock'ta Albüm Kapağı";
+"Clear Desk" = "Masayı Temizle";
+"Hides every other app with one click and brings them back with another." = "Tek tıkla diğer bütün uygulamaları gizler, ikinci tıkla hepsini geri getirir.";
+"Settings…" = "Ayarlar…";
+"Quit Ahenk" = "Ahenk'ten Çık";
+"About Ahenk" = "Ahenk Hakkında";
+"Hide Ahenk" = "Ahenk'i Gizle";
+"Hide Others" = "Diğerlerini Gizle";
+"Show All" = "Tümünü Göster";
+"Edit" = "Düzen";
+"Undo" = "Geri Al";
+"Redo" = "Yinele";
+"Cut" = "Kes";
+"Copy" = "Kopyala";
+"Paste" = "Yapıştır";
+"Select All" = "Tümünü Seç";
+"Window" = "Pencere";
+"Minimize" = "Simge Durumuna Küçült";
+"Close" = "Kapat";
+"Bring All to Front" = "Tümünü Öne Getir";
+
+/* MARK: Settings sidebar */
+"General" = "Genel";
+"Sources" = "Kaynaklar";
+"Sound" = "Ses";
+"Stickers" = "Çıkartmalar";
+"About" = "Hakkında";
+
+/* MARK: General */
+"Demo Mode" = "Demo Modu";
+"Invented songs, generated covers and a steady 120 BPM beat. No music or permissions needed." = "Kurgusal şarkılar, üretilmiş kapaklar ve dakikada 120 vuruşluk sabit bir ritim. Müzik ya da izin gerekmez.";
+"Starting the demo…" = "Demo başlatılıyor…";
+"Previous" = "Önceki";
+"Play" = "Çal";
+"Pause" = "Duraklat";
+"Next" = "Sonraki";
+"Language" = "Dil";
+"Ahenk uses this language whatever language the system uses." = "Ahenk, sistem dili ne olursa olsun bu dili kullanır.";
+"Performance" = "Performans";
+"Optimized Mode" = "Optimize Edilmiş Mod";
+"Uses less energy: fewer particles, lower frame rates and smaller videos." = "Daha az enerji harcar: daha az parçacık, daha düşük kare hızı ve daha küçük videolar.";
+"Run lighter on battery" = "Pilde daha hafif çalış";
+"Also applies when Low Power Mode is on." = "Düşük Güç Modu açıkken de geçerlidir.";
+"Menu Bar" = "Menü Çubuğu";
+"Show the song title in the menu bar" = "Şarkının adını menü çubuğunda göster";
+"Troubleshooting" = "Sorun Giderme";
+"Detailed logging" = "Ayrıntılı günlük kaydı";
+"Writes extra detail to the log file." = "Günlük dosyasına ek ayrıntılar yazar.";
+"Log files" = "Günlük dosyaları";
+"Show in Finder" = "Finder'da Göster";
+"Settings" = "Ayarlar";
+"Reset All Settings…" = "Tüm Ayarları Sıfırla…";
+"Reset all settings?" = "Tüm ayarlar sıfırlansın mı?";
+"Every setting returns to its default value. This cannot be undone." = "Tüm ayarlar varsayılan değerlerine döner. Bu işlem geri alınamaz.";
+"Reset" = "Sıfırla";
+"Cancel" = "Vazgeç";
+
+/* MARK: Sources */
+"Ahenk follows what plays in Apple Music, Spotify, your browser and any app that shows what is playing." = "Ahenk; Apple Music'te, Spotify'da, tarayıcınızda ve çalan şarkıyı gösteren her uygulamada neyin çaldığını izler.";
+"Follow" = "İzlenecek kaynak";
+"Automatic" = "Otomatik";
+"Automatic follows the source that started playing most recently." = "Otomatik seçenek, en son çalmaya başlayan kaynağı izler.";
+"Ask which one to follow when two sources play at once" = "İki kaynak aynı anda çaldığında hangisinin izleneceğini sor";
+"Pause the previous source when switching" = "Kaynak değiştirildiğinde öncekini duraklat";
+"Listen To" = "Dinlenecek Kaynaklar";
+"Spotify Web Player" = "Spotify Web Oynatıcı";
+"Other Apps" = "Diğer Uygulamalar";
+"Files on This Mac" = "Bu Mac'teki Dosyalar";
+"Demo" = "Demo";
+"Browser Extension" = "Tarayıcı Eklentisi";
+"Allow the browser extension to connect" = "Tarayıcı eklentisinin bağlanmasına izin ver";
+"Music sites in the browser report what is playing through the Ahenk extension. Only connections from this Mac are accepted." = "Tarayıcıdaki müzik siteleri, çalan şarkıyı Ahenk eklentisi aracılığıyla bildirir. Yalnızca bu Mac'ten gelen bağlantılar kabul edilir.";
+
+/* MARK: Edge light */
+"The edges of the screen glow in the colors of the album cover and move with the beat." = "Ekranın kenarları albüm kapağının renkleriyle parlar ve ritimle hareket eder.";
+"Show the edge light" = "Kenar ışığını göster";
+"Look" = "Görünüm";
+"Style" = "Stil";
+"Position" = "Konum";
+"Thickness" = "Kalınlık";
+"Glow" = "Parlama";
+"Intensity" = "Yoğunluk";
+"Speed" = "Hız";
+"Color" = "Renk";
+"Colors" = "Renkler";
+"Custom Colors" = "Özel Renkler";
+"Add a color" = "Renk ekle";
+"Remove the last color" = "Son rengi kaldır";
+"Only on the desktop" = "Yalnızca masaüstünde";
+"The light steps back when an app comes to the front." = "Bir uygulama öne gelince ışık geri çekilir.";
+"Step aside for full-screen apps" = "Tam ekran uygulamalarda kenara çekil";
+"Displays" = "Ekranlar";
+"Main display" = "Ana ekran";
+"Keep the display you work on calm and let the others glow." = "Çalıştığınız ekranı sakin bırakın, diğerleri parlasın.";
+
+/* MARK: Light styles */
+"Soft Glow" = "Yumuşak Işıma";
+"Pulse" = "Nabız";
+"Breathe" = "Nefes";
+"Wave" = "Dalga";
+"Spectrum" = "Spektrum";
+"Snake" = "Yılan";
+"Twin Snakes" = "İkiz Yılanlar";
+"Lava" = "Lav";
+"Aurora" = "Kutup Işıkları";
+"Rainbow" = "Gökkuşağı";
+"Neon Tube" = "Neon Tüp";
+"Plasma" = "Plazma";
+"Fire" = "Ateş";
+"Embers" = "Korlar";
+"Snow" = "Kar";
+"Hearts" = "Kalpler";
+"Fireworks" = "Havai Fişek";
+"Sparkles" = "Pırıltılar";
+"Bubbles" = "Baloncuklar";
+"Lightning" = "Şimşek";
+"Rain" = "Yağmur";
+"Starfield" = "Yıldızlar";
+
+/* MARK: Light positions and colours */
+"All Edges" = "Tüm Kenarlar";
+"Bottom" = "Alt";
+"Top" = "Üst";
+"Corners" = "Köşeler";
+"Album Cover" = "Albüm Kapağı";
+"Custom" = "Özel";
+
+/* MARK: Desktop player */
+"A glass player on the desktop, under your windows: a big clock, Continue Playing, the artist's albums and search." = "Masaüstünde, pencerelerin altında duran cam bir oynatıcı: büyük bir saat, Çalmaya Devam Et listesi, sanatçının albümleri ve arama.";
+"Show the desktop player" = "Masaüstü oynatıcıyı göster";
+"Size" = "Boyut";
+"Small" = "Küçük";
+"Large" = "Büyük";
+"Display" = "Ekran";
+"Show" = "Gösterilecekler";
+"Clock" = "Saat";
+"Date" = "Tarih";
+"Clock format" = "Saat biçimi";
+"Same as the System" = "Sistemle Aynı";
+"12-Hour" = "12 Saatlik";
+"24-Hour" = "24 Saatlik";
+"Continue Playing" = "Çalmaya Devam Et";
+"The artist's albums" = "Sanatçının albümleri";
+"Search bar" = "Arama çubuğu";
+"Playback" = "Çalma";
+"Start every song at 0:15" = "Her şarkıyı 0:15'ten başlat";
+"Skips the intro of each new song." = "Her yeni şarkının girişini atlar.";
+
+/* MARK: Lyrics */
+"Synced lyrics on the desktop, line by line, beside the album cover." = "Masaüstünde, albüm kapağının yanında satır satır eşzamanlı şarkı sözleri.";
+"Show lyrics on the desktop" = "Şarkı sözlerini masaüstünde göster";
+"Text size" = "Yazı boyutu";
+"Show the album cover beside the lyrics" = "Sözlerin yanında albüm kapağını göster";
+"Color the lines from the album cover" = "Satırları albüm kapağının renkleriyle boya";
+"Count down to the next line in instrumental parts" = "Enstrümantal bölümlerde sıradaki satıra geri say";
+"Timing" = "Zamanlama";
+"Sync automatically" = "Otomatik eşzamanla";
+"Listens to the song on this Mac to keep the lines on time. Nothing is recorded." = "Satırlar zamanında gelsin diye şarkıyı bu Mac'te dinler. Hiçbir şey kaydedilmez.";
+"Timing offset" = "Zaman kaydırma";
+"Align lyrics on this Mac (Beta)" = "Sözleri bu Mac'te hizala (Beta)";
+"For songs without synced lyrics. Everything runs on this Mac." = "Eşzamanlı sözü olmayan şarkılar için. Her şey bu Mac'te yapılır.";
+
+/* MARK: Lyric styles */
+"Fisheye" = "Balıkgözü";
+"Spread" = "Yayılma";
+"Karaoke" = "Karaoke";
+"Typewriter" = "Daktilo";
+"Neon" = "Neon";
+"Echo" = "Yankı";
+"Glitch" = "Bozulma";
+"Cinema" = "Sinema";
+
+/* MARK: Live wallpaper */
+"While a song plays, its motion artwork or music video becomes the wallpaper, then fades back into yours." = "Şarkı çalarken hareketli kapağı ya da müzik videosu duvar kâğıdı olur; ardından yavaşça sizinkine geri döner.";
+"Show the live wallpaper" = "Canlı duvar kâğıdını göster";
+"Use" = "Kullanılacaklar";
+"Motion artwork" = "Hareketli kapaklar";
+"Music videos" = "Müzik videoları";
+"The song's own video, or another one by the same artist." = "Şarkının kendi videosu ya da aynı sanatçının başka bir videosu.";
+"The album cover when there is no video" = "Video yoksa albüm kapağı";
+"Crossfade" = "Geçiş süresi";
+"Dimming" = "Karartma";
+"Your Videos" = "Videolarınız";
+"No videos yet. Videos you add appear here." = "Henüz video yok. Eklediğiniz videolar burada görünür.";
+"Remove" = "Kaldır";
+
+/* MARK: Sound */
+"Ahenk listens only to the sound of the music app, never to the microphone, and records nothing." = "Ahenk yalnızca müzik uygulamasının sesini dinler; mikrofonu asla kullanmaz ve hiçbir şey kaydetmez.";
+"Beat" = "Ritim";
+"Sensitivity" = "Hassasiyet";
+"Live spectrum" = "Canlı spektrum";
+"Waiting for music" = "Müzik bekleniyor";
+"Sound Effects" = "Ses Efektleri";
+"Use sound effects" = "Ses efektlerini kullan";
+"Changes the sound of the song as it plays." = "Şarkının sesini çalarken değiştirir.";
+"Preset" = "Hazır ayar";
+"Pitch (semitones)" = "Perde (yarım ton)";
+"Reverb" = "Yankılanma";
+"Equalizer" = "Ekolayzır";
+"Use the equalizer" = "Ekolayzırı kullan";
+"Flatten" = "Düzleştir";
+"8D Audio" = "8D Ses";
+"Bass Boost" = "Bas Güçlendirme";
+"Concert Hall" = "Konser Salonu";
+
+/* MARK: Stickers */
+"Pick any photo and Ahenk cuts out the subject, ready to stick on the desktop, the clock or the player." = "Herhangi bir fotoğraf seçin; Ahenk özneyi arka plandan ayırsın, siz de masaüstüne, saate ya da oynatıcıya yapıştırın.";
+"Show stickers" = "Çıkartmaları göster";
+"White border" = "Beyaz kenarlık";
+"Your Stickers" = "Çıkartmalarınız";
+"No stickers yet." = "Henüz çıkartma yok.";
+
+/* MARK: About */
+"Version %@ (%@)" = "Sürüm %@ (%@)";
+"Your desktop, in time with the music." = "Masaüstünüz, müzikle aynı ahenkte.";
+"Source Code" = "Kaynak Kodu";
+"Third-Party Notices" = "Üçüncü Taraf Bildirimleri";
+"Done" = "Bitti";
+"© 2026 Sinan Mert Sener · MIT License" = "© 2026 Sinan Mert Sener · MIT Lisansı";
+
+/* MARK: Units */
+"%@ pt" = "%@ pt";
+"%@×" = "%@×";
+"%@ s" = "%@ sn";
+"%@ dB" = "%@ dB";
+"%@ Hz" = "%@ Hz";
+"%@ kHz" = "%@ kHz";
+"%@ BPM" = "%@ BPM";

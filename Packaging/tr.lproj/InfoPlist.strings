@@ -1,0 +1,3 @@
+/* macOS, Ahenk erişim istediğinde bu metinleri gösterir. */
+"NSAudioCaptureUsageDescription" = "Ahenk, ışığın ritimle hareket edebilmesi için müzik uygulamanızın sesini bu Mac'te dinler. Ses yalnızca bellekte analiz edilir, asla kaydedilmez.";
+"NSAppleEventsUsageDescription" = "Ahenk, çalan şarkıyı ve kapağını müzik uygulamalarınızdan okur; seçtiğiniz çalma, duraklatma ve atlama komutlarını gönderir.";

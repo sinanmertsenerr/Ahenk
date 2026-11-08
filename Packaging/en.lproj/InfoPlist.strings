@@ -1,0 +1,3 @@
+/* Permission texts shown by macOS when Ahenk asks for access. */
+"NSAudioCaptureUsageDescription" = "Ahenk listens to the sound of your music app on this Mac so the light can move with the beat. The sound is analyzed in memory and never recorded.";
+"NSAppleEventsUsageDescription" = "Ahenk reads the current song and its cover from your music apps and sends the play, pause and skip commands you choose.";
