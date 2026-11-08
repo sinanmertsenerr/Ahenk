@@ -158,7 +158,18 @@ public struct AudioBands: Sendable, Equatable, BitwiseCopyable {
 /// thread at display rate: implementations never block, never allocate
 /// and return within microseconds.
 public protocol AudioFeatureSource: AnyObject, Sendable {
+    /// The features now.
     func currentFeatures() -> AudioFeatures
+    /// The features as they should look at `time` (``AudioClock`` seconds),
+    /// e.g. the target timestamp of the frame being rendered, so the beat
+    /// pulse is exact for that frame.
+    func features(at time: Double) -> AudioFeatures
+}
+
+extension AudioFeatureSource {
+    public func features(at time: Double) -> AudioFeatures {
+        currentFeatures()
+    }
 }
 
 /// The clock every audio timestamp uses: seconds on the host's uptime clock,

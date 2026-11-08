@@ -51,7 +51,10 @@ public struct AudioFeatureFrame: Sendable, Equatable, BitwiseCopyable {
             strength = previousBeatStrength
             result.beatIndex -= 1
         }
-        if beatAt.isFinite, now >= beatAt {
+        if result.isSilent {
+            result.beat = 0
+            result.beatPhase = 0
+        } else if beatAt.isFinite, now >= beatAt {
             let since = now - beatAt
             result.beat = strength * Float(exp(-since / Double(max(0.01, pulseDecay))))
             result.beatPhase = beatPeriod > 0 ? Float(min(0.9999, since / beatPeriod)) : 0
@@ -79,7 +82,7 @@ public struct AudioFeatureFrame: Sendable, Equatable, BitwiseCopyable {
 /// render thread, the Settings monitor, the Dock ring.
 ///
 /// Reading (``currentFeatures()``, ``features(at:)``) is lock-free and
-/// allocation-free from any thread: a seqlock copy of a 300-byte frame plus
+/// allocation-free from any thread: a seqlock copy of a 244-byte frame plus
 /// a few multiplications. Publishing is for one producer at a time (the
 /// analysis queue).
 public final class AudioFeatureStore: AudioFeatureSource, @unchecked Sendable {

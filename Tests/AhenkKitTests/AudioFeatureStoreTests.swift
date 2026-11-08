@@ -55,6 +55,10 @@ struct AudioFeatureStoreTests {
     func silenceFrame() {
         let silent = AudioFeatureFrame.silence.features(at: 3)
         #expect(silent.isSilent && silent.beat == 0 && silent.beatPhase == 0)
+        // A silent frame shows no pulse even right after its last beat.
+        var quiet = frame(beat: 10)
+        quiet.features.isSilent = true
+        #expect(quiet.features(at: 10.01).beat == 0 && quiet.features(at: 10.01).beatPhase == 0)
         let store = AudioFeatureStore()
         #expect(store.currentFeatures().isSilent)
         #expect(!store.isActive)
