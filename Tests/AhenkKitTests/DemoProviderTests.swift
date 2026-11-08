@@ -218,11 +218,12 @@ struct DemoContentTests {
         for step in 0..<400 {
             let f = DemoBeat.features(at: Double(step) * 0.137)
             #expect(!f.isSilent && f.bpm == 120)
-            for value in [f.level, f.bass, f.mid, f.treble, f.onset, f.beat, f.beatPhase] {
+            let bands = f.bands
+            for value in [f.energy, bands.subBass, bands.bass, bands.lowMid, bands.mid, bands.high, f.onset, f.beat, f.beatPhase] {
                 #expect(value >= 0 && value <= 1)
             }
-            for band in 0..<AudioFeatures.bandCount {
-                #expect(f.bands[band] >= 0 && f.bands[band] <= 1)
+            for band in 0..<AudioFeatures.spectrumCount {
+                #expect(f.spectrum[band] >= 0 && f.spectrum[band] <= 1)
             }
         }
     }
@@ -231,9 +232,9 @@ struct DemoContentTests {
     func bandShape() {
         let onBeat = DemoBeat.features(at: 8.0)
         let offBeat = DemoBeat.features(at: 8.25)
-        #expect(onBeat.bass > offBeat.bass)
-        #expect(offBeat.treble > onBeat.treble)
-        #expect(onBeat.bands[0] > onBeat.bands[15])
+        #expect(onBeat.bands.bass > offBeat.bands.bass)
+        #expect(offBeat.bands.high > onBeat.bands.high)
+        #expect(onBeat.spectrum[0] > onBeat.spectrum[31])
     }
 
     @Test("Artwork is deterministic per seed")

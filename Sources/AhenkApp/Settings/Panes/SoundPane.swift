@@ -91,7 +91,7 @@ final class SpectrumBarsView: NSView {
     var isActive = false { didSet { if isActive != oldValue { updateTimer() } } }
 
     private var timer: Timer?
-    private static let barCount = AudioFeatures.bandCount
+    private static let barCount = AudioFeatures.spectrumCount
     private static let labelWidth: CGFloat = 70
 
     override var intrinsicContentSize: NSSize { NSSize(width: 230, height: 24) }
@@ -124,7 +124,7 @@ final class SpectrumBarsView: NSView {
         let slot = barsWidth / CGFloat(Self.barCount)
         NSColor.controlAccentColor.setFill()
         for band in 0..<Self.barCount {
-            let level = CGFloat(current?.bands[band] ?? 0)
+            let level = CGFloat(current?.spectrum[band] ?? 0)
             let height = max(2, level * bounds.height)
             let rect = NSRect(x: CGFloat(band) * slot + 1, y: bounds.height - height, width: max(2, slot - 3), height: height)
             NSBezierPath(roundedRect: rect, xRadius: 1.5, yRadius: 1.5).fill()

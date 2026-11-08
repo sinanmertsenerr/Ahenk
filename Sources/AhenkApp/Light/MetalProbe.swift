@@ -66,7 +66,7 @@ enum MetalProbe {
                 glow: Float(light.glow),
                 intensity: Float(light.intensity),
                 beat: features.beat,
-                level: features.level,
+                level: features.energy,
                 colorA: palette.primary.simd,
                 colorB: palette.secondary.simd
             )

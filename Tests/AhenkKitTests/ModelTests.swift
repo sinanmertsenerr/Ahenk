@@ -79,7 +79,7 @@ struct ModelTests {
 
     @Test("Silence is silent")
     func silence() {
-        #expect(AudioFeatures.silence.isSilent && AudioFeatures.silence.level == 0)
+        #expect(AudioFeatures.silence.isSilent && AudioFeatures.silence.energy == 0 && AudioFeatures.silence.bpm == 0)
     }
 }
 
