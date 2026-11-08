@@ -12,6 +12,7 @@ import SwiftUI
 final class SmokeRunner {
     private let environment: AppEnvironment
     private let log = AhenkLogger(category: "smoke")
+    private var edgeLightRenderer: EdgeLightRenderer?
 
     init(environment: AppEnvironment) {
         self.environment = environment
@@ -37,6 +38,7 @@ final class SmokeRunner {
         await report.check("recentlyPlayed") { try self.checkRecentlyPlayed() }
         await report.check("audio") { try self.checkAudio() }
         await report.check("metal") { try self.checkMetal() }
+        await report.check("edgeLight") { try self.checkEdgeLight() }
         await report.check("menus") { try self.checkMenus() }
         await report.check("settingsWindow") { try await self.checkSettingsWindow() }
         report.finish()
@@ -330,12 +332,25 @@ final class SmokeRunner {
             + "ring to store works; system audio access \(permission.rawValue) (read without a prompt)"
     }
 
+    /// Compiles the bundled shader and checks the uniform layout against
+    /// the shader's reflection.
     private func checkMetal() throws -> String {
+        let (renderer, detail) = try EdgeLightCheck.compileAndCompare()
+        edgeLightRenderer = renderer
+        return detail
+    }
+
+    /// Every style rendered offscreen (finite, lit, only in the band), the
+    /// position settings, and a frame drawn into a hidden window's strips.
+    /// With `--snapshots`, a PNG per style.
+    private func checkEdgeLight() throws -> String {
+        guard let renderer = edgeLightRenderer else { throw SmokeFailure("the shader did not compile (see metal)") }
         let palette = environment.demo?.songs.first?.palette ?? .neutral
-        let frames = (0..<3).map { DemoBeat.features(at: Double($0) * 0.25) }
-        let result = try MetalProbe.run(frames: frames, palette: palette, light: LightSettings())
-        let compile = String(format: "%.0f", result.compileMilliseconds)
-        return "\(result.deviceName): compiled EdgeLight.metal in \(compile) ms, rendered \(result.frames) frames (edge alpha \(result.edgeAlpha), centre \(result.centerAlpha))"
+        let directory = snapshotDirectory()
+        if let directory {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        return try EdgeLightCheck.run(renderer: renderer, palette: palette, snapshots: directory)
     }
 
     private func checkMenus() throws -> String {

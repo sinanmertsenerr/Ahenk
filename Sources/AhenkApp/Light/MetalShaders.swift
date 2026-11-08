@@ -30,10 +30,66 @@ enum MetalShaders {
         guard let url = sourceURL(named: name) else { throw LoadError.missingSource(name) }
         return try String(contentsOf: url, encoding: .utf8)
     }
+}
 
-    static func makeLibrary(named name: String, device: MTLDevice) throws -> MTLLibrary {
-        let options = MTLCompileOptions()
-        options.languageVersion = .version3_0
-        return try device.makeLibrary(source: source(named: name), options: options)
+/// The app's one edge light renderer (device, queue, compiled shader,
+/// pipelines), shared by the screens' light and the Settings previews.
+/// Compiled once, off the main thread, the first time anything asks.
+@MainActor
+final class EdgeLightShader {
+    static let shared = EdgeLightShader()
+
+    enum State {
+        case idle
+        case loading
+        case ready(EdgeLightRenderer)
+        case failed(String)
+    }
+
+    private(set) var state: State = .idle
+    private var waiters: [(EdgeLightRenderer?) -> Void] = []
+    private static let log = AhenkLogger(category: "light")
+
+    /// The renderer once compiled; `nil` while compiling or after a failure.
+    var renderer: EdgeLightRenderer? {
+        if case .ready(let renderer) = state { return renderer }
+        return nil
+    }
+
+    /// Calls `completion` on the main thread with the renderer (compiling it
+    /// first if needed), or `nil` when the shader cannot be compiled.
+    func load(_ completion: @escaping (EdgeLightRenderer?) -> Void) {
+        switch state {
+        case .ready(let renderer):
+            completion(renderer)
+        case .failed:
+            completion(nil)
+        case .loading:
+            waiters.append(completion)
+        case .idle:
+            state = .loading
+            waiters.append(completion)
+            Task.detached(priority: .userInitiated) {
+                let result = Result { try EdgeLightRenderer(source: MetalShaders.source(named: "EdgeLight")) }
+                await MainActor.run { EdgeLightShader.shared.finish(result) }
+            }
+        }
+    }
+
+    private func finish(_ result: Result<EdgeLightRenderer, Error>) {
+        let renderer: EdgeLightRenderer?
+        switch result {
+        case .success(let compiled):
+            state = .ready(compiled)
+            renderer = compiled
+            Self.log.info("Edge light shader compiled in \(Int(compiled.compileMilliseconds.rounded())) ms on \(compiled.device.name)")
+        case .failure(let error):
+            state = .failed(String(describing: error))
+            renderer = nil
+            Self.log.error("Edge light shader unavailable: \(error)")
+        }
+        let waiting = waiters
+        waiters = []
+        waiting.forEach { $0(renderer) }
     }
 }
