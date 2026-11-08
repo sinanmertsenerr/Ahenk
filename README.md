@@ -31,7 +31,12 @@ macOS 14.2 or later, Xcode 16 or later (Swift 6).
 Ahenk uses two permissions: system audio (so the light hears the music;
 nothing is recorded, never the microphone) and Automation (to read the song,
 cover, shuffle, repeat and favorites from Apple Music and Spotify and send
-the commands you choose). Without Automation, Ahenk still shows what plays;
+the commands you choose). macOS asks for system audio only when you press
+**Allow Listening…** in Settings › Sound or in the menu bar menu; Ahenk then
+listens to the app that plays your music, only while music plays, and
+analyzes the sound in memory. If you said no, turn Ahenk on in System
+Settings › Privacy & Security › Screen & System Audio Recording › System
+Audio Recording Only. Without Automation, Ahenk still shows what plays;
 it asks only when you press **Allow Access…** in Settings › Sources. To find
 covers, Ahenk sends a song's title and artist to Apple's public catalog and
 asks Spotify's public page for a track's cover; nothing else leaves your Mac.
@@ -73,11 +78,17 @@ macOS 14.2 ya da sonrası, Xcode 16 ya da sonrası (Swift 6).
 Ahenk iki izin kullanır: sistem sesi (ışık müziği duysun diye; hiçbir şey
 kaydedilmez, mikrofon asla kullanılmaz) ve Otomasyon (Apple Music ile
 Spotify'dan şarkıyı, kapağı, karıştırma, tekrar ve favori bilgisini okumak ve
-seçtiğiniz komutları göndermek için). Otomasyon izni olmadan da neyin çaldığını
-gösterir; izni yalnızca Ayarlar › Kaynaklar'daki **Erişime İzin Ver…**
-düğmesine bastığınızda ister. Kapakları bulmak için şarkının adını ve
-sanatçısını Apple'ın herkese açık kataloğuna gönderir, bir parçanın kapağını
-Spotify'ın herkese açık sayfasından ister; Mac'inizden başka hiçbir şey çıkmaz.
+seçtiğiniz komutları göndermek için). macOS sistem sesi iznini yalnızca
+Ayarlar › Ses'teki ya da menü çubuğu menüsündeki **Dinlemeye İzin Ver…**
+düğmesine bastığınızda sorar; Ahenk bundan sonra yalnızca müzik çalarken,
+müziğinizi çalan uygulamayı dinler ve sesi bellekte analiz eder. Hayır
+dediyseniz Sistem Ayarları › Gizlilik ve Güvenlik › Ekran ve Sistem Sesi
+Kaydı › Yalnızca Sistem Sesi Kaydı bölümünden Ahenk'i açın. Otomasyon izni
+olmadan da neyin çaldığını gösterir; izni yalnızca Ayarlar › Kaynaklar'daki
+**Erişime İzin Ver…** düğmesine bastığınızda ister. Kapakları bulmak için
+şarkının adını ve sanatçısını Apple'ın herkese açık kataloğuna gönderir, bir
+parçanın kapağını Spotify'ın herkese açık sayfasından ister; Mac'inizden başka
+hiçbir şey çıkmaz.
 
 ### Lisans
 
