@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Info.plist template for Ahenk.app. Scripts/make-app.sh copies it into the
+  bundle and fills in CFBundleShortVersionString, CFBundleVersion and
+  AhenkGitCommit. Localized permission texts live in <lang>.lproj/InfoPlist.strings.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>com.sinanmertsener.Ahenk</string>
+	<key>CFBundleName</key>
+	<string>Ahenk</string>
+	<key>CFBundleDisplayName</key>
+	<string>Ahenk</string>
+	<key>CFBundleExecutable</key>
+	<string>Ahenk</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>0</string>
+	<key>AhenkGitCommit</key>
+	<string>unknown</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>tr</string>
+	</array>
+	<!-- The UI strings live in the SwiftPM resource bundle, not the main bundle. -->
+	<key>CFBundleAllowMixedLocalizations</key>
+	<true/>
+	<!-- Core Audio process taps arrived in macOS 14.2. -->
+	<key>LSMinimumSystemVersion</key>
+	<string>14.2</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.music</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Ahenk listens to the sound of your music app on this Mac so the light can move with the beat. The sound is analyzed in memory and never recorded.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Ahenk reads the current song and its cover from your music apps and sends the play, pause and skip commands you choose.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026 Sinan Mert Sener. MIT License.</string>
+</dict>
+</plist>

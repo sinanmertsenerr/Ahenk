@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Ahenk is signed with the hardened runtime (the codesign "runtime" option)
+  and is not sandboxed. The only entitlement: sending Apple Events to read and
+  control Apple Music and Spotify. The user still approves each app once
+  (Automation). System audio for the light uses a Core Audio process tap,
+  which is covered by NSAudioCaptureUsageDescription; no microphone access.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+</dict>
+</plist>
