@@ -119,6 +119,10 @@ enum TestImages {
         context.fill(CGRect(x: 0, y: bar, width: width, height: height - 2 * bar))
         return context.makeImage()!
     }
+
+    static func png(_ image: CGImage) -> Data {
+        ArtworkImageDecoder.pngData(image)!
+    }
 }
 
 /// Reads up to `count` elements, or what arrived when the stream ends or
