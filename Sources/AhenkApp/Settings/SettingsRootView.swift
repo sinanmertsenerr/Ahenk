@@ -44,7 +44,7 @@ struct SettingsDetail: View {
         switch pane {
         case .general: GeneralPane(environment: environment, settings: settings)
         case .sources: SourcesPane(services: environment.services, settings: settings)
-        case .light: LightPane(settings: settings)
+        case .light: LightPane(settings: settings, light: environment.light)
         case .player: PlayerPane(settings: settings)
         case .lyrics: LyricsPane(settings: settings)
         case .wallpaper: WallpaperPane(settings: settings)

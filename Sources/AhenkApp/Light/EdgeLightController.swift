@@ -84,6 +84,7 @@ final class EdgeLightController {
         self.features = features
         self.power = power
         lastLight = settings.light
+        status = settings.light.enabled ? .starting : .off
     }
 
     // MARK: Lifecycle

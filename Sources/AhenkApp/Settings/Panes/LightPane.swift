@@ -3,6 +3,7 @@ import SwiftUI
 
 struct LightPane: View {
     @Bindable var settings: AppSettings
+    let light: EdgeLightController
     @State private var displays = DisplayIdentity.currentDisplays()
 
     var body: some View {
@@ -11,15 +12,18 @@ struct LightPane: View {
             summary: "The edges of the screen glow in the colors of the album cover and move with the beat.".l10n
         ) {
             Section {
-                ToggleRow(title: "Show the edge light".l10n, isOn: $settings.light.enabled)
+                ToggleRow(title: "Show the edge light".l10n, detail: light.status.title, isOn: $settings.light.enabled)
             }
 
-            Section("Look".l10n) {
-                Picker("Style".l10n, selection: $settings.light.style) {
-                    ForEach(LightStyle.allCases) { style in
-                        Text(style.title).tag(style)
-                    }
-                }
+            Section {
+                LightStyleGallery(selection: $settings.light.style)
+            } header: {
+                Text("Style".l10n)
+            } footer: {
+                Text("Each preview moves with the music, or with a demo beat while nothing plays.".l10n)
+            }
+
+            Section {
                 Picker("Position".l10n, selection: $settings.light.position) {
                     ForEach(LightPosition.allCases) { position in
                         Text(position.title).tag(position)
@@ -29,6 +33,10 @@ struct LightPane: View {
                 SliderRow(title: "Glow".l10n, value: $settings.light.glow, range: LightSettings.glowRange, format: ValueFormat.percent)
                 SliderRow(title: "Intensity".l10n, value: $settings.light.intensity, range: LightSettings.intensityRange, format: ValueFormat.percent)
                 SliderRow(title: "Speed".l10n, value: $settings.light.speed, range: LightSettings.speedRange, format: ValueFormat.multiplier)
+            } header: {
+                Text("Look".l10n)
+            } footer: {
+                Text("While nothing plays, a change shows on your screens for a few seconds.".l10n)
             }
 
             Section("Color".l10n) {
@@ -115,6 +123,76 @@ struct LightPane: View {
             } else {
                 settings.light.disabledDisplays.insert(display.id)
             }
+        }
+    }
+}
+
+/// Every style as a live miniature; clicking one picks it.
+struct LightStyleGallery: View {
+    @Binding var selection: LightStyle
+
+    private let columns = [GridItem(.adaptive(minimum: 104, maximum: 150), spacing: 12)]
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+            ForEach(LightStyle.allCases) { style in
+                LightStyleTile(style: style, isSelected: style == selection) {
+                    selection = style
+                }
+            }
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+/// One style: its live preview and its name; the chosen one is outlined.
+struct LightStyleTile: View {
+    let style: LightStyle
+    let isSelected: Bool
+    let choose: () -> Void
+
+    var body: some View {
+        Button(action: choose) {
+            VStack(spacing: 6) {
+                LightPreview(style: style)
+                    .aspectRatio(1.6, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(isSelected ? Color.accentColor : Color.primary.opacity(0.12), lineWidth: isSelected ? 2.5 : 1)
+                    }
+                Text(style.title)
+                    .font(.caption)
+                    .fontWeight(isSelected ? .semibold : .regular)
+                    .foregroundStyle(isSelected ? .primary : .secondary)
+                    .lineLimit(1)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(style.title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+extension EdgeLightController.Status {
+    /// One line under the switch: what the light is doing now.
+    @MainActor
+    var title: String {
+        switch self {
+        case .off: "Off".l10n
+        case .starting: "Starting…".l10n
+        case .waitingForMusic: "Waiting for music".l10n
+        case .glowing(let reason):
+            switch reason {
+            case .normal, .hidden: "On".l10n
+            case .battery: "On, lighter on battery".l10n
+            case .lowPowerMode: "On, lighter in Low Power Mode".l10n
+            case .optimizedMode: "On, lighter in Optimized Mode".l10n
+            case .thermal: "On, lighter while the Mac is hot".l10n
+            }
+        case .steppedAside: "Stepped aside".l10n
+        case .unavailable: "Not available on this Mac".l10n
         }
     }
 }

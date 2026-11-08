@@ -136,6 +136,16 @@
 "Displays" = "Ekranlar";
 "Main display" = "Ana ekran";
 "Keep the display you work on calm and let the others glow." = "Çalıştığınız ekranı sakin bırakın, diğerleri parlasın.";
+"Each preview moves with the music, or with a demo beat while nothing plays." = "Her önizleme müzikle, hiçbir şey çalmıyorken de bir demo ritmiyle hareket eder.";
+"While nothing plays, a change shows on your screens for a few seconds." = "Hiçbir şey çalmıyorken yaptığınız değişiklik birkaç saniye ekranlarınızda görünür.";
+"Off" = "Kapalı";
+"On" = "Açık";
+"On, lighter on battery" = "Açık, pilde daha hafif";
+"On, lighter in Low Power Mode" = "Açık, Düşük Güç Modunda daha hafif";
+"On, lighter in Optimized Mode" = "Açık, Optimize Edilmiş Modda daha hafif";
+"On, lighter while the Mac is hot" = "Açık, Mac ısındığı için daha hafif";
+"Stepped aside" = "Kenara çekildi";
+"Not available on this Mac" = "Bu Mac'te kullanılamıyor";
 
 /* MARK: Light styles */
 "Soft Glow" = "Yumuşak Işıma";
