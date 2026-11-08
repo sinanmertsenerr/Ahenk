@@ -39,6 +39,7 @@ final class SmokeRunner {
         await report.check("audio") { try self.checkAudio() }
         await report.check("metal") { try self.checkMetal() }
         await report.check("edgeLight") { try self.checkEdgeLight() }
+        await report.check("lightSwitch") { try await self.checkLightSwitch() }
         await report.check("menus") { try self.checkMenus() }
         await report.check("settingsWindow") { try await self.checkSettingsWindow() }
         report.finish()
@@ -433,6 +434,47 @@ final class SmokeRunner {
         }
         let saved = directory.map { ", snapshots in \($0.path)" } ?? ""
         return "\(rendered) panes rendered offscreen (\(SettingsPane.allCases.count) panes × \(AppLanguage.allCases.count) languages)\(saved)"
+    }
+
+    /// The menu bar's Edge Light switch drives the running light: the real
+    /// controller starts with every display switched off in the in-memory
+    /// settings (so nothing can appear on a screen), then the menu item turns
+    /// the light off and on again and the controller's status follows.
+    private func checkLightSwitch() async throws -> String {
+        let settings = environment.settings
+        let original = settings.light
+        let controller = environment.light
+        defer {
+            controller.stop()
+            settings.light = original
+        }
+        settings.light.disabledDisplays = Set(LightScreen.current().map(\.0.id))
+        settings.light.enabled = true
+        controller.start()
+        func wait(for description: String, _ condition: @escaping () -> Bool) async throws {
+            let deadline = Date().addingTimeInterval(4)
+            while !condition() {
+                guard Date() < deadline else { throw SmokeFailure("the light did not become \(description) (status \(controller.status))") }
+                try await Task.sleep(for: .milliseconds(20))
+            }
+        }
+        let running: () -> Bool = { controller.status != .off && controller.status != .starting }
+        try await wait(for: "ready", running)
+        let first = controller.status
+        func flip() throws {
+            let menu = NSMenu()
+            QuickMenu.populate(menu, environment: environment, placement: .menuBar)
+            guard let item = menu.items.first(where: { $0.title == QuickToggle.edgeLight.title }), let action = item.action else {
+                throw SmokeFailure("no Edge Light item in the menu")
+            }
+            NSApp.sendAction(action, to: item.target, from: item)
+        }
+        try flip()
+        try await wait(for: "off") { controller.status == .off }
+        try flip()
+        try await wait(for: "ready again", running)
+        return "the menu's Edge Light item turns the running light off and on (\(first) → off → \(controller.status)); "
+            + "every display was switched off, nothing was shown"
     }
 
     // MARK: Helpers
