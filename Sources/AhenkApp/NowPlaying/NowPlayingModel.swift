@@ -2,12 +2,14 @@ import AhenkKit
 import AppKit
 import Observation
 
-/// What the UI shows as "now playing": the snapshot of the active provider
+/// What the UI shows as "now playing": the snapshot of the followed player
 /// plus its artwork, lyrics and live audio features.
 ///
-/// Step 1 attaches the demo provider directly. Step 2 puts the
-/// `NowPlayingHub` (several providers, active-source rules) in front of this
-/// model; the UI only depends on the properties below.
+/// Normally attached to the `NowPlayingHub` (which is itself a provider and
+/// merges every source); tests and the smoke run may attach any provider.
+/// The UI only depends on the properties below. Step 3's audio engine reads
+/// `snapshot` for the app to tap (`bundleIdentifier`, `processIdentifier`)
+/// and whether it plays music (`isPlaying`, `contentKind`).
 @MainActor
 @Observable
 final class NowPlayingModel {
@@ -25,6 +27,9 @@ final class NowPlayingModel {
     @ObservationIgnored private var lyricsProvider: LyricsProvider?
     @ObservationIgnored private var streamTask: Task<Void, Never>?
     @ObservationIgnored private var detailTask: Task<Void, Never>?
+    @ObservationIgnored private var artworkTask: Task<Void, Never>?
+    /// Which cover `artwork` shows (song plus the source's cover identity).
+    @ObservationIgnored private var artworkSignature: String?
 
     private static let log = AhenkLogger(category: "now-playing")
     static let artworkPixelSize = 600
@@ -56,8 +61,11 @@ final class NowPlayingModel {
     func detach() {
         streamTask?.cancel()
         detailTask?.cancel()
+        artworkTask?.cancel()
         streamTask = nil
         detailTask = nil
+        artworkTask = nil
+        artworkSignature = nil
         provider = nil
         artworkProvider = nil
         lyricsProvider = nil
@@ -85,34 +93,64 @@ final class NowPlayingModel {
         snapshot = new
         guard let new else {
             if previous != nil { Self.log.info("Nothing is playing") }
+            artworkTask?.cancel()
+            detailTask?.cancel()
+            artworkSignature = nil
             artwork = nil
             artworkImage = nil
             lyrics = nil
             return
         }
-        guard previous.map({ !$0.isSameTrack(as: new) }) ?? true else { return }
-        let track = new.track
-        Self.log.info("Now playing \u{201C}\(track.title)\u{201D} by \(track.artist) [\(track.source.rawValue)]")
-        artwork = nil
-        artworkImage = nil
-        lyrics = nil
-        loadDetails(for: track)
+        let isNewTrack = previous.map { !$0.isSameTrack(as: new) } ?? true
+        if isNewTrack {
+            let track = new.track
+            Self.log.info("Now playing \u{201C}\(track.title)\u{201D} by \(track.artist) [\(track.source.rawValue), \(new.contentKind.rawValue), \(new.bundleIdentifier ?? "-")]")
+            artwork = nil
+            artworkImage = nil
+            lyrics = nil
+            loadLyrics(for: track)
+        }
+        // The cover may arrive after the song (a later update, a lookup);
+        // the old cover of the same song stays until the new one is ready.
+        let signature = Self.artworkSignature(of: new)
+        if isNewTrack || signature != artworkSignature {
+            artworkSignature = signature
+            loadArtwork(for: new)
+        }
     }
 
-    private func loadDetails(for track: Track) {
+    static func artworkSignature(of snapshot: NowPlayingSnapshot) -> String {
+        let track = snapshot.track
+        let cover = snapshot.artworkIdentifier ?? snapshot.artworkData.map { "\($0.count)" } ?? ""
+        return "\(track.source.rawValue):\(track.id)|\(cover)|\(track.artworkURL?.absoluteString ?? "")|\(snapshot.contentKind.rawValue)"
+    }
+
+    private func loadArtwork(for snapshot: NowPlayingSnapshot) {
+        artworkTask?.cancel()
+        guard let artworkProvider else { return }
+        let signature = artworkSignature
+        artworkTask = Task { [weak self] in
+            let loaded = await artworkProvider.artwork(for: snapshot, pixelSize: Self.artworkPixelSize)
+            guard let self, !Task.isCancelled, self.artworkSignature == signature else { return }
+            guard let loaded else {
+                if self.snapshot.map({ !$0.isSameTrack(as: snapshot) }) ?? true {
+                    self.artwork = nil
+                    self.artworkImage = nil
+                }
+                return
+            }
+            self.artwork = loaded
+            self.artworkImage = NSImage(cgImage: loaded.image, size: .zero)
+        }
+    }
+
+    private func loadLyrics(for track: Track) {
         detailTask?.cancel()
-        let artworkProvider = self.artworkProvider
         let lyricsProvider = self.lyricsProvider
         detailTask = Task { [weak self] in
-            async let art = artworkProvider?.artwork(for: track, pixelSize: Self.artworkPixelSize)
-            async let words = Self.fetchLyrics(lyricsProvider, track: track)
-            let (loadedArt, loadedLyrics) = await (art, words)
-            guard let self, !Task.isCancelled, self.snapshot?.track.id == track.id else { return }
-            if let loadedArt {
-                self.artwork = loadedArt
-                self.artworkImage = NSImage(cgImage: loadedArt.image, size: .zero)
-            }
-            self.lyrics = loadedLyrics
+            let loaded = await Self.fetchLyrics(lyricsProvider, track: track)
+            guard let self, !Task.isCancelled, self.snapshot?.track.isSameSong(as: track) == true else { return }
+            self.lyrics = loaded
         }
     }
 

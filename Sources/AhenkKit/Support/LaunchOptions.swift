@@ -8,6 +8,8 @@ import Foundation
 ///   write `~/Library/Logs/Ahenk/smoke.json` and quit with status 0.
 /// - `--snapshots [dir]`: with `--smoke`, also save PNGs of every Settings
 ///   pane in every language (default `~/Library/Logs/Ahenk/snapshots`).
+/// - `--demo-conflict`: like `--demo`, with a second demo player so the
+///   "several sources are playing" question shows up.
 /// - `--settings [pane]` / `--settings=pane`: open Settings at launch.
 /// - `--allow-multiple`: skip the single-instance hand-off (development).
 ///
@@ -24,6 +26,8 @@ public struct LaunchOptions: Equatable, Sendable {
     public var settingsPane: String?
     public var snapshotDirectory: String?
     public var allowsMultipleInstances = false
+    /// A second demo player plays alongside the first (`--demo-conflict`).
+    public var demoConflict = false
 
     /// Demo content is used in both `--demo` and `--smoke`.
     public var usesDemoContent: Bool { mode != .normal }
@@ -39,6 +43,9 @@ public struct LaunchOptions: Equatable, Sendable {
             switch name {
             case "--demo":
                 if mode == .normal { mode = .demo }
+            case "--demo-conflict":
+                if mode == .normal { mode = .demo }
+                demoConflict = true
             case "--smoke":
                 mode = .smoke
             case "--settings":

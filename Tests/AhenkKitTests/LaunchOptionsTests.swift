@@ -22,6 +22,10 @@ struct LaunchOptionsTests {
         #expect(parse("--demo", "--smoke").mode == .smoke)
         #expect(parse("--smoke", "--demo").mode == .smoke, "smoke wins regardless of order")
         #expect(parse("--smoke").usesDemoContent)
+        let conflict = parse("--demo-conflict")
+        #expect(conflict.mode == .demo && conflict.demoConflict)
+        #expect(!parse("--demo").demoConflict)
+        #expect(parse("--smoke", "--demo-conflict").mode == .smoke)
     }
 
     @Test("Settings pane in both spellings")

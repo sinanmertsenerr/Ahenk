@@ -48,10 +48,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         status.install()
         statusMenu = status
 
-        if let demo = environment.demo {
+        if environment.demo != nil {
             log.notice("Demo mode: invented songs, generated covers, 120 BPM")
-            environment.nowPlaying.attach(provider: demo, artwork: demo, lyrics: demo, features: demo)
         }
+        let services = environment.services
+        services.start(settings: settings)
+        environment.nowPlaying.attach(
+            provider: services.hub, artwork: services.artwork, lyrics: services.lyrics, features: services.features
+        )
 
         observers.append(ChangeObserver({ settings.general.language }) { [weak self] language in
             guard let self else { return }
@@ -124,6 +128,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Later steps restore the user's desktop here (wallpaper, hidden apps).
         environment.nowPlaying.detach()
+        // Ends the MediaRemote adapter child process.
+        environment.services.stop()
         log.notice("Quitting")
         Log.flush()
     }

@@ -10,6 +10,8 @@ final class AppEnvironment {
     let options: LaunchOptions
     let settings: AppSettings
     let nowPlaying: NowPlayingModel
+    /// The hub and every source (or the demo alone in `--demo`/`--smoke`).
+    let services: NowPlayingServices
     /// Present in `--demo` and `--smoke`.
     let demo: DemoProvider?
     /// Step 9 replaces the placeholder with the real Clear Desk.
@@ -22,6 +24,18 @@ final class AppEnvironment {
         self.settings = settings
         self.demo = demo
         self.nowPlaying = NowPlayingModel()
+        if let demo {
+            // The second demo player starts two songs later.
+            let second = options.demoConflict
+                ? DemoProvider(
+                    songs: Array(DemoCatalog.songs[2...] + DemoCatalog.songs[..<2]),
+                    id: "demo-b", bundleIdentifier: "com.sinanmertsener.Ahenk.demo-b"
+                )
+                : nil
+            services = .demo(demo, second: second, settings: settings)
+        } else {
+            services = .live(settings: settings)
+        }
     }
 
     /// Smoke runs work on an in-memory copy of the user's settings so they

@@ -84,6 +84,7 @@
 "Other Apps" = "Diğer Uygulamalar";
 "Files on This Mac" = "Bu Mac'teki Dosyalar";
 "Demo" = "Demo";
+"Demo %@" = "Demo %@";
 "Browser Extension" = "Tarayıcı Eklentisi";
 "Allow the browser extension to connect" = "Tarayıcı eklentisinin bağlanmasına izin ver";
 "Music sites in the browser report what is playing through the Ahenk extension. Only connections from this Mac are accepted." = "Tarayıcıdaki müzik siteleri, çalan şarkıyı Ahenk eklentisi aracılığıyla bildirir. Yalnızca bu Mac'ten gelen bağlantılar kabul edilir.";
