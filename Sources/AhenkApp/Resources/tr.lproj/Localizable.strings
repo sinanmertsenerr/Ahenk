@@ -38,6 +38,7 @@
 "Which one should Ahenk follow?" = "Ahenk hangisini izlesin?";
 
 /* MARK: Settings sidebar */
+"Ahenk Settings" = "Ahenk Ayarları";
 "General" = "Genel";
 "Sources" = "Kaynaklar";
 "Sound" = "Ses";
@@ -53,7 +54,7 @@
 "Pause" = "Duraklat";
 "Next" = "Sonraki";
 "Language" = "Dil";
-"Ahenk uses this language whatever language the system uses." = "Ahenk, sistem dili ne olursa olsun bu dili kullanır.";
+"Ahenk keeps this language even when your Mac uses another one." = "Mac'iniz başka bir dil kullansa bile Ahenk bu dilde kalır.";
 "Performance" = "Performans";
 "Optimized Mode" = "Optimize Edilmiş Mod";
 "Uses less energy: fewer particles, lower frame rates and smaller videos." = "Daha az enerji harcar: daha az parçacık, daha düşük kare hızı ve daha küçük videolar.";

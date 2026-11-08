@@ -35,7 +35,7 @@ struct GeneralPane: View {
                     }
                 }
             } footer: {
-                Text("Ahenk uses this language whatever language the system uses.".l10n)
+                Text("Ahenk keeps this language even when your Mac uses another one.".l10n)
             }
 
             Section("Performance".l10n) {
