@@ -17,7 +17,8 @@ struct BandLayout: Sendable {
     /// Centre frequency of each band in Hz.
     let spectrumCenter: SIMD32<Float>
     /// dB added before display so typical music looks level rather than
-    /// sloping down: +3 dB per octave around 500 Hz.
+    /// sloping down: +4.5 dB per octave around 500 Hz (the usual slope of a
+    /// music spectrum analyser).
     let spectrumTilt: SIMD32<Float>
     /// 1 for bands below the Nyquist limit, 0 above.
     let spectrumActive: SIMD32<Float>
@@ -33,7 +34,7 @@ struct BandLayout: Sendable {
     /// dB added to each summary band so the bands of typical music land at
     /// a similar height (music carries far more power low than high).
     static let summaryOffsets = SIMD8<Float>(2, 0, 6, 7, 12, 0, 0, 0)
-    static let tiltPerOctave: Float = 3
+    static let tiltPerOctave: Float = 4.5
     static let tiltPivot: Double = 500
 
     init(fftSize: Int, sampleRate: Double) {
