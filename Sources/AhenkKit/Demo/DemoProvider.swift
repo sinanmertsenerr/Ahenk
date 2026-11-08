@@ -8,9 +8,12 @@ import os
 /// (song, position, date) and the injected clock, so tests can drive time
 /// by hand; commands only move the anchor.
 public final class DemoProvider: NowPlayingProvider, ArtworkProvider, LyricsProvider, AudioFeatureSource, Sendable {
-    public let id = "demo"
+    public let id: String
     public let name = "demo"
     public let songs: [DemoSong]
+    /// Set on a second demo player (`--demo-conflict`) so the hub sees two
+    /// players; `nil` for the regular demo.
+    public let bundleIdentifier: String?
 
     private let clock: @Sendable () -> Date
     private let state: OSAllocatedUnfairLock<State>
@@ -37,10 +40,14 @@ public final class DemoProvider: NowPlayingProvider, ArtworkProvider, LyricsProv
     public init(
         songs: [DemoSong] = DemoCatalog.songs,
         startPlaying: Bool = true,
+        id: String = "demo",
+        bundleIdentifier: String? = nil,
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         precondition(!songs.isEmpty, "The demo needs at least one song")
         self.songs = songs
+        self.id = id
+        self.bundleIdentifier = bundleIdentifier
         self.clock = clock
         self.state = OSAllocatedUnfairLock(initialState: State(
             order: Array(songs.indices),
@@ -104,12 +111,15 @@ public final class DemoProvider: NowPlayingProvider, ArtworkProvider, LyricsProv
         let track = songs[state.order[resolved.slot]].track
         return NowPlayingSnapshot(
             track: track,
+            bundleIdentifier: bundleIdentifier,
             elapsedTime: resolved.position,
             playbackRate: state.isPlaying ? 1 : 0,
             timestamp: now,
             isShuffled: state.isShuffled,
             repeatMode: state.repeatMode,
-            isLiked: state.liked.contains(track.id)
+            isLiked: state.liked.contains(track.id),
+            capabilities: .all,
+            contentKind: .music
         )
     }
 
