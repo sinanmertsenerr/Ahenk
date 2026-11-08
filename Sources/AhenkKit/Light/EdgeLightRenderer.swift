@@ -113,9 +113,46 @@ public final class EdgeLightRenderer: Sendable {
         encoder.endEncoding()
     }
 
+    /// Encodes a whole atlas in one render pass: clears `texture` (the
+    /// gutters stay transparent), then draws each slot into its viewport.
+    public func encode(atlas draws: [(uniforms: EdgeLightUniforms, slot: EdgeAtlasSlot)], into texture: MTLTexture, commandBuffer: MTLCommandBuffer) throws {
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = texture
+        pass.colorAttachments[0].loadAction = .clear
+        pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+        pass.colorAttachments[0].storeAction = .store
+        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else {
+            throw RenderError.encoding("start a render pass")
+        }
+        encoder.setRenderPipelineState(try pipeline(for: texture.pixelFormat))
+        for draw in draws {
+            let rect = draw.slot.pixels
+            encoder.setViewport(MTLViewport(
+                originX: rect.minX, originY: rect.minY, width: rect.width, height: rect.height, znear: 0, zfar: 1
+            ))
+            var values = draw.uniforms
+            encoder.setFragmentBytes(&values, length: MemoryLayout<EdgeLightUniforms>.stride, index: 0)
+            encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+        }
+        encoder.endEncoding()
+    }
+
     /// Draws `uniforms` into a new `width` × `height` float image and waits
     /// for the GPU. For tests, `--smoke` and snapshots, not for every frame.
     public func renderImage(width: Int, height: Int, uniforms: EdgeLightUniforms) throws -> LightImage {
+        try renderImage(width: width, height: height) { texture, commands in
+            try encode(uniforms, into: texture, commandBuffer: commands)
+        }
+    }
+
+    /// An atlas drawn offscreen, as the screens draw it.
+    public func renderAtlasImage(_ atlas: EdgeAtlas, draws: [(uniforms: EdgeLightUniforms, slot: EdgeAtlasSlot)]) throws -> LightImage {
+        try renderImage(width: atlas.width, height: atlas.height) { texture, commands in
+            try encode(atlas: draws, into: texture, commandBuffer: commands)
+        }
+    }
+
+    private func renderImage(width: Int, height: Int, encode: (MTLTexture, MTLCommandBuffer) throws -> Void) throws -> LightImage {
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .rgba32Float, width: max(1, width), height: max(1, height), mipmapped: false
         )
@@ -124,7 +161,7 @@ public final class EdgeLightRenderer: Sendable {
         guard let texture = device.makeTexture(descriptor: descriptor),
               let commands = queue.makeCommandBuffer()
         else { throw RenderError.encoding("create an offscreen target") }
-        try encode(uniforms, into: texture, commandBuffer: commands)
+        try encode(texture, commands)
         if texture.storageMode == .managed, let blit = commands.makeBlitCommandEncoder() {
             blit.synchronize(resource: texture)
             blit.endEncoding()

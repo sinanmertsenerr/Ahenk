@@ -166,6 +166,41 @@ struct EdgeGeometryTests {
         }
     }
 
+    @Test("The atlas packs every strip without overlap, tall ones turned, gutters between", arguments: LightPosition.allCases)
+    func atlasPacking(position: LightPosition) {
+        for scale in [1.0, 2.0] {
+            let metrics = EdgeMetrics(shape: Self.macBook, band: 64)
+            let strips = EdgeLayout.strips(for: metrics, position: position)
+            let atlas = EdgeAtlas(strips: strips, scale: scale)
+            #expect(atlas.slots.count == strips.count)
+            #expect(atlas.slots.map(\.place) == strips.map(\.place))
+            for (index, slot) in atlas.slots.enumerated() {
+                #expect(slot.pixels.minX >= 0 && slot.pixels.minY >= 0)
+                #expect(Int(slot.pixels.maxX) <= atlas.width && Int(slot.pixels.maxY) <= atlas.height)
+                #expect(slot.isRotated == (slot.strip.height > slot.strip.width))
+                let along = Double(slot.isRotated ? slot.strip.height : slot.strip.width)
+                #expect(Double(slot.pixels.width) == (along * scale).rounded())
+                #expect(slot.layerSize == (slot.isRotated ? CGSize(width: slot.strip.height, height: slot.strip.width) : slot.strip.size))
+                for other in atlas.slots[(index + 1)...] {
+                    let padded = slot.pixels.insetBy(dx: -CGFloat(EdgeAtlas.gutter) + 0.5, dy: -CGFloat(EdgeAtlas.gutter) + 0.5)
+                    #expect(!padded.intersects(other.pixels), "\(slot.place) touches \(other.place)")
+                }
+            }
+            // The atlas holds the strips' pixels and not much more.
+            let used = atlas.slots.reduce(0.0) { $0 + Double($1.pixels.width * $1.pixels.height) }
+            #expect(Double(atlas.width * atlas.height) < used * 2 + 1000)
+        }
+    }
+
+    @Test("Contents rectangles count y from the bottom, as Core Animation does")
+    func contentsRect() {
+        let slot = EdgeAtlasSlot(place: .top, strip: CGRect(x: 0, y: 0, width: 100, height: 10), pixels: CGRect(x: 10, y: 0, width: 50, height: 20), isRotated: false)
+        let rect = slot.contentsRect(atlasWidth: 100, atlasHeight: 80)
+        #expect(rect == CGRect(x: 0.1, y: 0.75, width: 0.5, height: 0.25))
+        let empty = EdgeAtlas(strips: [], scale: 2)
+        #expect(empty.slots.isEmpty && empty.width >= 1 && empty.height >= 1)
+    }
+
     @Test("Looks: the band grows with thickness, glow and the style's particles")
     func looks() {
         let thin = LightLook(style: .glow, thickness: 4, glow: 0.2)

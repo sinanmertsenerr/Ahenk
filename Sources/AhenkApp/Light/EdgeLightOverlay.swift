@@ -48,35 +48,36 @@ final class EdgeLightWindow: NSWindow {
     }
 }
 
-/// One strip of a screen's light: a plain layer whose contents the render
-/// loop swaps for the newest frame (see ``SurfaceRing``), and where it sits.
+/// One strip of a screen's light: a plain layer that shows its slot of the
+/// screen's atlas (the render loop swaps the atlas surface every frame, see
+/// ``SurfaceRing``).
 final class EdgeLightStrip {
     let place: EdgeStrip.Place
     let layer = CALayer()
-    private(set) var rect = CGRect.zero
-    private(set) var pixelWidth = 1
-    private(set) var pixelHeight = 1
 
     init(place: EdgeStrip.Place) {
         self.place = place
         layer.isOpaque = false
         layer.contentsGravity = .resize
         layer.needsDisplayOnBoundsChange = false
-        layer.actions = ["bounds": NSNull(), "position": NSNull(), "frame": NSNull(), "contents": NSNull(), "hidden": NSNull()]
+        layer.actions = [
+            "bounds": NSNull(), "position": NSNull(), "frame": NSNull(), "contents": NSNull(),
+            "contentsRect": NSNull(), "transform": NSNull(), "hidden": NSNull(),
+        ]
     }
 
-    /// Moves the strip to `rect` (points, y up) drawn at `scale` pixels per
-    /// point. Call inside a transaction without actions.
-    func place(at rect: CGRect, scale: CGFloat) {
-        self.rect = rect
-        layer.contentsScale = scale
-        layer.frame = rect
-        pixelWidth = max(1, Int((rect.width * scale).rounded()))
-        pixelHeight = max(1, Int((rect.height * scale).rounded()))
-    }
-
-    var target: EdgeLightScreenState.Strip {
-        EdgeLightScreenState.Strip(rect: rect, layer: layer, pixelWidth: pixelWidth, pixelHeight: pixelHeight)
+    /// Puts the layer over its strip and points it at its slot; a turned
+    /// slot is turned back a quarter. Call inside a transaction without
+    /// actions.
+    func show(_ slot: EdgeAtlasSlot, of atlas: EdgeAtlas) {
+        layer.setAffineTransform(.identity)
+        layer.contentsScale = CGFloat(atlas.scale)
+        layer.bounds = CGRect(origin: .zero, size: slot.layerSize)
+        layer.position = CGPoint(x: slot.strip.midX, y: slot.strip.midY)
+        if slot.isRotated {
+            layer.setAffineTransform(CGAffineTransform(rotationAngle: .pi / 2))
+        }
+        layer.contentsRect = slot.contentsRect(atlasWidth: atlas.width, atlasHeight: atlas.height)
     }
 }
 
@@ -87,6 +88,8 @@ final class EdgeLightOverlay {
     private(set) var screen: LightScreen
     let window: EdgeLightWindow
     private(set) var strips: [EdgeLightStrip] = []
+    /// Where every strip lives in the atlas the render loop draws.
+    private(set) var atlas = EdgeAtlas(strips: [], scale: 1)
     /// The window shows on the current Space and nothing covers it.
     private(set) var isVisible = true
     /// Called when the window becomes visible or hidden (occlusion, sleep,
@@ -114,19 +117,21 @@ final class EdgeLightOverlay {
     }
 
     /// Lays out the strips for `layout`, drawn at `resolutionScale` of the
-    /// display's backing scale. Reuses layers by place.
+    /// display's backing scale into one atlas. Reuses layers by place.
     func layout(_ layout: [EdgeStrip], resolutionScale: Double) {
         guard let root = window.contentView?.layer else { return }
         let scale = max(1, screen.backingScale * CGFloat(resolutionScale))
+        let atlas = EdgeAtlas(strips: layout, scale: Double(scale))
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         var next: [EdgeLightStrip] = []
-        for item in layout {
-            let strip = strips.first { $0.place == item.place } ?? EdgeLightStrip(place: item.place)
-            strip.place(at: item.rect, scale: scale)
+        for slot in atlas.slots {
+            let strip = strips.first { $0.place == slot.place } ?? EdgeLightStrip(place: slot.place)
+            strip.show(slot, of: atlas)
             if strip.layer.superlayer == nil { root.addSublayer(strip.layer) }
             next.append(strip)
         }
+        self.atlas = atlas
         for old in strips where !next.contains(where: { $0 === old }) {
             old.layer.removeFromSuperlayer()
         }
@@ -140,6 +145,7 @@ final class EdgeLightOverlay {
         CATransaction.setDisableActions(true)
         strips.forEach { $0.layer.removeFromSuperlayer() }
         strips = []
+        atlas = EdgeAtlas(strips: [], scale: 1)
         CATransaction.commit()
     }
 

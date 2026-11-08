@@ -11,7 +11,9 @@ struct EdgeLightUniformTests {
         #expect(MemoryLayout<EdgeLightUniforms>.stride == EdgeLightUniforms.expectedSize)
         #expect(EdgeLightUniforms.memberOffsets["colors"] == 224)
         #expect(EdgeLightUniforms.memberOffsets["spectrum"] == 288)
-        #expect(EdgeLightUniforms.memberOffsets.count == 31)
+        #expect(EdgeLightUniforms.memberOffsets["atlasOrigin"] == 416)
+        #expect(EdgeLightUniforms.memberOffsets["rotated"] == 424)
+        #expect(EdgeLightUniforms.memberOffsets.count == 34)
     }
 
     @Test("Uniforms carry the screen, the strip, the look, the colours and the music")
@@ -51,5 +53,20 @@ struct EdgeLightUniformTests {
         #expect(u.energy == 0 && u.beat == 0 && u.bands == .zero && u.spectrum7 == .zero)
         #expect(u.notch == .zero && u.colorMode == 1 && u.opacity == 1)
         #expect(u.beatAges == SIMD4(repeating: LightMotion.noBeatAge))
+        #expect(u.atlasOrigin == .zero && u.rotated == 0)
+    }
+
+    @Test("A slot puts its atlas origin and turn in the uniforms")
+    func atlasSlot() {
+        let metrics = EdgeMetrics(shape: EdgeShape(width: 800, height: 600), band: 40)
+        let atlas = EdgeAtlas(strips: EdgeLayout.strips(for: metrics, position: .allEdges), scale: 2)
+        let side = try? #require(atlas.slots.first { $0.isRotated })
+        guard let side else { return }
+        let u = EdgeLightUniforms(
+            metrics: metrics, strip: side.strip, pixelScale: 2, look: LightLook(), colors: [.white], isRainbow: false,
+            motion: LightMotion(), features: .silence, time: 0, opacity: 1, quality: .full, slot: side
+        )
+        #expect(u.rotated == 1)
+        #expect(u.atlasOrigin == SIMD2(Float(side.pixels.minX), Float(side.pixels.minY)))
     }
 }

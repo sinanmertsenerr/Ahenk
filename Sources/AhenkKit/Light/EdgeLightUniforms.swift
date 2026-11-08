@@ -4,7 +4,7 @@ import Foundation
 /// The edge light shader's parameters for one strip and one frame.
 ///
 /// Mirrors `EdgeLightUniforms` in EdgeLight.metal member for member
-/// (416 bytes): Swift lays out stored properties in order with natural
+/// (432 bytes): Swift lays out stored properties in order with natural
 /// alignment, as Metal does. The tests and the smoke check compare every
 /// offset with the compiled shader's reflection, so a drift fails loudly.
 public struct EdgeLightUniforms: Equatable, Sendable {
@@ -74,9 +74,16 @@ public struct EdgeLightUniforms: Equatable, Sendable {
     public var spectrum6: SIMD4<Float> = .zero
     public var spectrum7: SIMD4<Float> = .zero
 
+    // Where the strip sits in the screen's atlas (``EdgeAtlas``).
+    /// The slot's top-left corner in the target texture, in pixels.
+    public var atlasOrigin: SIMD2<Float> = .zero
+    /// 1 when the strip is stored turned a quarter.
+    public var rotated: Int32 = 0
+    public var reserved: Int32 = 0
+
     public init() {}
 
-    public static let expectedSize = 416
+    public static let expectedSize = 432
 
     /// Byte offset of every member, by the shader's member names (arrays by
     /// their first element), for the layout check against the shader.
@@ -116,6 +123,9 @@ public struct EdgeLightUniforms: Equatable, Sendable {
         record("beatStrengths", \.beatStrengths)
         record("colors", \.color0)
         record("spectrum", \.spectrum0)
+        record("atlasOrigin", \.atlasOrigin)
+        record("rotated", \.rotated)
+        record("reserved", \.reserved)
         return offsets
     }()
 }
@@ -136,10 +146,12 @@ extension EdgeLightUniforms {
     ///   - opacity: the fade.
     ///   - quality: full or light.
     ///   - seed: per screen.
+    ///   - slot: where the strip sits in the screen's atlas; `nil` when the
+    ///     target holds just this strip, upright.
     public init(
         metrics: EdgeMetrics, strip: CGRect, pixelScale: Double, look: LightLook,
         colors: [SRGBColor], isRainbow: Bool, motion: LightMotion, features: AudioFeatures,
-        time: Double, opacity: Double, quality: LightQuality, seed: Int32 = 0
+        time: Double, opacity: Double, quality: LightQuality, seed: Int32 = 0, slot: EdgeAtlasSlot? = nil
     ) {
         self.init()
         let shape = metrics.shape
@@ -196,5 +208,10 @@ extension EdgeLightUniforms {
         spectrum5 = SIMD4(s[20], s[21], s[22], s[23])
         spectrum6 = SIMD4(s[24], s[25], s[26], s[27])
         spectrum7 = SIMD4(s[28], s[29], s[30], s[31])
+
+        if let slot {
+            atlasOrigin = SIMD2(Float(slot.pixels.minX), Float(slot.pixels.minY))
+            rotated = slot.isRotated ? 1 : 0
+        }
     }
 }

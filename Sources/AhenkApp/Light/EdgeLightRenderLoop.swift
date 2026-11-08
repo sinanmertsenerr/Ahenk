@@ -52,18 +52,13 @@ final class RenderThread: Thread {
 
 /// What the main thread tells the render loop about one screen.
 struct EdgeLightScreenState {
-    /// A strip's place on the screen and the layer that shows it.
-    struct Strip {
-        var rect: CGRect
-        var layer: CALayer
-        var pixelWidth: Int
-        var pixelHeight: Int
-    }
-
     var id: String
     var metrics: EdgeMetrics
     var look: LightLook
-    var strips: [Strip]
+    /// Every strip's slot in the screen's atlas…
+    var atlas: EdgeAtlas
+    /// …and the layers that show them, in the same order.
+    var layers: [CALayer]
     /// Frame rate and quality while visible.
     var plan: LightFramePlan
     var seed: Int32
@@ -72,17 +67,17 @@ struct EdgeLightScreenState {
     /// The window is on screen and not covered.
     var isVisible: Bool
 
-    var canDraw: Bool { isVisible && !plan.isPaused && !strips.isEmpty }
+    var canDraw: Bool { isVisible && !plan.isPaused && !layers.isEmpty }
 }
 
 /// Draws every screen's edge light.
 ///
 /// Each screen has a display link on the render thread. On every frame it
 /// reads the audio features for the frame's target time (lock-free),
-/// advances the shared motion, fades and colours, draws the screen's strips
-/// into their surfaces in one command buffer and, once the GPU is done,
-/// shows them all in one Core Animation transaction. A screen stops its
-/// display link as soon as
+/// advances the shared motion, fades and colours, draws every strip of the
+/// screen into one atlas surface in one render pass and, once the GPU is
+/// done, shows it on all strip layers in one Core Animation transaction.
+/// A screen stops its display link as soon as
 /// it has nothing to show: the music has faded out, the screen stepped
 /// aside, or its window is hidden. The main thread wakes it again with
 /// `setMusic`, `preview` or a new screen state; nothing polls.
@@ -123,8 +118,8 @@ final class EdgeLightRenderLoop: @unchecked Sendable {
 
     // Render thread only.
     private var targets: [String: Target] = [:]
-    /// Surfaces per strip layer.
-    private var rings: [ObjectIdentifier: SurfaceRing] = [:]
+    /// Atlas surfaces per screen.
+    private var rings: [String: SurfaceRing] = [:]
     private var music = LightFade.music()
     private var musicActive = false
     private var previewStart = 0.0
@@ -303,47 +298,46 @@ final class EdgeLightRenderLoop: @unchecked Sendable {
     }
 
     private func draw(_ target: Target, time: Double, opacity: Double) {
-        guard let commands = renderer.queue.makeCommandBuffer() else { return }
-        commands.label = "Edge light"
         let state = target.state
-        var frames: [(layer: CALayer, surface: IOSurface)] = []
-        for strip in state.strips {
-            let key = ObjectIdentifier(strip.layer)
-            if rings[key].map({ $0.width != strip.pixelWidth || $0.height != strip.pixelHeight }) ?? true {
-                rings[key] = SurfaceRing(device: renderer.device, width: strip.pixelWidth, height: strip.pixelHeight)
-            }
-            guard let (surface, texture) = rings[key]?.acquire() else { continue }
-            let uniforms = EdgeLightUniforms(
-                metrics: state.metrics, strip: strip.rect, pixelScale: Double(texture.width) / max(1, strip.rect.width),
-                look: state.look, colors: frameColors, isRainbow: isRainbow, motion: motion, features: frameFeatures,
-                time: time, opacity: opacity, quality: state.plan.quality, seed: state.seed
-            )
-            do {
-                try renderer.encode(uniforms, into: texture, commandBuffer: commands)
-                frames.append((strip.layer, surface))
-            } catch {
-                if !reportedFailure {
-                    reportedFailure = true
-                    log.error("Edge light: could not draw (\(error))")
-                }
-            }
+        let atlas = state.atlas
+        if rings[state.id].map({ $0.width != atlas.width || $0.height != atlas.height }) ?? true {
+            rings[state.id] = SurfaceRing(device: renderer.device, width: atlas.width, height: atlas.height)
         }
-        guard !frames.isEmpty else { return }
+        // All three surfaces still on screen: keep the last frame.
+        guard let (surface, texture) = rings[state.id]?.acquire(),
+              let commands = renderer.queue.makeCommandBuffer()
+        else { return }
+        commands.label = "Edge light"
+        let draws = atlas.slots.map { slot in
+            (uniforms: EdgeLightUniforms(
+                metrics: state.metrics, strip: slot.strip, pixelScale: atlas.scale, look: state.look,
+                colors: frameColors, isRainbow: isRainbow, motion: motion, features: frameFeatures,
+                time: time, opacity: opacity, quality: state.plan.quality, seed: state.seed, slot: slot
+            ), slot: slot)
+        }
+        do {
+            try renderer.encode(atlas: draws, into: texture, commandBuffer: commands)
+        } catch {
+            if !reportedFailure {
+                reportedFailure = true
+                log.error("Edge light: could not draw (\(error))")
+            }
+            return
+        }
         commands.commit()
         // The window server must not show a half-drawn surface.
         commands.waitUntilCompleted()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        for frame in frames {
-            frame.layer.contents = frame.surface
+        for layer in state.layers {
+            layer.contents = surface
         }
         CATransaction.commit()
     }
 
-    /// Forgets the surfaces of layers no screen uses any more.
+    /// Forgets the surfaces of screens that are gone.
     private func pruneRings() {
-        let live = Set(targets.values.flatMap { $0.state.strips.map { ObjectIdentifier($0.layer) } })
-        rings = rings.filter { live.contains($0.key) }
+        rings = rings.filter { targets[$0.key] != nil }
     }
 
     private func noteDrawing() {

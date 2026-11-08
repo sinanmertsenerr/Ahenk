@@ -121,35 +121,51 @@ struct EdgeLightRenderTests {
         try Self.writePreview([image], name: "position-\(position.rawValue)")
     }
 
-    @Test("The strips add up to the whole-screen picture", arguments: LightPosition.allCases)
-    func stripsMatchTheWholeScreen(position: LightPosition) throws {
+    @Test("The atlas, turned back into strips, adds up to the whole-screen picture", arguments: LightPosition.allCases)
+    func atlasMatchesTheWholeScreen(position: LightPosition) throws {
         let renderer = try #require(Self.renderer, "EdgeLight.metal did not compile")
         let scale = 2.0
         let (whole, metrics) = Self.frame(style: .sparkles, position: position, at: 1.3, pixelScale: scale)
         let full = try renderer.renderImage(width: Int(Self.shape.width * scale), height: Int(Self.shape.height * scale), uniforms: whole)
-        var covered = [Bool](repeating: false, count: full.width * full.height)
-        for strip in EdgeLayout.strips(for: metrics, position: position) {
+        let atlas = EdgeAtlas(strips: EdgeLayout.strips(for: metrics, position: position), scale: scale)
+        let draws = atlas.slots.map { slot -> (uniforms: EdgeLightUniforms, slot: EdgeAtlasSlot) in
             var uniforms = whole
-            uniforms.stripOrigin = SIMD2(Float(strip.rect.minX), Float(strip.rect.minY))
-            uniforms.stripSize = SIMD2(Float(strip.rect.width), Float(strip.rect.height))
-            let image = try renderer.renderImage(
-                width: Int(strip.rect.width * scale), height: Int(strip.rect.height * scale), uniforms: uniforms
-            )
-            let originX = Int(strip.rect.minX * scale)
-            let originY = Int((Self.shape.height - strip.rect.maxY) * scale)
-            for y in 0..<image.height {
-                for x in 0..<image.width {
+            uniforms.stripOrigin = SIMD2(Float(slot.strip.minX), Float(slot.strip.minY))
+            uniforms.stripSize = SIMD2(Float(slot.strip.width), Float(slot.strip.height))
+            uniforms.atlasOrigin = SIMD2(Float(slot.pixels.minX), Float(slot.pixels.minY))
+            uniforms.rotated = slot.isRotated ? 1 : 0
+            return (uniforms, slot)
+        }
+        let image = try renderer.renderAtlasImage(atlas, draws: draws)
+        #expect(image.isWellFormed)
+        var covered = [Bool](repeating: false, count: full.width * full.height)
+        for slot in atlas.slots {
+            // Every pixel of the strip on the screen, found in its slot.
+            let originX = Int(slot.strip.minX * scale)
+            let originY = Int((Self.shape.height - slot.strip.maxY) * scale)
+            let width = Int(slot.strip.width * scale)
+            let height = Int(slot.strip.height * scale)
+            for y in 0..<height {
+                for x in 0..<width {
                     let index = (originY + y) * full.width + originX + x
                     #expect(!covered[index], "strips overlap at \(originX + x), \(originY + y)")
                     covered[index] = true
-                    let delta: SIMD4<Float> = image.pixel(x: x, y: y) - full.pixel(x: originX + x, y: originY + y)
+                    // Screen pixel (x, y) from the strip's top-left; a turned slot runs
+                    // from the strip's bottom end along its row, its top edge the strip's left.
+                    let ax = Int(slot.pixels.minX) + (slot.isRotated ? (height - 1 - y) : x)
+                    let ay = Int(slot.pixels.minY) + (slot.isRotated ? x : y)
+                    let delta: SIMD4<Float> = image.pixel(x: ax, y: ay) - full.pixel(x: originX + x, y: originY + y)
                     let difference = max(abs(delta.x), abs(delta.y), abs(delta.z), abs(delta.w))
                     if difference > 0.002 {
-                        Issue.record("\(strip.place) differs from the whole screen at \(x), \(y) by \(difference)")
+                        Issue.record("\(slot.place) differs from the whole screen at \(x), \(y) by \(difference)")
                         return
                     }
                 }
             }
+        }
+        // Gutters stay transparent.
+        if let first = atlas.slots.first, Int(first.pixels.maxY) + 1 < image.height {
+            #expect(image.pixel(x: 0, y: Int(first.pixels.maxY)).w == 0)
         }
         // Every lit pixel of the whole screen belongs to a strip.
         for y in 0..<full.height {

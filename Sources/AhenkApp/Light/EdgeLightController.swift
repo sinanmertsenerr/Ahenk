@@ -361,7 +361,7 @@ final class EdgeLightController {
         loop.update(
             EdgeLightScreenState(
                 id: screen.id, metrics: metrics, look: look,
-                strips: overlay.strips.map(\.target), plan: plan, seed: screen.seed,
+                atlas: overlay.atlas, layers: overlay.strips.map(\.layer), plan: plan, seed: screen.seed,
                 isAllowed: allowed && light.enabled, isVisible: overlay.isVisible
             ),
             link: link

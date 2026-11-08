@@ -98,7 +98,7 @@ enum EdgeLightCheck {
 
     /// The real path: a light window for the main screen (never ordered
     /// in), its strip layers laid out for the default look, one frame drawn
-    /// into each strip's surfaces and set as the layer's contents.
+    /// into the screen's atlas and shown on every strip layer.
     private static func drawIntoStrips(renderer: EdgeLightRenderer, colors: [SRGBColor]) throws -> String {
         guard let nsScreen = NSScreen.main ?? NSScreen.screens.first, let screen = LightScreen(nsScreen) else {
             throw SmokeReport.Skip("no screen")
@@ -109,34 +109,34 @@ enum EdgeLightCheck {
         let overlay = EdgeLightOverlay(screen: screen)
         defer { overlay.close() }
         overlay.layout(layout, resolutionScale: 1)
-        guard let commands = renderer.queue.makeCommandBuffer() else { throw SmokeFailure("no command buffer") }
-        var drawn = 0
-        var pixels = 0
-        var frames: [(CALayer, IOSurface)] = []
-        for strip in overlay.strips {
-            guard let ring = SurfaceRing(device: renderer.device, width: strip.pixelWidth, height: strip.pixelHeight),
-                  let (surface, texture) = ring.acquire()
-            else { throw SmokeFailure("no surface for the \(strip.place.rawValue) strip") }
-            let uniforms = EdgeLightUniforms(
-                metrics: metrics, strip: strip.rect, pixelScale: Double(texture.width) / strip.rect.width, look: look,
-                colors: colors, isRainbow: false, motion: LightMotion(), features: DemoBeat.features(at: 1), time: 1,
-                opacity: 1, quality: .full, seed: screen.seed
-            )
-            try renderer.encode(uniforms, into: texture, commandBuffer: commands)
-            frames.append((strip.layer, surface))
-            drawn += 1
-            pixels += texture.width * texture.height
+        let atlas = overlay.atlas
+        guard atlas.slots.count == layout.count, overlay.strips.count == layout.count else {
+            throw SmokeFailure("\(overlay.strips.count) strip layers for \(layout.count) strips")
         }
+        guard let ring = SurfaceRing(device: renderer.device, width: atlas.width, height: atlas.height),
+              let (surface, texture) = ring.acquire(),
+              let commands = renderer.queue.makeCommandBuffer()
+        else { throw SmokeFailure("no atlas surface of \(atlas.width)×\(atlas.height)") }
+        let draws = atlas.slots.map { slot in
+            (uniforms: EdgeLightUniforms(
+                metrics: metrics, strip: slot.strip, pixelScale: atlas.scale, look: look, colors: colors, isRainbow: false,
+                motion: LightMotion(), features: DemoBeat.features(at: 1), time: 1, opacity: 1, quality: .full,
+                seed: screen.seed, slot: slot
+            ), slot: slot)
+        }
+        try renderer.encode(atlas: draws, into: texture, commandBuffer: commands)
         commands.commit()
         commands.waitUntilCompleted()
         if let error = commands.error { throw error }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        for (layer, surface) in frames { layer.contents = surface }
+        for strip in overlay.strips { strip.layer.contents = surface }
         CATransaction.commit()
+        let drawn = atlas.slots.count
+        let pixels = atlas.slots.reduce(0) { $0 + Int($1.pixels.width * $1.pixels.height) }
         let share = EdgeLayout.area(of: layout) / (screen.frame.width * screen.frame.height)
         return "\(screen.name) \(Int(screen.frame.width))×\(Int(screen.frame.height))\(screen.shape.notch == nil ? "" : " with a notch"): "
-            + "\(drawn) strips drawn (\(pixels / 1000) k pixels, \(Int((share * 100).rounded())) % of the screen)"
+            + "\(drawn) strips drawn in one \(atlas.width)×\(atlas.height) atlas (\(pixels / 1000) k pixels, \(Int((share * 100).rounded())) % of the screen)"
     }
 }
 

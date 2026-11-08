@@ -60,6 +60,9 @@ struct EdgeLightUniforms {
     float4 beatStrengths;
     float4 colors[4];
     float4 spectrum[8];
+    float2 atlasOrigin;  // the strip's slot in the target, pixels from its top-left corner
+    int rotated;         // 1: the slot holds the strip turned a quarter (EdgeAtlas)
+    int reserved;
 };
 
 struct EdgeLightVertexOut {
@@ -1040,8 +1043,12 @@ static float4 styleStarfield(thread const Ctx &c, constant EdgeLightUniforms &u)
 // MARK: - Fragment
 
 fragment float4 edgeLightFragment(EdgeLightVertexOut in [[stage_in]], constant EdgeLightUniforms &u [[buffer(0)]]) {
-    float2 local = in.position.xy / u.pixelScale;
-    float2 p = float2(u.stripOrigin.x + local.x, u.stripOrigin.y + u.stripSize.y - local.y);
+    // Where this pixel of the slot is on the screen. A turned slot runs
+    // along the strip from its bottom end; its top edge is the strip's left.
+    float2 local = (in.position.xy - u.atlasOrigin) / u.pixelScale;
+    float2 p = u.rotated != 0
+        ? float2(u.stripOrigin.x + local.y, u.stripOrigin.y + local.x)
+        : float2(u.stripOrigin.x + local.x, u.stripOrigin.y + u.stripSize.y - local.y);
     float d = edgeDistance(p, u);
     float pixel = 1.0 / u.pixelScale;
     float window = smoothstep(-pixel, 0.5 * pixel, d) * (1.0 - smoothstep(u.band * 0.72, u.band, d));
