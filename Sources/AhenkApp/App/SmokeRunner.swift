@@ -28,8 +28,13 @@ final class SmokeRunner {
         await report.check("localization") { try self.checkLocalization() }
         await report.check("resources") { try self.checkResources() }
         await report.check("adapter") { try self.checkAdapter() }
+        await report.check("adapterRun") { try await self.checkAdapterRun() }
+        await report.check("sources") { try self.checkSources() }
         await report.check("demo") { try await self.checkDemo() }
+        await report.check("hub") { try await self.checkHub() }
         await report.check("nowPlaying") { try await self.checkNowPlaying() }
+        await report.check("artwork") { try await self.checkArtwork() }
+        await report.check("recentlyPlayed") { try self.checkRecentlyPlayed() }
         await report.check("metal") { try self.checkMetal() }
         await report.check("menus") { try self.checkMenus() }
         await report.check("settingsWindow") { try await self.checkSettingsWindow() }
@@ -83,6 +88,7 @@ final class SmokeRunner {
             "Edge Light": "Kenar Işığı",
             "Quit Ahenk": "Ahenk'ten Çık",
             "Start every song at 0:15": "Her şarkıyı 0:15'ten başlat",
+            "Ahenk Settings": "Ahenk Ayarları",
         ]
         for (key, expected) in samples where key.l10n != expected {
             throw SmokeFailure("\u{201C}\(key)\u{201D} is \u{201C}\(key.l10n)\u{201D} in Turkish, expected \u{201C}\(expected)\u{201D}")
@@ -97,7 +103,7 @@ final class SmokeRunner {
             throw SmokeFailure("Shaders/EdgeLight.metal missing from the resource bundle")
         }
         let symbols = Set(QuickMenu.symbolNames + SettingsPane.allCases.map(\.symbolName)
-            + ["backward.fill", "forward.fill", "play.fill", "pause.fill", "plus", "minus", "waveform"])
+            + ["backward.fill", "forward.fill", "play.fill", "pause.fill", "plus", "minus", "waveform", "app.dashed"])
         let missing = symbols.filter { NSImage(systemSymbolName: $0, accessibilityDescription: nil) == nil }
         guard missing.isEmpty else { throw SmokeFailure("Missing SF Symbols: \(missing.sorted().joined(separator: ", "))") }
         return "shader sources and \(symbols.count) SF Symbols present"
@@ -136,10 +142,69 @@ final class SmokeRunner {
         return "\(demo.songs.count) songs, \(artwork.pixelWidth)×\(artwork.pixelHeight) cover, \(lyrics.lines.count) lines, 120 BPM"
     }
 
+    /// The bundled adapter answers once (`get`, no artwork). Reads the
+    /// system's Now Playing like the app does (no permission involved) and
+    /// reports only which kind of player plays, never the song.
+    private func checkAdapterRun() async throws -> String {
+        guard AppInfo.isBundled else { throw SmokeReport.Skip("not running from an app bundle") }
+        guard let invocation = AdapterLocator.invocation() else { throw SmokeFailure("adapter files not found") }
+        let adapter = MediaRemoteAdapter(invocation: invocation)
+        guard let payload = await adapter.current(includeArtwork: false, timeout: 4) else {
+            throw SmokeFailure("the adapter did not answer (MediaRemote may be blocked on this macOS)")
+        }
+        guard let snapshot = payload.snapshot(resolver: .standard, artworkAspectRatio: nil, now: Date()) else {
+            return "answered: nothing is playing"
+        }
+        return "answered: source \(snapshot.track.source.rawValue), \(snapshot.isPlaying ? "playing" : "paused")"
+    }
+
+    private func checkSources() throws -> String {
+        let resolver = SourceResolver.standard
+        let expectations: [(String, AppKind)] = [
+            (KnownApps.appleMusic, .musicApp(.appleMusic)),
+            (KnownApps.spotify, .musicApp(.spotify)),
+            (KnownApps.search, .browser),
+            ("com.apple.Safari", .browser),
+            ("org.videolan.vlc", .videoPlayer),
+        ]
+        for (bundle, kind) in expectations where resolver.kind(of: bundle) != kind {
+            throw SmokeFailure("\(bundle) is not \(kind)")
+        }
+        let guess = WebSiteInference.guess(title: "Glass Harbor - YouTube Music", artist: "Nova Atlas", album: "", artworkAspectRatio: 1)
+        guard guess.source == .youtubeMusic, guess.title == "Glass Harbor" else { throw SmokeFailure("site inference failed") }
+        let browsers = BrowserRegistry.installedBrowsers()
+        return "\(expectations.count) apps mapped, site inference works, \(browsers.count) browsers on this Mac"
+    }
+
+    /// The hub's rules on invented players: the newest start is followed,
+    /// two playing together raise a question after the delay, an answer
+    /// settles it.
+    private func checkHub() async throws -> String {
+        let start = Date(timeIntervalSinceReferenceDate: 0)
+        func song(_ source: MusicSource, _ bundle: String, _ title: String) -> NowPlayingSnapshot {
+            NowPlayingSnapshot(
+                track: Track(id: title, source: source, title: title, artist: "Invented"),
+                bundleIdentifier: bundle, elapsedTime: 0, playbackRate: 1, timestamp: start,
+                capabilities: .transport, contentKind: .music
+            )
+        }
+        var core = HubCore(configuration: HubConfiguration(conflictDelay: 3))
+        core.ingest([song(.spotify, KnownApps.spotify, "One")], from: "spotify", now: start)
+        core.ingest([song(.otherApp, KnownApps.search, "Two")], from: "mediaremote", now: start.addingTimeInterval(1))
+        guard core.state.activeID?.source == .otherApp else { throw SmokeFailure("the newest start is not followed") }
+        core.tick(now: start.addingTimeInterval(4.5))
+        guard let conflict = core.state.conflict, conflict.players.count == 2 else { throw SmokeFailure("no question after the delay") }
+        core.choose(conflict.players[1], now: start.addingTimeInterval(5))
+        guard core.state.conflict == nil, core.state.activeID?.source == .spotify else { throw SmokeFailure("the answer was not followed") }
+        return "automatic selection, conflict after 3 s and the answer work"
+    }
+
     private func checkNowPlaying() async throws -> String {
-        guard let demo = environment.demo else { throw SmokeFailure("No demo provider") }
+        guard environment.demo != nil else { throw SmokeFailure("No demo provider") }
+        let services = environment.services
+        services.start(settings: environment.settings)
         let model = environment.nowPlaying
-        model.attach(provider: demo, artwork: demo, lyrics: demo, features: demo)
+        model.attach(provider: services.hub, artwork: services.artwork, lyrics: services.lyrics, features: services.features)
         let deadline = Date().addingTimeInterval(5)
         while model.snapshot == nil || model.artwork == nil || model.lyrics == nil {
             guard Date() < deadline else { throw SmokeFailure("The model did not receive song, cover and lyrics within 5 s") }
@@ -149,7 +214,48 @@ final class SmokeRunner {
             throw SmokeFailure("No audio features while playing")
         }
         let title = model.snapshot?.track.title ?? "?"
-        return "\u{201C}\(title)\u{201D} with cover, \(model.lyrics?.lines.count ?? 0) lyric lines and live features"
+        guard services.state.activeID?.source == .demo else { throw SmokeFailure("the hub does not follow the demo") }
+        return "\u{201C}\(title)\u{201D} through the hub, with cover, \(model.lyrics?.lines.count ?? 0) lyric lines and live features"
+    }
+
+    /// Decodes, crops and colours generated covers through the real
+    /// pipeline, offline, with a throwaway disk cache.
+    private func checkArtwork() async throws -> String {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ahenk-smoke-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let pipeline = ArtworkPipeline(disk: ArtworkDiskCache(directory: directory), fetcher: OfflineFetcher(), catalog: nil)
+        let palette = Palette(colors: [SRGBColor("#0E5E6F"), SRGBColor("#FF7A6B"), SRGBColor("#FFD9A0")])
+        guard let cover = DemoArtwork.makeImage(palette: palette, seed: 7, pixelSize: 800),
+              let data = ArtworkImageDecoder.pngData(cover)
+        else { throw SmokeFailure("could not draw a cover") }
+        let snapshot = NowPlayingSnapshot(
+            track: Track(id: "smoke", source: .local, title: "Generated", artist: "Ahenk"),
+            elapsedTime: 0, playbackRate: 0, timestamp: Date(), contentKind: .music, artworkData: data
+        )
+        let started = ContinuousClock.now
+        guard let artwork = await pipeline.artwork(for: snapshot, pixelSize: 600) else { throw SmokeFailure("the pipeline returned nothing") }
+        let elapsed = started.duration(to: .now)
+        guard artwork.pixelWidth == 600, artwork.pixelHeight == 600 else { throw SmokeFailure("cover is \(artwork.pixelWidth)×\(artwork.pixelHeight)") }
+        guard let extracted = artwork.palette, extracted.colors.count >= 3 else { throw SmokeFailure("fewer than three colours") }
+        guard extracted.onDark.allSatisfy({ $0.contrastRatio(with: Palette.darkBackdrop) >= 4.5 }) else {
+            throw SmokeFailure("a text colour is not readable on dark")
+        }
+        let milliseconds = Double(elapsed.components.attoseconds) / 1e15 + Double(elapsed.components.seconds) * 1000
+        return "600 px cover with \(extracted.colors.count) colours in \(String(format: "%.0f", milliseconds)) ms; text variants pass 4.5:1"
+    }
+
+    private func checkRecentlyPlayed() throws -> String {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("ahenk-smoke-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = RecentlyPlayedStore(fileURL: url)
+        for title in ["One", "Two", "One"] {
+            store.record(Track(id: title, source: .local, title: title, artist: "Invented"), bundleIdentifier: nil, at: Date())
+        }
+        store.flush()
+        let reloaded = RecentlyPlayedStore(fileURL: url).items.map(\.track.title)
+        guard reloaded == ["One", "Two"] else { throw SmokeFailure("reloaded \(reloaded)") }
+        let live = environment.services.recentlyPlayed.fileURL == nil ? "in memory for the demo" : "on disk"
+        return "deduplicated, newest first, survives a reload; the running list is \(live)"
     }
 
     private func checkMetal() throws -> String {
@@ -190,6 +296,12 @@ final class SmokeRunner {
             guard MainMenu.build(environment: environment).items.count == 3 else {
                 throw SmokeFailure("Main menu should have the app, Edit and Window menus")
             }
+            // The question asked while two sources play.
+            let players = [PlayerID(source: .demo), PlayerID(source: .demo, bundleIdentifier: "com.sinanmertsener.Ahenk.demo-b")]
+            let question = QuickMenu.conflictItems(PlaybackConflict(players: players, since: Date()), services: environment.services)
+            guard question.count == 3, question[0].title == "Which one should Ahenk follow?".l10n,
+                  question[1].title == "Demo".l10n, question[2].action != nil
+            else { throw SmokeFailure("the conflict question is incomplete in \(language.rawValue)") }
         }
         // The toggles are wired to the settings (an in-memory copy here).
         settings.general.language = .english
@@ -224,11 +336,35 @@ final class SmokeRunner {
                 }
             }
         }
+        if let directory {
+            // The menu bar glyph, plain and with the "Ahenk asks" dot.
+            for (name, icon) in [("menubar-icon", MenuBarIcon.image), ("menubar-icon-attention", MenuBarIcon.attention)] {
+                if let png = Self.png(of: icon, scale: 8) {
+                    try png.write(to: directory.appendingPathComponent("\(name).png"))
+                }
+            }
+        }
         let saved = directory.map { ", snapshots in \($0.path)" } ?? ""
         return "\(rendered) panes rendered offscreen (\(SettingsPane.allCases.count) panes × \(AppLanguage.allCases.count) languages)\(saved)"
     }
 
     // MARK: Helpers
+
+    /// `image` drawn black on white at `scale` (template images are masks).
+    private static func png(of image: NSImage, scale: CGFloat) -> Data? {
+        let size = NSSize(width: image.size.width * scale, height: image.size.height * scale)
+        guard let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: Int(size.width), pixelsHigh: Int(size.height), bitsPerSample: 8,
+            samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        NSColor.white.setFill()
+        NSRect(origin: .zero, size: size).fill()
+        image.draw(in: NSRect(origin: .zero, size: size))
+        NSGraphicsContext.restoreGraphicsState()
+        return bitmap.representation(using: .png, properties: [:])
+    }
 
     private func snapshotDirectory() -> URL? {
         guard let raw = environment.options.snapshotDirectory else { return nil }
@@ -268,5 +404,12 @@ final class SmokeRunner {
         }
         hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
         return bitmap
+    }
+}
+
+/// The smoke run never touches the network.
+private struct OfflineFetcher: HTTPFetching {
+    func get(_ url: URL) async throws -> (data: Data, status: Int) {
+        throw URLError(.notConnectedToInternet)
     }
 }
