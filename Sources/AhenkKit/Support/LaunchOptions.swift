@@ -14,11 +14,20 @@ import Foundation
 ///   pause (resume) the demo song that many seconds after launch.
 /// - `--demo-scene <name>`: like `--demo`, with the desktop player opened in
 ///   one state (`albums`, `search`, `album`, `artist`, `queue`, `small`,
-///   `small-search`, `status`, `loading`, or `off` for none), for
-///   screenshots, visual checks and measurements.
+///   `small-search`, `status`, `loading`, `lyrics-versions`,
+///   `lyrics-search`, or `off` for none), for screenshots, visual checks and
+///   measurements.
 /// - `--demo-backdrop`: in demo mode, a generated wallpaper behind the
 ///   desktop widgets (so they can be captured without the user's desktop).
 /// - `--language <en|tr>`: the UI language for this run only.
+/// - `--lyrics-style <name>`: the lyrics in this style for this run only
+///   (`fisheye`, `spread`, `karaoke`, `typewriter`, `neon`, `echo`,
+///   `glitch`, `cinema`), or `off` for none.
+/// - `--demo-position <s>`: the demo song starts at this many seconds.
+/// - `--smoke-only <a,b>`: with `--smoke`, run only these checks (the
+///   others are left out of the report).
+/// - `--draw-covered`: in demo mode, the lyrics keep moving while app
+///   windows cover them (captures and CPU measurements).
 /// - `--settings [pane]` / `--settings=pane`: open Settings at launch.
 /// - `--allow-multiple`: skip the single-instance hand-off (development).
 ///
@@ -47,6 +56,14 @@ public struct LaunchOptions: Equatable, Sendable {
     public var demoBackdrop = false
     /// The UI language for this run (`--language`), not saved.
     public var language: String?
+    /// The lyrics style for this run (`--lyrics-style`), not saved.
+    public var lyricsStyle: String?
+    /// Where the demo song starts, in seconds (`--demo-position`).
+    public var demoPosition: Double?
+    /// The smoke checks to run (`--smoke-only`); `nil` runs them all.
+    public var smokeChecks: Set<String>?
+    /// Demo only: draw the lyrics even while windows cover them (`--draw-covered`).
+    public var drawCovered = false
 
     /// Demo content is used in both `--demo` and `--smoke`.
     public var usesDemoContent: Bool { mode != .normal }
@@ -54,7 +71,7 @@ public struct LaunchOptions: Equatable, Sendable {
     /// The run works on an in-memory copy of the settings, so what it
     /// changes (a smoke check, a scene, a language) is never saved.
     public var usesDetachedSettings: Bool {
-        mode == .smoke || demoScene != nil || language != nil
+        mode == .smoke || demoScene != nil || language != nil || lyricsStyle != nil
     }
 
     public init() {}
@@ -90,6 +107,16 @@ public struct LaunchOptions: Equatable, Sendable {
                 demoBackdrop = true
             case "--language":
                 language = (inlineValue ?? Self.popValue(&remaining)).map { $0.lowercased() }
+            case "--lyrics-style":
+                lyricsStyle = inlineValue ?? Self.popValue(&remaining)
+            case "--demo-position":
+                demoPosition = Self.seconds(inlineValue ?? Self.popValue(&remaining))
+            case "--draw-covered":
+                drawCovered = true
+            case "--smoke-only":
+                let names = (inlineValue ?? Self.popValue(&remaining) ?? "")
+                    .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                smokeChecks = names.isEmpty ? nil : Set(names)
             default:
                 continue
             }

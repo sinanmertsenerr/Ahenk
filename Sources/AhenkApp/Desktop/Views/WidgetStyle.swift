@@ -383,7 +383,7 @@ final class EqualizerBarsView: NSView {
     }
 }
 
-/// Every SF Symbol the desktop widgets use (checked by `--smoke`).
+/// Every SF Symbol the desktop widgets and the lyrics use (checked by `--smoke`).
 enum DesktopSymbols {
     static let all = [
         "arrow.clockwise", "arrow.down.right.and.arrow.up.left", "arrow.up.left.and.arrow.down.right", "backward.fill",
@@ -394,6 +394,8 @@ enum DesktopSymbols {
         "rectangle.3.group", "repeat", "repeat.1", "shuffle", "sparkles", "speaker.slash.fill", "speaker.wave.1.fill",
         "speaker.wave.2.fill", "speaker.wave.3.fill", "square.stack", "text.append",
         "text.line.first.and.arrowtriangle.forward", "wifi.exclamationmark", "xmark", "xmark.circle.fill",
+        // The lyrics widget and its states.
+        "arrow.counterclockwise", "minus", "photo", "text.alignleft", "text.badge.xmark", "text.magnifyingglass",
     ]
 }
 

@@ -52,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if environment.demo != nil {
             log.notice("Demo mode: invented songs, generated covers, 120 BPM")
+            LyricsStageView.drawsWhenCovered = environment.options.drawCovered
         }
         let services = environment.services
         services.start(settings: settings)
@@ -168,6 +169,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func scheduleDemoCommands() {
         guard let demo = environment.demo else { return }
         let options = environment.options
+        if let position = options.demoPosition {
+            Task { await demo.perform(.seek(to: position)) }
+        }
         for (delay, command) in [(options.demoPauseAfter, PlaybackCommand.pause), (options.demoResumeAfter, .play)] {
             guard let delay else { continue }
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [log] in

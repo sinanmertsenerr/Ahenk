@@ -73,4 +73,13 @@ struct LaunchOptionsTests {
         let options = parse("-NSDocumentRevisionsDebugMode", "YES", "--frobnicate", "-psn_0_12345", "--demo")
         #expect(options.mode == .demo)
     }
+
+    @Test("Launch options for lyrics checks")
+    func launchOptions() {
+        let options = LaunchOptions(arguments: ["Ahenk", "--demo", "--lyrics-style", "neon", "--demo-position=12.5", "--draw-covered", "--smoke-only", "lyrics, menus"])
+        #expect(options.lyricsStyle == "neon" && options.demoPosition == 12.5 && options.drawCovered)
+        #expect(options.smokeChecks == ["lyrics", "menus"])
+        #expect(options.usesDetachedSettings, "a style for one run is never saved")
+        #expect(LaunchOptions(arguments: ["Ahenk", "--smoke-only"]).smokeChecks == nil)
+    }
 }

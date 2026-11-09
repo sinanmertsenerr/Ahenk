@@ -98,6 +98,11 @@ extension DesktopPlayerController {
                 model.query = "harbor"
             case "off":
                 model.settings.player.enabled = false
+            case "lyrics-versions":
+                self.lyrics.panel = .versions
+            case "lyrics-search":
+                self.lyrics.panel = .search
+                self.lyrics.search()
             case "status":
                 model.show(PlayerStatus(text: "Playing in the browser needs the Ahenk browser extension.".l10n, kind: .problem))
             case "loading":

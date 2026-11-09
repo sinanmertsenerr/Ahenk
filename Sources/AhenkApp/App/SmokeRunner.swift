@@ -23,26 +23,29 @@ final class SmokeRunner {
             version: AppInfo.version, build: AppInfo.build, commit: AppInfo.commit,
             bundlePath: Bundle.main.bundlePath
         )
+        let only = environment.options.smokeChecks
+        func selected(_ name: String) -> Bool { only?.contains(name) ?? true }
         await report.check("launch") { try self.checkLaunch() }
-        await report.check("logging") { try self.checkLogging() }
-        await report.check("settings") { try self.checkSettings() }
-        await report.check("localization") { try self.checkLocalization() }
-        await report.check("resources") { try self.checkResources() }
-        await report.check("adapter") { try self.checkAdapter() }
-        await report.check("adapterRun") { try await self.checkAdapterRun() }
-        await report.check("sources") { try self.checkSources() }
-        await report.check("demo") { try await self.checkDemo() }
-        await report.check("hub") { try await self.checkHub() }
-        await report.check("nowPlaying") { try await self.checkNowPlaying() }
-        await report.check("artwork") { try await self.checkArtwork() }
-        await report.check("recentlyPlayed") { try self.checkRecentlyPlayed() }
-        await report.check("audio") { try self.checkAudio() }
-        await report.check("metal") { try self.checkMetal() }
-        await report.check("edgeLight") { try self.checkEdgeLight() }
-        await report.check("lightSwitch") { try await self.checkLightSwitch() }
-        await report.check("desktopPlayer") { try await self.checkDesktopPlayer() }
-        await report.check("menus") { try self.checkMenus() }
-        await report.check("settingsWindow") { try await self.checkSettingsWindow() }
+        if selected("logging") { await report.check("logging") { try self.checkLogging() } }
+        if selected("settings") { await report.check("settings") { try self.checkSettings() } }
+        if selected("localization") { await report.check("localization") { try self.checkLocalization() } }
+        if selected("resources") { await report.check("resources") { try self.checkResources() } }
+        if selected("adapter") { await report.check("adapter") { try self.checkAdapter() } }
+        if selected("adapterRun") { await report.check("adapterRun") { try await self.checkAdapterRun() } }
+        if selected("sources") { await report.check("sources") { try self.checkSources() } }
+        if selected("demo") { await report.check("demo") { try await self.checkDemo() } }
+        if selected("hub") { await report.check("hub") { try await self.checkHub() } }
+        if selected("nowPlaying") { await report.check("nowPlaying") { try await self.checkNowPlaying() } }
+        if selected("artwork") { await report.check("artwork") { try await self.checkArtwork() } }
+        if selected("recentlyPlayed") { await report.check("recentlyPlayed") { try self.checkRecentlyPlayed() } }
+        if selected("audio") { await report.check("audio") { try self.checkAudio() } }
+        if selected("metal") { await report.check("metal") { try self.checkMetal() } }
+        if selected("edgeLight") { await report.check("edgeLight") { try self.checkEdgeLight() } }
+        if selected("lightSwitch") { await report.check("lightSwitch") { try await self.checkLightSwitch() } }
+        if selected("desktopPlayer") { await report.check("desktopPlayer") { try await self.checkDesktopPlayer() } }
+        if selected("menus") { await report.check("menus") { try self.checkMenus() } }
+        if selected("lyrics") { await report.check("lyrics") { try await self.checkLyrics() } }
+        if selected("settingsWindow") { await report.check("settingsWindow") { try await self.checkSettingsWindow() } }
         report.finish()
         for entry in report.subsystems {
             log.info("\(entry.name): \(entry.status.rawValue), \(entry.detail)")
@@ -408,6 +411,101 @@ final class SmokeRunner {
         guard settings.isOn(.edgeLight) != before else { throw SmokeFailure("Edge Light item did not flip the setting") }
         settings.flip(.edgeLight)
         return "menu bar menu (\(itemCount) items), Dock menu and main menu in \(AppLanguage.allCases.count) languages; toggles flip settings"
+    }
+
+    /// The lyrics, offscreen, with the demo's invented songs: every style
+    /// at four moments of a song (the scene, the line and the countdown
+    /// checked against the timeline; the Turkish song in the Turkish pass),
+    /// the states without lines, the widget with its bar and both panels in
+    /// both languages; the controller finds, lists, picks and times lyrics;
+    /// one automatic-sync window of the demo beat changes nothing.
+    private func checkLyrics() async throws -> String {
+        guard let demo = environment.demo else { throw SmokeFailure("No demo provider") }
+        let settings = environment.settings
+        let originalLanguage = settings.general.language
+        let originalLyrics = settings.lyrics
+        let controller = environment.lyrics
+        defer {
+            settings.general.language = originalLanguage
+            settings.lyrics = originalLyrics
+            controller.stop()
+        }
+        let fonts = try LyricsCheck.checkFonts()
+        let directory = snapshotDirectory()
+        if let directory { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
+
+        // The controller follows the playing demo song.
+        settings.lyrics.enabled = true
+        controller.start()
+        func wait(_ what: String, seconds: Double = 4, _ condition: () -> Bool) async throws {
+            let deadline = Date().addingTimeInterval(seconds)
+            while !condition() {
+                guard Date() < deadline else { throw SmokeFailure("\(what) within \(Int(seconds)) s") }
+                try await Task.sleep(for: .milliseconds(20))
+            }
+        }
+        try await wait("no lyrics for the playing demo song") { controller.phase == .synced }
+        guard let original = controller.lyrics else { throw SmokeFailure("no lines") }
+        controller.panel = .versions
+        try await wait("no other versions") { controller.versions.value?.count == 3 }
+        guard let late = controller.versions.value?[1] else { throw SmokeFailure("no late version") }
+        controller.choose(late)
+        try await wait("the picked version was not shown") { controller.choice?.id == late.id && controller.panel == nil }
+        guard controller.lyrics?.lines.first?.start == (original.lines.first?.start ?? 0) + 0.7 else {
+            throw SmokeFailure("the picked version's timing is not the one shown")
+        }
+        controller.useAutomatic()
+        try await wait("the automatic pick did not come back") { controller.choice == nil && controller.lyrics == original }
+        controller.nudge(by: LyricsController.nudgeStep)
+        guard abs(controller.songOffset - LyricsController.nudgeStep) < 1e-9 else { throw SmokeFailure("the nudge did not move the timing") }
+        controller.resetOffset()
+        controller.panel = .search
+        controller.searchTitle = "harbor"
+        controller.searchArtist = ""
+        controller.search()
+        try await wait("search found nothing") { controller.results.value?.isEmpty == false }
+
+        // Every style, the states and the widget, in both languages.
+        var frames = 0
+        var states = 0
+        var widgets = 0
+        for language in AppLanguage.allCases {
+            settings.general.language = language
+            let song = language == .turkish ? demo.songs[3] : demo.songs[0]
+            let cover = await demo.artwork(for: song.track, pixelSize: 360)?.image
+            frames += try LyricsCheck.renderStyles(song: song, cover: cover, language: language, directory: directory).frames
+            states += try LyricsCheck.renderStates(song: song, cover: cover, language: language, directory: directory)
+            let size = LyricsLayout.widgetSize(textScale: 1, showsCover: true)
+            let model = environment.desktopPlayer.model
+            for (name, panel) in [("bar", nil), ("versions", LyricsController.Panel.versions), ("search", .search)] as [(String, LyricsController.Panel?)] {
+                controller.panel = panel
+                if panel == .versions { try await wait("no versions to show") { controller.versions.value != nil } }
+                if panel == .search {
+                    controller.search()
+                    try await wait("no search results to show") { controller.results.value != nil }
+                }
+                let widget = LyricsWidget(lyrics: controller, player: model, power: environment.power, settings: settings, showsBar: true)
+                let bitmap = try await renderWidget(widget, size: size, model: model, language: language)
+                try saveWidget(bitmap, name: "lyrics-\(name)", language: language, in: directory)
+                widgets += 1
+            }
+            controller.panel = nil
+        }
+
+        // Automatic sync: one window of the bare demo beat is measured and
+        // changes nothing (a single window never does).
+        let window = DemoAudioSynth(sampleRate: LyricsSyncCapture.analysisRate).render(seconds: 32, from: 2)
+        let started = ContinuousClock.now
+        let measured = LyricsSyncSession.measure(window, sampleRate: LyricsSyncCapture.analysisRate, starts: original.lines.map(\.start), position: 2, beatPeriod: 0.5)
+        let milliseconds = Int((ContinuousClock.now - started) / .milliseconds(1))
+        var session = LyricsSyncSession(key: "smoke", fingerprint: original.timingFingerprint)
+        session.beginWindow()
+        guard session.add(measured) == nil else { throw SmokeFailure("a single sync window changed the timing") }
+
+        let saved = directory.map { ", snapshots in \($0.path)" } ?? ""
+        return "\(frames) style frames (8 styles × 4 moments × 2 languages) with the right line and countdown, \(states) states, "
+            + "\(widgets) widget renders; found, listed, picked, nudged and searched lyrics; a 32 s sync window measured in \(milliseconds) ms "
+            + "(\(measured.stage.rawValue)); fonts \(fonts.joined(separator: ", "))\(saved)"
     }
 
     private func checkSettingsWindow() async throws -> String {

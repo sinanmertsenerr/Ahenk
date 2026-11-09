@@ -79,6 +79,14 @@ final class AppEnvironment {
         if let code = options.language, let language = AppLanguage(rawValue: code) {
             settings.general.language = language
         }
+        if let name = options.lyricsStyle {
+            if let style = LyricStyle(rawValue: name) {
+                settings.lyrics.style = style
+                settings.lyrics.enabled = true
+            } else if name == "off" {
+                settings.lyrics.enabled = false
+            }
+        }
         let environment = AppEnvironment(
             options: options,
             settings: settings,
