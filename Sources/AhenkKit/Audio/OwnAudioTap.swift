@@ -93,16 +93,24 @@ public final class OwnAudioTap: @unchecked Sendable {
         }
 
         /// A player item's audio is about to flow: its rate and buffer size.
-        public func prepare(sampleRate: Double, maxFrames: Int) {
-            guard sampleRate > 0, sampleRate.isFinite else { return }
+        /// Only 32-bit float samples can be mixed (what AVFoundation hands
+        /// to a tap); with anything else (`isFloat` false) the item is not
+        /// listened to and the light stays still for it.
+        public func prepare(sampleRate: Double, maxFrames: Int, isFloat: Bool = true) {
+            guard isFloat, sampleRate > 0, sampleRate.isFinite else {
+                ahenk_store_release(shared + 1, 0)
+                return
+            }
             ahenk_store_release(shared, Int64(bitPattern: sampleRate.bitPattern))
-            ahenk_store_release(shared + 1, Int64(max(0, maxFrames)))
+            ahenk_store_release(shared + 1, Int64(max(1, maxFrames)))
         }
 
         /// Averages every channel of every buffer (interleaved or not) into
         /// mono and writes it to the ring. Real-time safe: vDSP and the
         /// ring's lock-free writer, no allocation, no locks.
         public func mix(_ list: UnsafeMutablePointer<AudioBufferList>, frames: Int, mediaTimeEnd: Double?) {
+            // Not prepared, or samples that are not floats.
+            guard ahenk_load_acquire(shared + 1) > 0 else { return }
             let buffers = UnsafeMutableAudioBufferListPointer(list)
             var channels = 0
             var available = Int.max

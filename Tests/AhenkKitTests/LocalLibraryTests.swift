@@ -291,6 +291,13 @@ struct LocalLibraryTests {
         var out = [Float](repeating: 0, count: frames)
         out.withUnsafeMutableBufferPointer { _ = tap.ring.reader.read(into: $0.baseAddress!, maxCount: frames) }
         #expect(out.allSatisfy { abs($0 - 0.75) < 1e-6 })
+        // An item whose samples are not floats is not listened to; the next float item is.
+        tap.context.pointee.prepare(sampleRate: 48_000, maxFrames: 4096, isFloat: false)
+        tap.context.pointee.mix(list.unsafeMutablePointer, frames: frames, mediaTimeEnd: 13)
+        #expect(tap.ring.availableSamples == 0 && tap.buffersSeen == 1 && tap.sampleRate == 44_100)
+        tap.context.pointee.prepare(sampleRate: 48_000, maxFrames: 4096)
+        tap.context.pointee.mix(list.unsafeMutablePointer, frames: frames, mediaTimeEnd: 13)
+        #expect(tap.ring.availableSamples == frames && tap.buffersSeen == 2 && tap.sampleRate == 48_000)
         tap.measuredLead = 9
         #expect(tap.measuredLead == 1.5, "clamped")
         tap.measuredLead = .nan

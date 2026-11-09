@@ -44,8 +44,11 @@ private let tapFinalize: MTAudioProcessingTapFinalizeCallback = { tap in
 
 private let tapPrepare: MTAudioProcessingTapPrepareCallback = { tap, maxFrames, format in
     let rate = format.pointee.mSampleRate
+    let isFloat = format.pointee.mFormatID == kAudioFormatLinearPCM
+        && format.pointee.mFormatFlags & kAudioFormatFlagIsFloat != 0
+        && format.pointee.mBitsPerChannel == 32
     Unmanaged<OwnAudioTap>.fromOpaque(MTAudioProcessingTapGetStorage(tap))._withUnsafeGuaranteedRef { owner in
-        owner.context.pointee.prepare(sampleRate: rate, maxFrames: Int(maxFrames))
+        owner.context.pointee.prepare(sampleRate: rate, maxFrames: Int(maxFrames), isFloat: isFloat)
     }
 }
 
