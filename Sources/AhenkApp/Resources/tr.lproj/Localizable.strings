@@ -210,6 +210,10 @@
 /* MARK: Desktop widgets: the player bar */
 "Not in demo mode" = "Demo modunda kullanılamaz";
 
+/* MARK: Desktop widgets: the queue */
+"The queue stopped: the next song cannot be started from Ahenk." = "Çalma sırası durdu: sıradaki şarkı Ahenk'ten başlatılamıyor.";
+"The song did not start." = "Şarkı başlamadı.";
+
 /* MARK: Desktop widgets: playing in a source */
 "In demo mode, songs play in the demo player." = "Demo modunda şarkılar demo oynatıcısında çalar.";
 "This song is not part of the demo." = "Bu şarkı demoda yok.";
