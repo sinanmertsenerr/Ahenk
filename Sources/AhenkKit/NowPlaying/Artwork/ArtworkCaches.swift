@@ -145,11 +145,20 @@ public protocol HTTPFetching: Sendable {
     /// The body and status code of a POST request with a JSON body (batch
     /// lookups). Fetchers that only read covers need not implement it.
     func post(_ url: URL, json body: Data) async throws -> (data: Data, status: Int)
+    /// The body and status code of `request`, headers included (lyrics
+    /// providers that need a referer or a cookie). Fetchers that only read
+    /// by URL answer with `get` and drop the headers.
+    func send(_ request: URLRequest) async throws -> (data: Data, status: Int)
 }
 
 extension HTTPFetching {
     public func post(_ url: URL, json body: Data) async throws -> (data: Data, status: Int) {
         throw URLError(.unsupportedURL)
+    }
+
+    public func send(_ request: URLRequest) async throws -> (data: Data, status: Int) {
+        guard let url = request.url else { throw URLError(.badURL) }
+        return try await get(url)
     }
 }
 
@@ -177,6 +186,11 @@ public struct URLSessionFetcher: HTTPFetching {
         request.httpMethod = "POST"
         request.httpBody = body
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let (data, response) = try await session.data(for: request)
+        return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
+    }
+
+    public func send(_ request: URLRequest) async throws -> (data: Data, status: Int) {
         let (data, response) = try await session.data(for: request)
         return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
     }
