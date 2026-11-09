@@ -645,6 +645,8 @@ struct WallpaperDemoTests {
             #expect(Set(candidates.map(\.id)).count == 4)
             #expect(VideoSync.mode(isSongVideo: true, syncEnabled: true, songDuration: song.track.duration, videoDuration: candidates[0].duration) == .followsSong)
         }
+        let ids = DemoCatalog.songs.flatMap { WallpaperDemo.candidates(for: $0).filter { $0.kind != .artwork }.map(\.id) }
+        #expect(Set(ids).count == ids.count, "every song's pictures are its own, so a new song crossfades")
         let colors = WallpaperDemo.colors(look: 1, palette: DemoCatalog.songs[0].palette)
         #expect(colors.count == DemoCatalog.songs[0].palette.colors.count + 1)
         #expect(colors.first == DemoCatalog.songs[0].palette.colors[1])

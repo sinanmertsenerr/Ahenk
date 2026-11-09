@@ -15,10 +15,11 @@ public enum WallpaperDemo {
     public static func candidates(for song: DemoSong) -> [WallpaperCandidate] {
         let first = Int(song.artworkSeed % UInt64(lookCount))
         let looks = (0..<3).map { (first + $0) % lookCount }
+        let id = song.track.id
         return [
-            .generated(look: looks[0], kind: .songVideo, title: song.track.title, duration: song.track.duration),
-            .generated(look: looks[1], kind: .artistVideo, title: lookTitles[looks[1]]),
-            .generated(look: looks[2], kind: .artistVideo, title: lookTitles[looks[2]]),
+            .generated(look: looks[0], kind: .songVideo, title: song.track.title, duration: song.track.duration, song: id),
+            .generated(look: looks[1], kind: .artistVideo, title: lookTitles[looks[1]], song: id),
+            .generated(look: looks[2], kind: .artistVideo, title: lookTitles[looks[2]], song: id),
             .artwork,
         ]
     }

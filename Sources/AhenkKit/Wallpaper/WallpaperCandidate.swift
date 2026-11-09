@@ -91,8 +91,10 @@ public struct WallpaperCandidate: Hashable, Sendable, Identifiable {
 
     public static let artwork = WallpaperCandidate(id: "artwork", kind: .artwork, media: .artwork)
 
-    public static func generated(look: Int, kind: Kind, title: String, duration: TimeInterval? = nil) -> WallpaperCandidate {
-        WallpaperCandidate(id: "generated:\(look)", kind: kind, media: .generated(look: look), title: title, duration: duration)
+    /// Generated motion for one song (`song` keeps two songs' pictures
+    /// apart, so a new song crossfades even in the same look).
+    public static func generated(look: Int, kind: Kind, title: String, duration: TimeInterval? = nil, song: String = "") -> WallpaperCandidate {
+        WallpaperCandidate(id: "generated:\(song):\(look)", kind: kind, media: .generated(look: look), title: title, duration: duration)
     }
 
     /// A video from the user's list (`nil` for an unusable entry).
