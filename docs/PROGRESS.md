@@ -1553,3 +1553,293 @@ Generated motion and the cover run as Core Animation in the window server at 30 
 
 Nothing new is asked. To get the art-track signal from YouTube Music, reload the browser extension (1.1.0) from
 `Ahenk.app/Contents/Resources/Extension` after installing this build.
+
+## Step 9 — Desktop extras (done, 2026-11-10)
+
+### What exists
+
+```
+Sources/AhenkKit/Desk/ClearDesk       DeskApp, ClearDeskState (the rules: clear → plan, restore → plan, refused / shown / quit),
+                                      ClearDeskStore (a cleared desk on disk while it lasts), DeskSpaces (owners of full-screen Spaces)
+Sources/AhenkKit/Dock/DockArt         DockArtPolicy (mode and frame rate; the cover's grace between songs), DockRingMotion (a swell
+                                      per beat, the same at any frame rate), DockTileLook (the few steps a tile changes in),
+                                      DockRingGeometry
+Sources/AhenkKit/Stickers/            Sticker + StickerPlacement (free on a display, or stuck on a widget), StickerGeometry (window,
+                                      clamping, snapping, new placements), StickerStore (Stickers.json + one PNG per cut-out)
+Sources/AhenkKit/Local/               LocalSong + LocalFileNames (what a file's name and folders say), LocalLibraryScanner +
+                                      LocalMetadata (tags, length, embedded cover, the folder's picture), LocalLibraryStore (remembered
+                                      folders, bookmarks), LocalQueue (PlayQueue with a player's rules), GeneratedSongFiles (tones as
+                                      WAV / tagged M4A for tests and checks)
+Sources/AhenkKit/Audio/OwnAudioTap    Ahenk's own playback as samples for the analysis (+ OwnAudioPacer: bursts → a steady stream)
+Sources/AhenkKit/Bridge/BrowserBridge LocalPlaybackEngine, LocalPlaybackProvider (the hub's "local" provider), SnapshotBroadcaster
+Sources/AhenkKit/Demo/DemoStickerArt  generated "photos" (a mug, a ball on a studio backdrop) for the demo and the checks
+Sources/AhenkApp/Desk/                ClearDeskController (+ DeskWorkspace: SystemDeskWorkspace, InventedDeskWorkspace; ManagedSpaces),
+                                      ClearDeskCheck
+Sources/AhenkApp/Dock/                DockArtController, DockTile (DockTileParts, DockTileRenderer, DockTileView), DockArtCheck
+Sources/AhenkApp/Stickers/            StickerController, StickerWindow (+ StickerView: drag, resize, turn), StickerCutter (Vision),
+                                      StickerCheck
+Sources/AhenkApp/Local/               LocalPlayer (AVQueuePlayer + LocalPlayerEngine), LocalAudioTap (MTAudioProcessingTap → OwnAudioTap),
+                                      LocalDemo (--demo-local), LocalCheck
+Sources/AhenkApp/Desktop/Views/       ClearDeskButton (our own moon glyph), FileDrop (drops on widgets)
+Settings                              Stickers pane (list, add, drop, remove), Desktop Player › Dock, Sources › Your Music Folders
+Tests/AhenkKitTests/                  510 tests in 88 suites (was 469/84): ClearDeskTests, DockArtTests, StickerTests,
+                                      LocalLibraryTests; hub, capture policy and launch option cases
+```
+
+**Dock art.** While a song the light would react to (music; never a video, a podcast or an advert) is followed and its
+cover is known, `NSApp.dockTile.contentView` is a `DockTileView`: the round cover, a ring in the cover's colours that
+swells on every beat, and the song's progress as a bright arc from the top. Playing: at most 10 tiles a second (6 in
+Optimized Mode or on battery with "run lighter"); paused, the ring switched off, Low Power Mode or a hot Mac: one still
+tile; nothing playing or Dock Art off: `contentView = nil`, Ahenk's own icon. Without the audio permission the ring
+swells softly every 1.9 s while music plays. A new song's cover gets 3 s to arrive before the icon comes back (the last
+cover stays meanwhile). Toggles: Settings › Desktop Player › Dock (`dock.albumArtIcon`, `dock.beatRing`) and the menu's
+Dock Art.
+
+**Clear Desk.** The menu bar item (and the Dock menu's) and the moon button beside the search field (above the small
+player too) call `ClearDeskController.toggle()`. First click: Ahenk becomes active, then every visible regular app
+except Ahenk is hidden with `NSRunningApplication.hide()`, back to front, the active app last; apps the user had hidden,
+full-screen apps and menu bar extras are skipped. 1.2 s later, apps still visible count as refusing and are forgotten.
+While cleared, an app the user shows (`didUnhideApplication`) or that quits is forgotten; apps launched meanwhile were
+never recorded. Second click (and `applicationWillTerminate`, so also SIGTERM): `unhide()` for exactly the recorded
+processes that still run (same PID and bundle) and are still hidden, back to front, then the app that was in front is
+made active again. Nothing is ever quit, killed or relaunched, the Finder included. The state is written to
+`~/Library/Application Support/Ahenk/ClearDesk.json` while the desk is cleared; a launch that finds one younger than 12 h
+(a crash, a forced quit) shows those apps at once.
+
+**Stickers.** A photo (open panel from Settings › Stickers, the player's ⋯ menu or a sticker's menu; or a picture file
+dropped on Settings › Stickers or on any widget) is read at ≤ 2048 px, `VNGenerateForegroundInstanceMaskRequest` cuts
+all its subjects out (the whole photo with rounded corners when Vision finds none), the cut-out is kept at ≤ 1024 px as
+a PNG in `~/Library/Application Support/Ahenk/Stickers` next to `Stickers.json` (up to 60). Each sticker is a borderless
+non-activating panel at the widgets' level (`desktopIconWindow + 1`, all Spaces, stationary), square so it turns inside
+it, click-through outside the picture. Drag it anywhere on it, resize with the corner handle, a pinch or the scroll
+wheel (48–640 pt, at most 90 % of the screen), turn it with the handle above it, a two-finger rotation or
+Option-scroll (snaps to quarter turns within 3°). Right-click: Stick to the Clock / List / Player / Lyrics (it becomes a
+child window of that widget, keeps its offset from the widget's anchor point, moves and hides with it), Leave on the
+Desktop, Bring to Front, Original Size and Angle, Remove Sticker. A picture dropped on a widget sticks there. The
+optional white die-cut border (`stickers.border`) is drawn at display time, not stored. Settings › Stickers lists them
+with their place, frees or removes them, and reports what went wrong.
+
+**Local songs.** A folder (or song files) dropped on Continue Playing or the player, or "Add Folder…" in the list's
+menu or Settings › Sources: the folder is remembered (`LocalLibrary.json`, newest first, 40, with a bookmark that
+follows a move), shown as the list ("Demo Tones · 3 songs") and played by `LocalPlayer`: an `AVQueuePlayer` holding the
+current item and the next one (gapless), `LocalQueue` for the order. Tags, length and the cover come from the files
+(ID3, iTunes, QuickTime; `cover.jpg`/`folder.png`… next to the song otherwise; the file's name and folders when there
+are no tags). It reports to the hub as source `.local`, bundle `com.sinanmertsener.Ahenk`, with play/pause, next,
+previous (restarts after 3 s), seek, shuffle and repeat off/all/one; the light, the lyrics chain, the wallpaper, Continue
+Playing, the queue panel (Play Next, Add to Queue, remove, reorder), the play-the-list button and Dock art treat it like
+any source. Outside the demo it publishes `MPNowPlayingInfoCenter` and takes the media keys; the system's report of
+Ahenk merges into the same player (`KnownApps.ahenk` → `.local`), so the hub never sees Ahenk twice. With "pause the
+previous source" on, starting song files pauses the other players and starting another source pauses the files.
+
+**The light with Ahenk as the player.** No process tap can hear Ahenk (the taps exclude it on purpose), so every player
+item carries an `MTAudioProcessingTap` (pre-effects, pass-through) whose process callback mixes the buffer to mono into
+`OwnAudioTap`'s ring; `AudioCapturePolicy` answers a `.local` player with `.own(target)` (no permission needed) and the
+analysis queue paces the tap's 4096-frame bursts into the usual pipeline (`OwnAudioPacer`). AVFoundation hands audio
+over ~0.47 s before it is heard; `LocalPlayer` measures that lead from the player's clock in the first seconds of a
+song and the features wait that long (`presentationDelay`).
+
+### Build, run, verify
+
+```sh
+swift build && ./Scripts/test.sh      # 510 Swift tests + 24 node tests, no warnings
+./Scripts/make-app.sh && ./Scripts/smoke.sh --snapshots   # dock-{still,calm,beat,view}.png, sticker-{cutout,turned}.png
+open -n dist/Ahenk.app --args --demo --demo-backdrop      # Dock art (see the Dock), the mug sticker on the clock, the moon button
+open -n dist/Ahenk.app --args --demo --demo-backdrop --demo-desk-cleared   # the invented desk cleared: the moon filled
+open -n dist/Ahenk.app --args --demo --demo-backdrop --demo-local --draw-covered   # generated tones through the Local source, muted
+swift Scripts/widget-shot.swift /tmp/desk.png --full      # Ahenk's own windows only
+pkill -x Ahenk
+```
+
+New launch arguments: `--demo-local` (demo: three generated 50 s tones with generated covers in a temporary folder,
+dropped on the desktop player like a user's folder and played by the local player with its volume at zero; deleted on
+quit), `--demo-desk-cleared` (demo: Clear Desk on at launch, on the demo's invented apps), `--dock-art <on|still|off>`
+and `--full-rate` ("run lighter on battery" off) for one run with in-memory settings (measurements on an unplugged
+MacBook).
+
+Tests by name. Clear Desk: "The first click hides every visible regular app but Ahenk, back to front, the active app
+last", "The second click shows exactly what Ahenk hid…", "An app the user brings back meanwhile is theirs…", "An app
+shown by the system without a notification is not shown twice", "Apps that quit, relaunch or start meanwhile are never
+touched", "A reused PID with another bundle is not the app Ahenk hid", "An app that refuses to hide stays as it is and is
+not restored", "Apps without windows on screen go first…", "Ahenk in front is never 'the app to bring back'; an empty
+desk is a no-op", "The owners of full-screen Spaces are read from the list of Spaces, tiles of a split view included",
+"A cleared desk is remembered on disk until it is restored, and only for a while". Stickers: placement on a display and
+on a widget, dragging, new placements, size / rotation / window, encoding with a damaged placement, the store (order,
+pictures, a lost picture, capacity). Local: file names for missing tags, track numbers, scanning generated files (tagged
+M4A, untagged WAV, covers, album order), remembered folders following a move, the queue's rules (repeat, Next, Previous
+after 3 s, shuffle kept, Play Next / Add to Queue, an unplayable file), the own tap's mixdown and the pacer. Dock: the
+mode table, the cover's grace, the swell at 10 and 5 fps, the looks, frames that are not sent, the geometry inside the
+tile. Hub: "Ahenk's own player and the system's report of Ahenk are one player…". Capture policy: `.own` for a local
+player with and without the permission.
+
+Smoke checks (28, all `ok`): `clearDesk` — the real controller on a desk of invented apps: Ahenk made active first,
+Finder, Browser, Stubborn and Editor hidden in that order, the full-screen app, the hidden one and the menu bar extra
+left alone, the refusing app let go after 1.2 s; after the user showed one, one quit and one started, the second click
+only shows Editor and brings it to the front; the menu bar item toggles the environment's controller (invented apps in
+smoke and demo runs; the check refuses to run otherwise). It also reads this Mac's apps and works the first click out
+without carrying it out ("83 apps run, a click would hide 7 and leave 1 full-screen and 0 hidden ones alone").
+`dockArt` — the tile from a generated cover drawn offscreen still, between beats and on a beat (cover in the middle,
+clear corners, the ring's lit pixels 780 → 1381 → 4194), 33 of 40 frames sent in 4 s of the demo beat at 10 fps, and the
+tile's own view drawn through every size of the swell (13 pictures; 0.7 ms a tile the first time, 0.04 ms afterwards).
+`stickers` — a generated 1024 × 768 photo cut out by Vision in ~125 ms (360 × 301 px; backdrop and the hole in the mug's
+handle clear), the white border, a sticker window at the widgets' level that can never become key, the turned sticker
+drawn offscreen, the store. `localPlayback` — two tagged M4A tones and an untagged 48 kHz WAV generated into a temporary
+folder, scanned (titles from tags and from a file name), played muted through `LocalPlayer` and a hub of its own; the
+first song plays within ~35 ms, Ahenk's own audio reaches the analysis (44.1 kHz, energy 0.75, beats counted) with no
+process tap, then Next, a seek and a pause are carried out and the analysis falls silent.
+
+Seen in the demo (Ahenk's windows only, both languages): the mug sticker tilted on the clock's upper right corner; the
+moon button outlined, and filled in the accent colour with `--demo-desk-cleared`; with `--demo-local` the list titled
+"Demo Tones · 3 songs" with the files' covers, "Generated One — Demo Tones" in the bar, the cover as the wallpaper,
+"No lyrics for this song", and in the log "Listening to Ahenk's own player (44100 Hz, 350 ms ahead of the sound)" and
+"Dock icon: the cover with a beating ring".
+
+Measured on the M5 (release build, on battery with `--full-rate`, demo with the light, the player and the lyrics on,
+`--draw-covered --wallpaper-source off`, 30 s means with `top`; the user kept working, so Ahenk's own figure moves
+between ~4 % and ~9 % from run to run with what the desktop shows):
+
+| Dock art | Ahenk | Dock process |
+|---|---|---|
+| off | 6.8 %, 7.8 % (two runs) | 0.0–0.1 % |
+| on, 10 fps | 4.1 %, 9.3 % (two runs) | 1.6–2.3 % |
+| on, 6 fps (Optimized Mode / battery) | 6.5 % | 1.1–1.4 % |
+| on, ring off or Low Power Mode (still) | 7.6 % | 0.0 % |
+| on, paused (still) | 0.0–0.1 % | 0.0 % |
+| the Local source playing (muted tones), Dock art on | 9.5 % | 1.2 % |
+| live, nothing playing | 0.00–0.06 %, 34 MB | 0.0 % |
+
+Ahenk's own share of the tile, by sampling its main thread for 6 s at 10 fps: 39 ms of 6 s (0.65 % of a core), where
+the first version of the tile took 181 ms (3.0 %; +4.7 % by `top`). With lyrics, player and wallpaper off the pair read
+6.1–6.2 % (off) against 5.8–7.6 % (on). The Dock's own cost per tile is not Ahenk's to cut; it follows the tile rate.
+
+### Decisions
+
+- **The tile is a few pictures, not a drawing.** The Dock's tile bitmap is 16-bit float wide colour; a conic gradient,
+  a blurred shadow and a resampled cover drawn into it cost ~3 ms a tile (CPU frequency is low for sparse timer work).
+  A picture drawn before is copied quickly (Core Graphics keeps its converted form). So the tile changes in steps
+  (`DockTileLook`: paused, or 13 sizes of the swell × quiet/loud = 27 looks), each look is drawn once per cover into an
+  8-bit picture of the tile's own pixels (cover on whole pixels), and a frame copies one picture and strokes the progress
+  arc. Tried and dropped: wedges for the ring (60 fills were slower), drawing into an 8-bit canvas per frame and copying
+  that (a new picture is converted every time), stroke rings for the glow. The ring's colours do not turn with the beat
+  (a turned picture cannot be kept). Up to 27 × 256 KB per cover, made as needed.
+- **The swell is timed from the beat, not from the frame.** `AudioFeatures.beat` lasts ~0.1 s, less than two frames at
+  10 fps; `DockRingMotion` starts its own swell on every change of `beatIndex`, back-dated by `beatPhase`, decaying with
+  0.16 s, so 10 and 6 fps show the same motion.
+- **Only music takes the Dock icon** (the light's rule, `AudioCapturePolicy.reactsTo`): a paused video's thumbnail would
+  otherwise sit in the Dock for as long as the browser tab stays open.
+- **Clear Desk hides apps, not windows.** `NSRunningApplication.hide()`/`unhide()` is what Hide Others does: no
+  permission, nothing to restore but "hidden" itself, window positions untouched. Ahenk activates itself first so macOS
+  does not activate (and so show) an app that was just hidden. Desktop icons stay as they are (nothing covers them, and
+  the Finder's settings are never touched).
+- **Full-screen apps are left alone, and found through the list of Spaces.** Hiding the owner of a full-screen Space
+  would have to switch Spaces on restore, and it does not cover the desktop. On this notched display a full-screen window
+  is 1512 × 949 at y = 33, exactly like a zoomed window with the Dock hidden, so bounds cannot tell; the window server's
+  `CGSCopyManagedDisplaySpaces` (SkyLight, private, looked up at run time, read-only) names each full-screen Space's
+  owner (`type` 4, `pid`, split-view tiles under `TileLayoutManager.TileSpaces`). Without it, only a borderless window
+  exactly as large as a display counts. An app with a full-screen window and a desktop window keeps both.
+- **Demo and smoke runs can never hide anything.** `AppEnvironment` gives every run that is not `.normal` an
+  `InventedDeskWorkspace` and an in-memory `ClearDeskStore`; the smoke check throws if it finds the real one.
+- **A sticker is a window.** Windows give dragging between displays, per-sticker stacking, click-through outside the
+  picture and child-window attachment for free; a hidden widget's stickers are ordered out, not closed. Placements are
+  relative: to the display's visible frame (normalized) or to the widget's anchor point (points), and are clamped so the
+  centre stays 12 pt inside a display.
+- **Cut-outs: all instances, cropped to their extent**, downscaled to 1024 px, sRGB PNG. The border is CoreImage
+  (morphology maximum + a small blur) at display time, so the setting applies to old stickers too.
+- **The local player's ID is the file's path** (`Track.id`, `CatalogSong.origin.id` with source `.local`); lists carry
+  song files as `CatalogSong`s and `DesktopPlayerModel.play` sends those to `LocalPlayer`, the rest to the queue
+  conductor. Covers for `.local` come from the snapshot's `artworkData` (the catalog policy skips local songs); list rows
+  read them from the file through `CoverImageStore`.
+- **Folders are read each time** (tags of ≤ 4000 files, 8 at a time); only paths and bookmarks are stored.
+- **Launch arguments for checks** stay demo-only or in-memory: `--demo-local` and `--demo-desk-cleared` do nothing
+  without the demo; `--dock-art` and `--full-rate` never save.
+
+### Deviations from PLAN.md
+
+- Dock art also draws the song's progress on the ring and keeps the last cover for 3 s between songs.
+- Clear Desk skips full-screen apps, apps the user had hidden and menu bar extras, and uses a private read-only window
+  server call to find full-screen Spaces (see Decisions). Desktop icons are not covered while cleared.
+- Stickers can also be turned, get an optional white border, and stick to the lyrics widget too.
+- Local songs also take loose song files, play from the player widget too, and show in the system's Now Playing with
+  media keys.
+- **History.** One of the step's first commits used `KnownApps.ahenk` before a later commit defined it, so four commits
+  did not build; the constant now arrives with its first use (the commits were not pushed yet; the final tree is the
+  same). Every commit of the step builds and passes its tests.
+- **Shared API changes** (call sites and tests updated): `AudioTapRequest.own`, `AudioEngineStatus.isOwnPlayback`;
+  `AudioCaptureController.init(store:demo:ownAudio:)`, `AudioTapEngine.init(demo:ownAudio:)`;
+  `LocalPlaybackProvider.init(engine:)` and `LocalPlaybackEngine`; `NowPlayingServices.live/demo(… local:)` (the demo's
+  artwork provider now falls back to an offline pipeline, for local covers); `KnownApps.ahenk` (a music app of source
+  `.local`); `QueueContext.folder` / `.droppedSongs`; `PlayQueue.removeCurrent(wrapping:)` and `following`;
+  `ListSelection.folder`; `DesktopPlayerModel.local`, `library`, `onDropFiles`, `onAddSticker`;
+  `DesktopPlayerController.onWidgetsChanged`; `QueueConductor.release()`; `DeskClearing` is implemented by
+  `ClearDeskController` (`AppEnvironment.deskController`, `clearDesk`); `AppEnvironment.localPlayer`, `localLibrary`,
+  `stickers`, `dockArt`; `LaunchOptions` gained `demoLocal`, `demoDeskCleared`, `dockArt`, `fullRate`.
+
+### For Step 10 (sound effects and local lyric alignment)
+
+- **Two kinds of player, two hooks.** External sources are heard through `ProcessTapSession` (Step 3): a private,
+  **unmuted** tap whose C IOProc mixes every channel to mono into the analysis ring. Ahenk's own player is heard through
+  `LocalAudioTap` (an `MTAudioProcessingTap` on each `AVPlayerItem`'s audio mix). `AudioCapturePolicy.request` says which
+  (`.app`/`.everything` or `.own`), and `AudioEngineStatus.isOwnPlayback` tells the UI.
+- **External sources.** Effects need the tap with `muteBehavior = .mutedWhenTapped` and the samples in stereo: give
+  `ProcessTapSession` a second, stereo ring (keep the mono mixdown for the analysis, taken before the effects so the
+  beat does not follow a reverb tail) and play that ring through an `AVAudioEngine` (`AVAudioSourceNode` → pitch → EQ →
+  reverb → output). The tap already excludes Ahenk's own processes, so the processed sound is never tapped again; the
+  aggregate device is clocked by an output-only device, use the same device for the engine to avoid drift. A muted tap
+  unmutes by itself when Ahenk goes away; still unmute in `applicationWillTerminate` next to `audio.stop()`. Effects need
+  the audio permission (no tap, no effects): say so in the UI. The "everything" fallback tap must never be muted.
+- **Speed.** A live tap cannot play faster or slower than the source. Nightcore and Slowed need the player's own rate:
+  browser tabs through the bridge (`BridgeTab.playbackRate` is already reported; a "set rate" command is new),
+  the local player through `AVQueuePlayer.rate` with `audioTimePitchAlgorithm = .varispeed`; Apple Music and Spotify
+  offer no rate, so there those presets can only shift pitch (say so, or hide them).
+- **The Local player.** Its sound never passes a process tap, so effects go into its own chain. Simplest: process in
+  place in `LocalAudioTap`'s `tapProcess` (stereo float, 4096 frames, the tap is created pre-effects and may modify the
+  buffer: run the EQ / reverb / delay AudioUnits there, after `OwnAudioTap.Context.mix` has taken the dry signal), and
+  use the player's rate for speed presets. Alternative: mute the `AVQueuePlayer` and feed the same `AVAudioEngine` chain
+  as external sources from the tap; then delay by `OwnAudioTap.measuredLead` (~0.47 s), because the tap runs ahead of
+  what is heard, or the lyrics and the light lead the sound. `LocalPlayer.makeSnapshot` reports `playbackRate` 1 or 0
+  today; report the real rate so lyrics and the progress follow a sped-up song.
+- **One switch for both.** `settings.effects` (enabled, preset, speed, pitch, reverb, equalizerEnabled, equalizerBands)
+  exists since Step 1. Put the routing behind one controller that follows `nowPlaying.snapshot?.track.source` (`.local` →
+  the player's chain, anything else → the muted tap + engine) and turns effects off when the followed player changes
+  mid-song, so no source stays muted.
+- **Lyric alignment.** For `.local` songs `Track.id` is the file's path: whisper-cli can read the file itself (convert
+  with ffmpeg or `AVAssetReader` to 16 kHz mono first). For external sources there is no file; `LyricsSyncCapture`
+  (Step 6) already records analysis audio in memory for the auto-sync and is the place to collect audio for alignment.
+  Local songs get lyrics through the normal chain by title and artist (from tags, or the file name).
+- **UI.** The sound effects button belongs beside the lyrics (`LyricsWidget`'s bar). `DesktopSymbols.all` must list any
+  new SF Symbol (the `resources` smoke check). The player's ⋯ menu has "Add Sticker…"; stickers stuck to the lyrics
+  widget are child windows of it, so a larger lyrics bar moves nothing.
+- **Checks without sound.** `LocalPlayer(muted: true)` and `--demo-local` play at volume zero and still feed the tap
+  (pre-effects); `GeneratedSongFiles` makes tones for tests. Never play test audio aloud on the user's Mac.
+
+### Known gaps and risks
+
+- **Clear Desk has never hidden a real app.** The rules, the controller, the menu and the buttons run against invented
+  apps (tests, smoke, demo); the reading of this Mac's apps, window order and full-screen Spaces was exercised read-only.
+  `hide()`, `unhide()`, `NSApp.activate()` from a click on a desktop-level widget, `yieldActivation(to:)` and the
+  unhide/terminate notifications are untried on real apps. If Ahenk cannot become active first, macOS may show an app
+  again when the front app hides; that app then counts as shown by the user and stays. First real use: click the moon
+  with a few apps open and check the log (`[desk] Clear Desk: hid N apps (this Mac)`).
+- An app that is full screen on one Space and has windows on the desktop is left alone entirely, so those windows stay.
+  `CGSCopyManagedDisplaySpaces` is private; if it goes away, full-screen apps on notched displays are hidden like any
+  other (macOS then keeps their Space and shows them again on restore).
+- **The Dock itself was not looked at** (no full-screen captures): the tile is checked by drawing its view into a bitmap.
+  The tile's bitmap is cleared before every frame in case the Dock does not.
+- The Dock process costs ~1.6–2.3 % CPU at 10 tiles a second (1.1–1.4 % at 6); the ring can be switched off.
+- No real photo was cut out (generated pictures only) and no real song file was played (generated tones, muted). Not
+  tried: MP3 / FLAC / AIFF files, ID3 tags and embedded JPEG covers from real encoders, long folders, a DRM-protected
+  file (skipped as unplayable by `isPlayable`), sample-rate changes between real songs, AirPlay or Bluetooth output (the
+  lead is measured per song, clamped to 1.5 s), the media keys and the system's Now Playing for the local player (live
+  mode only; the hub merge is unit-tested).
+- Two player items (the current song and the preloaded next one) share one single-producer ring; if AVFoundation ever
+  ran both taps at the same moment, a few analysis samples would be garbled around a song change (memory-safe, inaudible).
+- Sticker gestures (drag, handles, pinch, rotation, context menu) and file drops on widgets were not driven by a real
+  pointer; geometry, hit areas and persistence are unit-tested and the window is checked offscreen.
+- Stickers are per Mac, not per display set: a sticker on a display that is gone moves to the first display.
+- Local songs with invented or unknown artists show "The catalog does not know this artist" in the cover flow.
+- Three launches during measurement ran in live mode by mistake (a shell quoting slip): Ahenk followed the system's Now
+  Playing read-only for ~30 s each with in-memory settings and touched nothing else.
+
+### What the user must do once
+
+Nothing new is required. Song files need no permission for the light. To try Clear Desk for real, use the installed app
+(not `--demo`, where the desk is invented).
