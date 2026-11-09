@@ -4,13 +4,19 @@ import os
 /// Feeds the invented demo songs through the same protocols the real sources
 /// use: now playing, artwork, lyrics and audio features (`--demo`, `--smoke`).
 ///
-/// The playlist loops forever. Playback is a pure function of an anchor
-/// (song, position, date) and the injected clock, so tests can drive time
-/// by hand; commands only move the anchor.
+/// It starts with `songs` as a playlist that loops forever. The desktop
+/// player can make it play any song of the demo library (`play(_:)`): that
+/// song alone, pausing at its end, as Apple Music or Spotify do when Ahenk
+/// starts one song there and its own queue picks the next. Playback is a
+/// pure function of an anchor (song, position, date) and the injected
+/// clock, so tests can drive time by hand; commands only move the anchor.
 public final class DemoProvider: NowPlayingProvider, ArtworkProvider, LyricsProvider, AudioFeatureSource, Sendable {
     public let id: String
     public let name = "demo"
+    /// The playlist the demo starts with.
     public let songs: [DemoSong]
+    /// Every song it can play (artwork and lyrics too).
+    public let library: DemoLibrary
     /// Set on a second demo player (`--demo-conflict`) so the hub sees two
     /// players; `nil` for the regular demo.
     public let bundleIdentifier: String?
@@ -19,26 +25,35 @@ public final class DemoProvider: NowPlayingProvider, ArtworkProvider, LyricsProv
     private let state: OSAllocatedUnfairLock<State>
 
     private struct State: Sendable {
-        /// Song indices in play order (sequential or shuffled).
+        /// What plays: the starting playlist, or one song from the library.
+        var playlist: [DemoSong]
+        /// Indices into `playlist` in play order (sequential or shuffled).
         var order: [Int]
         /// Index into `order` of the song at the anchor.
         var anchorSlot = 0
         var anchorPosition: TimeInterval = 0
         var anchorDate: Date
         var isPlaying: Bool
+        /// One song played on request: it pauses at its end instead of
+        /// moving on (unless repeat one is on).
+        var stopsAtEnd = false
         var isShuffled = false
         var repeatMode: RepeatMode = .all
         var liked: Set<String> = []
+        /// 0…1; the demo has no sound of its own, so this is only shown.
+        var volume = 0.7
         /// The song most recently sent to the streams.
         var announcedTrackID: String?
         var announcedPlaying: Bool?
         var continuations: [UUID: AsyncStream<NowPlayingSnapshot?>.Continuation] = [:]
         var boundaryTask: Task<Void, Never>?
+        var startTask: Task<Void, Never>?
         var artworkCache: [String: Artwork] = [:]
     }
 
     public init(
         songs: [DemoSong] = DemoCatalog.songs,
+        library: DemoLibrary = .standard,
         startPlaying: Bool = true,
         id: String = "demo",
         bundleIdentifier: String? = nil,
@@ -46,10 +61,12 @@ public final class DemoProvider: NowPlayingProvider, ArtworkProvider, LyricsProv
     ) {
         precondition(!songs.isEmpty, "The demo needs at least one song")
         self.songs = songs
+        self.library = library
         self.id = id
         self.bundleIdentifier = bundleIdentifier
         self.clock = clock
         self.state = OSAllocatedUnfairLock(initialState: State(
+            playlist: songs,
             order: Array(songs.indices),
             anchorDate: clock(),
             isPlaying: startPlaying
@@ -57,7 +74,10 @@ public final class DemoProvider: NowPlayingProvider, ArtworkProvider, LyricsProv
     }
 
     deinit {
-        state.withLock { $0.boundaryTask?.cancel() }
+        state.withLock { state in
+            state.boundaryTask?.cancel()
+            state.startTask?.cancel()
+        }
     }
 
     // MARK: Timeline
@@ -69,16 +89,60 @@ public final class DemoProvider: NowPlayingProvider, ArtworkProvider, LyricsProv
     }
 
     public func song(for track: Track) -> DemoSong? {
-        songs.first { $0.track.id == track.id }
+        songs.first { $0.track.id == track.id } ?? library.demoSong(id: track.id)
+    }
+
+    /// Plays `song` alone from the top after `startDelay` seconds (a real
+    /// source takes a moment to start a song; the player shows that), then
+    /// pauses at its end. Until it starts, the current song plays on.
+    public func play(_ song: DemoSong, startDelay: TimeInterval = 0) {
+        let task: Task<Void, Never>? = startDelay > 0
+            ? Task { [weak self] in
+                try? await Task.sleep(for: .seconds(startDelay))
+                guard !Task.isCancelled else { return }
+                self?.start(song)
+            }
+            : nil
+        let previous = state.withLock { state -> Task<Void, Never>? in
+            defer { state.startTask = task }
+            return state.startTask
+        }
+        previous?.cancel()
+        if task == nil { start(song) }
+    }
+
+    private func start(_ song: DemoSong) {
+        let now = clock()
+        state.withLock { state in
+            state.startTask = nil
+            state.playlist = [song]
+            state.order = [0]
+            state.anchorSlot = 0
+            state.anchorPosition = 0
+            state.anchorDate = now
+            state.isPlaying = true
+            state.stopsAtEnd = true
+        }
+        broadcast(force: true)
+        scheduleBoundary()
+    }
+
+    /// 0…1, shown by the player's volume control.
+    public var volume: Double { state.withLock { $0.volume } }
+
+    public func setVolume(_ volume: Double) {
+        state.withLock { $0.volume = min(1, max(0, volume.isFinite ? volume : 0)) }
     }
 
     private struct Resolved {
         var slot: Int
         var position: TimeInterval
+        /// A song played alone reached its end and stopped there.
+        var ended = false
     }
 
     private func duration(_ state: State, slot: Int) -> TimeInterval {
-        max(1, songs[state.order[slot]].track.duration)
+        max(1, state.playlist[state.order[slot]].track.duration)
     }
 
     private func resolve(_ state: State, now: Date) -> Resolved {
@@ -94,6 +158,9 @@ public final class DemoProvider: NowPlayingProvider, ArtworkProvider, LyricsProv
         if position < duration(state, slot: slot) {
             return Resolved(slot: slot, position: position)
         }
+        if state.stopsAtEnd {
+            return Resolved(slot: slot, position: duration(state, slot: slot), ended: true)
+        }
         // Finish the anchor song, skip whole loops of the playlist, then walk.
         position -= duration(state, slot: slot)
         slot = (slot + 1) % count
@@ -108,12 +175,12 @@ public final class DemoProvider: NowPlayingProvider, ArtworkProvider, LyricsProv
 
     private func makeSnapshot(_ state: State, now: Date) -> NowPlayingSnapshot {
         let resolved = resolve(state, now: now)
-        let track = songs[state.order[resolved.slot]].track
+        let track = state.playlist[state.order[resolved.slot]].track
         return NowPlayingSnapshot(
             track: track,
             bundleIdentifier: bundleIdentifier,
             elapsedTime: resolved.position,
-            playbackRate: state.isPlaying ? 1 : 0,
+            playbackRate: state.isPlaying && !resolved.ended ? 1 : 0,
             timestamp: now,
             isShuffled: state.isShuffled,
             repeatMode: state.repeatMode,
@@ -158,6 +225,11 @@ public final class DemoProvider: NowPlayingProvider, ArtworkProvider, LyricsProv
             state.anchorSlot = resolved.slot
             state.anchorPosition = resolved.position
             state.anchorDate = now
+            if resolved.ended {
+                // Stopped at the end: playing again starts from the top.
+                state.isPlaying = false
+                if command == .play || command == .togglePlayPause { state.anchorPosition = 0 }
+            }
             let count = state.order.count
             switch command {
             case .play:
@@ -182,7 +254,7 @@ public final class DemoProvider: NowPlayingProvider, ArtworkProvider, LyricsProv
             case .setRepeat(let mode):
                 state.repeatMode = mode
             case .setLiked(let liked):
-                let trackID = songs[state.order[state.anchorSlot]].track.id
+                let trackID = state.playlist[state.order[state.anchorSlot]].track.id
                 if liked { state.liked.insert(trackID) } else { state.liked.remove(trackID) }
             }
         }
@@ -232,6 +304,7 @@ public final class DemoProvider: NowPlayingProvider, ArtworkProvider, LyricsProv
             state.boundaryTask = nil
             guard state.isPlaying, !state.continuations.isEmpty else { return }
             let resolved = resolve(state, now: now)
+            guard !resolved.ended else { return }
             let remaining = max(0.05, duration(state, slot: resolved.slot) - resolved.position) + 0.02
             state.boundaryTask = Task { [weak self] in
                 try? await Task.sleep(for: .seconds(remaining))
@@ -265,7 +338,7 @@ public final class DemoProvider: NowPlayingProvider, ArtworkProvider, LyricsProv
         func same(_ a: String, _ b: String) -> Bool {
             a.compare(b, options: [.caseInsensitive, .diacriticInsensitive], range: nil, locale: nil) == .orderedSame
         }
-        let match = songs.first { same($0.track.title, query.title) && same($0.track.artist, query.artist) }
+        let match = (songs + library.songs).first { same($0.track.title, query.title) && same($0.track.artist, query.artist) }
         guard let match else { return .notFound }
         return .synced(match.lyrics)
     }
@@ -275,8 +348,9 @@ public final class DemoProvider: NowPlayingProvider, ArtworkProvider, LyricsProv
     public func currentFeatures() -> AudioFeatures {
         let now = clock()
         return state.withLock { state in
-            guard state.isPlaying else { return .silence }
-            return DemoBeat.features(at: resolve(state, now: now).position)
+            let resolved = resolve(state, now: now)
+            guard state.isPlaying, !resolved.ended else { return .silence }
+            return DemoBeat.features(at: resolved.position)
         }
     }
 }
