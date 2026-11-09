@@ -2071,6 +2071,8 @@ no timer and no processor exists; the tap's callback reads one atomic slot.
   `t_dtw` and starts where the word before it ended, or a plausible word's length (0.1 s + 0.07 s a letter, 0.8 s at
   most) before its own end when that is later. That needs flash attention off, which makes whisper's encoder about twice
   as slow (0.70 s against 0.38 s for 30 s of audio here). Without `t_dtw` the same limit is put on whisper's own times.
+  With a steady 110 Hz tone four times as loud as the voice mixed under the same spoken lines (by hand, outside the
+  repo) `t_dtw` moved by 0.02 s at most; that is one tone under a synthetic voice, not a song.
   A word per segment (`--max-len 1 --split-on-word`) stays, for the fallback. No prompt with the lyrics is passed (it
   would invite the model to write the lyrics instead of hearing them).
 - **Runs of words beat lone words.** The pairing rewards neighbours in a row (so a refrain is found where it is sung)
