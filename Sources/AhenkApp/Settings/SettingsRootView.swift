@@ -46,7 +46,7 @@ struct SettingsDetail: View {
         case .sources: SourcesPane(services: environment.services, settings: settings)
         case .light: LightPane(settings: settings, light: environment.light)
         case .player: PlayerPane(settings: settings) { environment.desktopPlayer.resetLayout() }
-        case .lyrics: LyricsPane(settings: settings)
+        case .lyrics: LyricsPane(settings: settings, lyrics: environment.lyrics, nowPlaying: environment.nowPlaying)
         case .wallpaper: WallpaperPane(settings: settings)
         case .sound: SoundPane(audio: environment.audio, apps: environment.services.apps, settings: settings)
         case .stickers: StickersPane(settings: settings)
