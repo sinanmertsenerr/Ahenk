@@ -116,6 +116,37 @@ public enum DemoCatalog {
     /// Length of one lyric slot: two bars at 120 BPM.
     public static let lineLength: TimeInterval = 4
 
+    /// The style previews' loop: three invented lines and a pause with its
+    /// countdown, `previewCycle` seconds long, repeated four times so a
+    /// preview can loop over the second cycle without a seam.
+    public static func previewLyrics(turkish: Bool) -> SyncedLyrics {
+        let words = turkish
+            ? ["Sahilde neon yanıyor", "Dalgalar ritmi tutuyor", "Bu gece biraz uzasın"]
+            : ["Lanterns drifting over the bay", "Every wave is keeping time", "Hold the night a little longer"]
+        var lines: [LyricLine] = []
+        for cycle in 0..<4 {
+            let base = Double(cycle) * previewCycle
+            lines.append(LyricLine(start: base + 1, text: words[0]))
+            lines.append(LyricLine(start: base + 4, text: words[1]))
+            lines.append(LyricLine(start: base + 7, text: words[2]))
+            // The singing stops here; the pause counts down to the next cycle.
+            lines.append(LyricLine(start: base + 9.6, text: ""))
+        }
+        return SyncedLyrics(lines: lines)
+    }
+
+    /// Seconds of one preview loop.
+    public static let previewCycle: TimeInterval = 13
+    /// Previews treat pauses this long as instrumental (shorter than songs do).
+    public static let previewMinimumGap: TimeInterval = 3
+
+    /// The lyric time a preview shows `elapsed` seconds after it started.
+    public static func previewTime(elapsed: TimeInterval) -> TimeInterval {
+        let cycle = previewCycle
+        let wrapped = elapsed.truncatingRemainder(dividingBy: cycle)
+        return cycle + (wrapped < 0 ? wrapped + cycle : wrapped)
+    }
+
     private static func song(
         id: String, title: String, artist: String, album: String, year: Int,
         duration: TimeInterval, seed: UInt64, colors: [String], lines: [(TimeInterval, String)]

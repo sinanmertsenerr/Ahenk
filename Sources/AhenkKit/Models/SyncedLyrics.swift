@@ -45,6 +45,38 @@ public struct SyncedLyrics: Sendable, Equatable, Codable {
     /// True when at least one line carries per-word timing.
     public var hasWordTiming: Bool { lines.contains { !$0.words.isEmpty } }
 
+    /// A short, stable identity of the timeline (every start and text,
+    /// FNV-1a). A timing correction measured for one timeline is never
+    /// applied to another one of the same song.
+    public var timingFingerprint: String {
+        var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+        func mix(_ text: String) {
+            for byte in text.utf8 {
+                hash ^= UInt64(byte)
+                hash = hash &* 0x0000_0100_0000_01B3
+            }
+        }
+        for line in lines {
+            mix(String(Int((line.start * 1000).rounded())))
+            mix("|")
+            mix(line.text)
+            mix("\n")
+        }
+        return String(hash, radix: 16)
+    }
+
+    /// The lines with every start moved by `seconds` (never below zero).
+    public func shifted(by seconds: TimeInterval) -> SyncedLyrics {
+        SyncedLyrics(lines: lines.map { line in
+            LyricLine(
+                start: max(0, line.start + seconds),
+                end: line.end.map { max(0, $0 + seconds) },
+                text: line.text,
+                words: line.words.map { LyricWord(text: $0.text, start: max(0, $0.start + seconds), end: $0.end.map { max(0, $0 + seconds) }) }
+            )
+        })
+    }
+
     /// Index of the line to highlight at `t`: the last line whose
     /// `start <= t`, or `nil` before the first line. O(log n), so it is safe
     /// to call every frame.
