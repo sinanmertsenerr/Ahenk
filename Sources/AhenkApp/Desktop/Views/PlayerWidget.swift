@@ -4,9 +4,9 @@ import SwiftUI
 
 /// The player window's content, stacked from the bottom (where the window
 /// is anchored): the bar, the search field, then the albums or an open
-/// page. The large player always shows the field and the albums; the small
-/// one is its bar with round buttons above, and grows a field and a page
-/// only on request.
+/// page, and the live wallpaper's dots on top. The large player always
+/// shows the field and the albums; the small one is its bar with round
+/// buttons above, and grows a field and a page only on request.
 struct PlayerWidget: View {
     let model: DesktopPlayerModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -16,6 +16,9 @@ struct PlayerWidget: View {
         let theme = model.theme
         VStack(spacing: PlayerLayout.spacing) {
             Spacer(minLength: 0)
+            if state.showsWallpaperPicker {
+                WallpaperPicker(model: model)
+            }
             switch state.size {
             case .large:
                 largeTop(state: state, theme: theme)

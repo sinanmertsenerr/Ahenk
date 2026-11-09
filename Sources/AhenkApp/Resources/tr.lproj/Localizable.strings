@@ -415,16 +415,56 @@
 /* MARK: Live wallpaper */
 "While a song plays, its motion artwork or music video becomes the wallpaper, then fades back into yours." = "Şarkı çalarken hareketli kapağı ya da müzik videosu duvar kâğıdı olur; ardından yavaşça sizinkine geri döner.";
 "Show the live wallpaper" = "Canlı duvar kâğıdını göster";
-"Use" = "Kullanılacaklar";
+"First choice" = "İlk tercih";
 "Motion artwork" = "Hareketli kapaklar";
 "Music videos" = "Müzik videoları";
 "The song's own video, or another one by the same artist." = "Şarkının kendi videosu ya da aynı sanatçının başka bir videosu.";
 "The album cover when there is no video" = "Video yoksa albüm kapağı";
+"Motion artwork comes from Apple's catalog, music videos from YouTube's embedded player, muted. Both stream while they show; nothing is downloaded." = "Hareketli kapaklar Apple'ın kataloğundan, müzik videoları ise sessiz olarak YouTube'un yerleştirilmiş oynatıcısından gelir. İkisi de gösterildikleri sırada akış olarak oynatılır; hiçbir şey indirilmez.";
+"Follow the song with its own video" = "Şarkının kendi videosunu şarkıyla eş zamanlı oynat";
+"It starts where the song is and keeps up with it. Other videos loop." = "Video, şarkının o anki yerinden başlar ve şarkıya ayak uydurur. Diğer videolar başa dönerek yeniden oynar.";
+"Go back to your wallpaper when the music pauses" = "Müzik duraklayınca duvar kâğıdınıza geri dön";
+"When this is off, the paused picture stays." = "Bu kapalıyken duraklatılan görüntü ekranda kalır.";
+"Show the dots above the player" = "Oynatıcının üstünde noktaları göster";
+"Choose the video for each song, or type the artist's name." = "Her şarkının videosunu seçin ya da sanatçının adını yazın.";
 "Crossfade" = "Geçiş süresi";
 "Dimming" = "Karartma";
+"Blur" = "Bulanıklık";
+"Dimming and a soft shade at the edges keep the clock, the player, the lyrics and the edge light readable over bright videos. On battery and in Optimized Mode videos play at a lower resolution; in Low Power Mode only the cover moves." = "Karartma ve kenarlardaki hafif gölge; saatin, oynatıcının, şarkı sözlerinin ve kenar ışığının parlak videoların üzerinde de kolayca okunmasını sağlar. Pilde ve Optimize Edilmiş Modda videolar daha düşük çözünürlükte oynatılır; Düşük Güç Modunda yalnızca kapak hareket eder.";
+"A YouTube video plays separately on each display." = "Bir YouTube videosu her ekranda ayrı ayrı oynatılır.";
 "Your Videos" = "Videolarınız";
 "No videos yet. Videos you add appear here." = "Henüz video yok. Eklediğiniz videolar burada görünür.";
+"The video you choose shows instead of the song's while music plays. Files play from where they are; web addresses and YouTube videos stream." = "Seçtiğiniz video, müzik çalarken şarkınınkinin yerine gösterilir. Dosyalar bulundukları yerden oynatılır; web adresleri ve YouTube videoları akış olarak oynatılır.";
+"Show on the Desktop" = "Masaüstünde Göster";
+"On the Desktop" = "Masaüstünde";
+"Follow the Song Again" = "Şarkıya Geri Dön";
+"A YouTube link or a video's web address" = "Bir YouTube bağlantısı ya da bir videonun web adresi";
+"Web address" = "Web adresi";
+"Add" = "Ekle";
+"Add Video File…" = "Video Dosyası Ekle…";
+"Choose videos for the live wallpaper." = "Canlı duvar kâğıdı için video seçin.";
+"That is not a YouTube link or the address of a video." = "Bu bir YouTube bağlantısı ya da bir videonun adresi değil.";
+"Looking for videos" = "Videolar aranıyor";
+"Showing the album's motion artwork" = "Albümün hareketli kapağı gösteriliyor";
+"Showing the song's video" = "Şarkının videosu gösteriliyor";
+"Showing another video by the artist" = "Sanatçının başka bir videosu gösteriliyor";
+"Showing your video" = "Videonuz gösteriliyor";
+"Showing the album cover" = "Albüm kapağı gösteriliyor";
+"Showing generated motion" = "Üretilen hareketli görüntü gösteriliyor";
+"Nothing to show for this song" = "Bu şarkı için gösterilecek bir şey yok";
+"Paused while the desktop is hidden" = "Masaüstü görünmediği için duraklatıldı";
 "Remove" = "Kaldır";
+
+/* MARK: Live wallpaper: the dots above the player */
+"No video found" = "Video bulunamadı";
+"Type the artist's name" = "Sanatçının adını yazın";
+"Artist name" = "Sanatçı adı";
+"The album's motion artwork" = "Albümün hareketli kapağı";
+"The album cover" = "Albüm kapağı";
+"The song's video" = "Şarkının videosu";
+"The song's video: %@" = "Şarkının videosu: %@";
+"Another video by the artist" = "Sanatçının başka bir videosu";
+"Your video: %@" = "Videonuz: %@";
 
 /* MARK: Sound */
 "Ahenk listens only to the sound of the music app, never to the microphone, and records nothing." = "Ahenk yalnızca müzik uygulamasının sesini dinler; mikrofonu asla kullanmaz ve hiçbir şey kaydetmez.";
