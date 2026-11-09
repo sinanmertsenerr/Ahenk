@@ -1871,7 +1871,7 @@ Extension/ 1.2.0                      "rate" command and capability (C.playbackR
                                       back when Ahenk goes away
 Settings                              Sound › Sound Effects (status, preset, speed, pitch, reverb, reset) and Equalizer;
                                       Lyrics › alignment (whisper-cli, speech model, Choose…, Download the Model)
-Tests/AhenkKitTests/                  553 tests in 94 suites (was 510/88): SoundEffectTests (+ the real-time helpers),
+Tests/AhenkKitTests/                  555 tests in 94 suites (was 510/88): SoundEffectTests (+ the real-time helpers),
                                       LyricAlignmentTests (transcript, aligner, tools, audio, the real tool when present),
                                       bridge rate cases; 25 node tests (was 24)
 ```
@@ -1931,8 +1931,10 @@ when the match is uncertain). `LyricsAlignmentController`:
   checked against the snapshot before anything is recognised. The capture is resampled to 16 kHz and written the same
   way. Automatic sync steps aside meanwhile (`LyricsAutoSync.isSuspended`).
 - **Recognising**: `whisper-cli -m <model> -f <wav> -l auto --output-json-full --max-len 1 --split-on-word
-  --print-progress` (progress from stderr, the task's cancellation ends the process, 15 minutes at most), the JSON read
-  by `WhisperTranscript`.
+  --print-progress --dtw <preset> --no-flash-attn` (progress from stderr, the task's cancellation ends the process, 15
+  minutes at most), the JSON read by `WhisperTranscript`. The preset is the model's name as whisper.cpp spells it
+  (`ggml-large-v3-turbo-q5_0.bin` → `large.v3.turbo`); for a name it does not know, or when that run fails (an older
+  whisper.cpp), the run is repeated without the last two arguments.
 - **Timing** (`LyricAligner`): both sides reduced to bare words (case, accents, punctuation folded; ı as i; hyphenated
   words one by one), a dynamic-programming pairing in order where equal words score, nearly equal ones (edit distance)
   score less, neighbours in a row score extra and skips cost a little; lone short words are dropped. A line with heard
@@ -1957,7 +1959,7 @@ when the match is uncertain). `LyricsAlignmentController`:
 ### Build, run, verify
 
 ```sh
-swift build && ./Scripts/test.sh      # 553 Swift tests + 25 node tests, no warnings
+swift build && ./Scripts/test.sh      # 555 Swift tests + 25 node tests, no warnings
 ./Scripts/make-app.sh && ./Scripts/smoke.sh --snapshots   # 30 checks; desktop-lyrics-{effects,align,align-working}-{en,tr}.png,
                                                           # settings-{sound,lyrics}-full-{en,tr}.png in ~/Library/Logs/Ahenk/snapshots
 open -n dist/Ahenk.app --args --demo --demo-backdrop --demo-scene effects        # the effects panel, Slowed + Reverb on
@@ -1979,7 +1981,9 @@ are switched off when another player is followed, not between songs or tabs", "A
 were asked for, and only while Ahenk plays the sound", "The tap on every app, the demo and Ahenk's own player are never
 muted". Bridge: "A speed for a tab has a wire form and stays within what a tab takes", the loopback server test sends
 `setRate`; node: "the speed Ahenk asks a tab for". Alignment: "A word per segment: the segment's times, without markers
-and sounds", "Longer segments: words are put together from their pieces", "Every line takes the time its first word was
+and sounds", "Longer segments: words are put together from their pieces", "With the attention's times a word ends where
+the model heard it end, and a pause is not part of the next word", "Without them, a word that swallowed a pause is cut
+to a plausible length", "Every line takes the time its first word was
 sung; every word gets its own", "Misheard, swallowed and added words do not move the lines", "A refrain is timed where
 it is sung, each time", "A line the recogniser missed sits between its neighbours, by its length", "After a long
 instrumental stretch, missed lines lead into the next heard one", "Lines before the first and after the last heard one
@@ -2012,8 +2016,11 @@ Smoke checks (30, all `ok`; two are new):
   WAV; the download's mechanics from one temporary file to another (no network); the demo's controller timing the playing
   song's words, the result adopted as the song's lyrics (`aligned`, with word timings) and dropped again by "use the
   lyrics Ahenk found"; and, with the tool and model of this Mac, three invented lines spoken into a file by `say -o`:
-  whisper-cli with ggml-large-v3-turbo-q5_0 recognised 19 words of 7.6 s in 1.5 s and the lines were timed at 0.0, 3.1 and
-  5.5 s. Without the tool the last part is skipped and says what is missing.
+  whisper-cli with ggml-large-v3-turbo-q5_0 recognised 19 words of 7.6 s in 1.5 s and the lines were timed at 0.0, 2.9 and
+  5.7 s (the pauses in that file end at 3.08 and 5.81 s); then the same sound is fed through a `LyricsSyncCapture` as the
+  analysis would hand it over (48 kHz in chunks, as from the middle of a song at 0:30), written, recognised and timed
+  again: the lines land within 0.00 s of the first run plus 30 s. Without the tool this part is skipped and says what is
+  missing.
 
 Seen (offscreen snapshots of Ahenk's own views, both languages): the effects panel with "Demo: the effects are shown,
 the demo's songs make no sound", the chips on two rows with Slowed + Reverb lit, Speed 0.85×, Pitch −3, Reverb 45 %,
@@ -2057,9 +2064,15 @@ no timer and no processor exists; the tap's callback reads one atomic slot.
 - **Demo and smoke runs cannot mute or play.** `EffectsOutput.isAllowed` and `ProcessTapSession.mutingAllowed` are set
   from the launch mode once; both initialisers throw otherwise, and the smoke check tries. The silent `EffectsOutput`
   (manual rendering) is the same code with no device.
-- **Alignment reads whisper's JSON with a word per segment** (`--max-len 1 --split-on-word`): the segment's times are
-  better than a token's own end. No prompt with the lyrics is passed (it would invite the model to write the lyrics
-  instead of hearing them).
+- **Word times come from the model's attention** (`--dtw`, the tokens' `t_dtw`), not from whisper's own word times.
+  Measured on the spoken lines: whisper's own times put the first word after a second of silence where the word
+  before it ended (1.90 s for a word spoken at 3.08 s) in one run and at the right place in another run of almost the
+  same audio; `t_dtw` gave the same times in both (it marks where a token ends). So a word ends at its last piece's
+  `t_dtw` and starts where the word before it ended, or a plausible word's length (0.1 s + 0.07 s a letter, 0.8 s at
+  most) before its own end when that is later. That needs flash attention off, which makes whisper's encoder about twice
+  as slow (0.70 s against 0.38 s for 30 s of audio here). Without `t_dtw` the same limit is put on whisper's own times.
+  A word per segment (`--max-len 1 --split-on-word`) stays, for the fallback. No prompt with the lyrics is passed (it
+  would invite the model to write the lyrics instead of hearing them).
 - **Runs of words beat lone words.** The pairing rewards neighbours in a row (so a refrain is found where it is sung)
   and drops lone words of three letters or fewer. Lines that were not heard get no word timings, so the styles fall back
   to the line.
@@ -2138,7 +2151,10 @@ no timer and no processor exists; the tap's callback reads one atomic slot.
   floats are left dry (`LocalEffectsProcessor.skips` says why). The lead is measured again after a speed change; until
   then the light may be off by a few tens of milliseconds.
 - **Alignment was only tried on a synthetic voice.** No song was recognised: whisper on singing over music misses and
-  invents words, its word times are coarse, and instrumental parts can produce text. The aligner's fallbacks are tested
+  invents words, its word times are coarse, and instrumental parts can produce text. A line's first word that is held
+  long after a pause starts late by about its hold (only its end is known; it is given a plausible word's length).
+  The attention's times need a model whose name whisper.cpp knows (the usual `ggml-<size>[.en][-q…].bin`) and a
+  whisper.cpp that has `--dtw`; otherwise whisper's own times are used, which smear pauses into the next word. The aligner's fallbacks are tested
   on invented transcripts, not on such output. Listening to another app was not tried with a real tap either (the
   capture is Step 6's; the checks for a pause or a seek are new and untested live). A song longer than 6 minutes is
   timed up to there; the rest is placed by length.
