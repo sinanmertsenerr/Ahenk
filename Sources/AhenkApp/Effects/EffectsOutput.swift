@@ -11,7 +11,9 @@ import os
 /// This is the only thing in Ahenk that makes sound from another app's
 /// audio, and with it comes the only reason to mute an app's own output,
 /// so it exists in a normal run only: demo and smoke runs cannot make one
-/// (``isAllowed``).
+/// that plays (``isAllowed``). They can make one that renders by hand
+/// (`silent: true`): the same ring, source and effects with no device, for
+/// the checks to measure.
 final class EffectsOutput: @unchecked Sendable {
     struct Failure: Error, CustomStringConvertible {
         let description: String
@@ -35,6 +37,9 @@ final class EffectsOutput: @unchecked Sendable {
     private let state: UnsafeMutablePointer<RenderState>
     private var observer: NSObjectProtocol?
     private static let scratchFrames = 4096
+    /// Renders by hand into buffers; plays nothing.
+    let isSilent: Bool
+    private var rendered: AVAudioPCMBuffer?
 
     /// The render thread's own state.
     private struct RenderState {
@@ -43,14 +48,23 @@ final class EffectsOutput: @unchecked Sendable {
         var isPrimed = false
     }
 
-    init(sampleRate: Double) throws {
-        guard Self.isAllowed else {
+    init(sampleRate: Double, silent: Bool = false) throws {
+        guard silent || Self.isAllowed else {
             throw Failure(description: "processed sound is never played in a demo or smoke run")
         }
         guard sampleRate > 0, let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2) else {
             throw Failure(description: "no stereo format at \(sampleRate) Hz")
         }
         self.sampleRate = sampleRate
+        isSilent = silent
+        if silent {
+            do {
+                try engine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: AVAudioFrameCount(Self.scratchFrames))
+            } catch {
+                throw Failure(description: "manual rendering is not available: \(error.localizedDescription)")
+            }
+            rendered = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(Self.scratchFrames))
+        }
         // About 0.7 s of stereo at 48 kHz: far more than ever waits.
         ring = AudioRingBuffer(capacity: 1 << 16)
         scratch = .allocate(capacity: Self.scratchFrames * 2)
@@ -73,8 +87,9 @@ final class EffectsOutput: @unchecked Sendable {
             else { return kAudioUnitErr_FormatNotSupported }
             var waiting = reader.available / 2
             if waiting > frames + ceiling {
-                reader.skip((waiting - frames) * 2)
-                waiting = frames
+                // Keep this buffer and one in reserve.
+                reader.skip((waiting - frames * 2) * 2)
+                waiting = frames * 2
             }
             // Start (and start again after running dry) with a buffer in
             // reserve, so the two audio threads' jitter is never heard.
@@ -137,6 +152,24 @@ final class EffectsOutput: @unchecked Sendable {
 
     func stop() {
         engine.stop()
+    }
+
+    /// A silent output only: what the engine makes of the next `frames`
+    /// frames, as the device would have asked for them.
+    func render(frames: Int) throws -> (left: [Float], right: [Float]) {
+        guard isSilent, let rendered, frames > 0, frames <= Self.scratchFrames else {
+            throw Failure(description: "only a silent output renders by hand")
+        }
+        let status: AVAudioEngineManualRenderingStatus
+        do {
+            status = try engine.renderOffline(AVAudioFrameCount(frames), to: rendered)
+        } catch {
+            throw Failure(description: "the output engine did not render: \(error.localizedDescription)")
+        }
+        guard status == .success, let channels = rendered.floatChannelData, Int(rendered.frameLength) == frames else {
+            throw Failure(description: "the output engine rendered \(rendered.frameLength) of \(frames) frames (status \(status.rawValue))")
+        }
+        return (Array(UnsafeBufferPointer(start: channels[0], count: frames)), Array(UnsafeBufferPointer(start: channels[1], count: frames)))
     }
 
     func apply(_ chain: SoundEffectChain) {

@@ -99,7 +99,17 @@ enum EffectsCheck {
         guard !SoundEffectTapRule.mutes(request: .everything(app), tapsProcesses: false, effectsFor: app, outputRuns: true),
               !SoundEffectTapRule.mutes(request: .app(app), tapsProcesses: true, effectsFor: app, outputRuns: false)
         else { throw SmokeFailure("the tap rule would mute what it must not") }
+        let external = try checkTapToOutput()
         guard !EffectsOutput.isAllowed else { throw SmokeFailure("this run could play processed sound and mute an app") }
+        if #available(macOS 14.2, *) {
+            guard !ProcessTapSession.mutingAllowed else { throw SmokeFailure("this run could mute an app") }
+            do {
+                _ = try ProcessTapSession(scope: .processes([]), ring: AudioRingBuffer(capacity: 64), effects: AudioRingBuffer(capacity: 64))
+                throw SmokeFailure("a muting tap was made in a smoke run")
+            } catch let failure as ProcessTapSession.Failure {
+                guard failure.stage.contains("refused") else { throw SmokeFailure("the muting tap failed otherwise: \(failure)") }
+            }
+        }
         do {
             _ = try EffectsOutput(sampleRate: rate)
             throw SmokeFailure("an effects output was made in a smoke run")
@@ -115,7 +125,7 @@ enum EffectsCheck {
             + "an octave up puts 880 Hz \(Int(moved))× over 440 Hz, echo \(String(format: "%.2f", repeatLevel)) after 0.32 s, "
             + "reverb tail \(String(format: "%.3f", tail)), orbit \(Int(min(left, right)))× to each ear, "
             + "\(SoundPreset.allCases.count - 1) presets render (\(String(format: "%.1f", slowest * 100)) % of real time at most), the pitch stage delays by \(delay) frames (a shifted burst by \(Int(onset * 1000)) ms); "
-            + local + "; no tap can be muted in this run"
+            + local + "; " + external + "; no tap can be muted and nothing played in this run"
     }
 
     // MARK: Rendering
@@ -209,6 +219,142 @@ enum EffectsCheck {
         return ((0..<total).map { samples[$0 * 2] }, (0..<total).map { samples[$0 * 2 + 1] })
     }
 
+    // MARK: Another app's sound
+
+    /// The way another app's sound takes, without a tap and without a
+    /// device: the tap's hand-over writes stereo into the ring in every
+    /// layout a tap delivers, and a silent output reads it through the
+    /// effects, waits for a buffer in reserve, falls silent when it runs
+    /// dry and catches up after falling behind.
+    static func checkTapToOutput() throws -> String {
+        let rate = 48_000.0
+        let frames = 512
+        let output = try EffectsOutput(sampleRate: rate, silent: true)
+        output.apply(.neutral)
+        try output.start()
+        defer { output.stop() }
+        let analysis = AudioRingBuffer(capacity: 1 << 17)
+        let context = TapIOContext(writer: analysis.writer, stereo: output.ring.writer, scratchCapacity: 2_048)
+        defer { context.release() }
+        var position = 0
+        func chunk() -> (left: [Float], right: [Float]) {
+            let left = (0..<frames).map { Float(0.4 * sin(2 * .pi * 300 * Double(position + $0) / rate)) }
+            let right = (0..<frames).map { Float(-0.3 * sin(2 * .pi * 500 * Double(position + $0) / rate)) }
+            position += frames
+            return (left, right)
+        }
+        /// Hands a chunk over as a tap does, in one of its layouts.
+        func feed(_ part: (left: [Float], right: [Float]), interleaved: Bool) {
+            if interleaved {
+                var samples = [Float](repeating: 0, count: frames * 2)
+                for index in 0..<frames {
+                    samples[index * 2] = part.left[index]
+                    samples[index * 2 + 1] = part.right[index]
+                }
+                samples.withUnsafeMutableBytes { raw in
+                    var list = AudioBufferList(mNumberBuffers: 1, mBuffers: AudioBuffer(mNumberChannels: 2, mDataByteSize: UInt32(raw.count), mData: raw.baseAddress))
+                    context.mix(&list)
+                    context.feed(&list)
+                }
+            } else {
+                var left = part.left
+                var right = part.right
+                let size = MemoryLayout<AudioBufferList>.size + MemoryLayout<AudioBuffer>.size
+                let memory = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: MemoryLayout<AudioBufferList>.alignment)
+                defer { memory.deallocate() }
+                let list = memory.bindMemory(to: AudioBufferList.self, capacity: 1)
+                list.pointee.mNumberBuffers = 2
+                left.withUnsafeMutableBytes { l in
+                    right.withUnsafeMutableBytes { r in
+                        let buffers = UnsafeMutableAudioBufferListPointer(list)
+                        buffers[0] = AudioBuffer(mNumberChannels: 1, mDataByteSize: UInt32(l.count), mData: l.baseAddress)
+                        buffers[1] = AudioBuffer(mNumberChannels: 1, mDataByteSize: UInt32(r.count), mData: r.baseAddress)
+                        context.mix(list)
+                        context.feed(list)
+                    }
+                }
+            }
+        }
+
+        // Nothing yet, and one buffer only: the output waits (silence).
+        guard try output.render(frames: frames).left.allSatisfy({ $0 == 0 }) else { throw SmokeFailure("the output made sound out of nothing") }
+        let first = chunk()
+        feed(first, interleaved: true)
+        guard try output.render(frames: frames).left.allSatisfy({ $0 == 0 }) else { throw SmokeFailure("the output did not wait for a buffer in reserve") }
+        // With one in reserve it plays what came, in order, left as left.
+        let second = chunk()
+        feed(second, interleaved: false)
+        let played = try output.render(frames: frames)
+        guard zip(played.left, first.left).allSatisfy({ abs($0 - $1) < 1e-5 }), zip(played.right, first.right).allSatisfy({ abs($0 - $1) < 1e-5 }) else {
+            throw SmokeFailure("the output did not play the tap's first buffer as it came")
+        }
+        let next = try output.render(frames: frames)
+        guard zip(next.left, second.left).allSatisfy({ abs($0 - $1) < 1e-5 }), zip(next.right, second.right).allSatisfy({ abs($0 - $1) < 1e-5 }) else {
+            throw SmokeFailure("separate channels did not arrive like interleaved ones")
+        }
+        // Dry: silence, and a buffer in reserve again before it goes on.
+        guard try output.render(frames: frames).left.allSatisfy({ $0 == 0 }) else { throw SmokeFailure("a dry ring was not silence") }
+        // Far behind (the engine stalled for half a second): it skips to the newest.
+        var latest = [first, first]
+        for _ in 0..<47 {
+            latest = [latest[1], chunk()]
+            feed(latest[1], interleaved: true)
+        }
+        // It plays the newest but one, and keeps the newest in reserve.
+        let caught = try output.render(frames: frames)
+        guard zip(caught.left, latest[0].left).allSatisfy({ abs($0 - $1) < 1e-5 }), output.ring.availableSamples == frames * 2 else {
+            throw SmokeFailure("the output did not catch up after falling behind")
+        }
+        // The analysis got its mono mix of every buffer, effects or not.
+        guard analysis.availableSamples == 49 * frames else { throw SmokeFailure("the analysis got \(analysis.availableSamples) samples of \(49 * frames)") }
+        // A ring that is full takes no half chunks (left and right never swap).
+        let small = AudioRingBuffer(capacity: 1_024)
+        let tight = TapIOContext(writer: analysis.writer, stereo: small.writer, scratchCapacity: 2_048)
+        defer { tight.release() }
+        for _ in 0..<3 {
+            var samples = [Float](repeating: 0.1, count: frames * 2)
+            samples.withUnsafeMutableBytes { raw in
+                var list = AudioBufferList(mNumberBuffers: 1, mBuffers: AudioBuffer(mNumberChannels: 2, mDataByteSize: UInt32(raw.count), mData: raw.baseAddress))
+                tight.feed(&list)
+            }
+        }
+        guard small.availableSamples == 1_024 else { throw SmokeFailure("a full ring took part of a chunk (\(small.availableSamples) samples)") }
+        // The effects are in the way of the sound: Bass Boost changes it.
+        output.apply(chain(.bassBoost))
+        var boosted: [Float] = []
+        var dry: [Float] = []
+        for _ in 0..<40 {
+            let part = chunk()
+            feed(part, interleaved: true)
+            if output.ring.availableSamples >= frames * 4 {
+                boosted += try output.render(frames: frames).left
+                dry += part.left
+            }
+        }
+        let change = EffectsCheck.rms(boosted, from: 0.05, to: 0.3) / max(1e-9, EffectsCheck.rms(dry, from: 0.05, to: 0.3))
+        guard abs(change - 1) > 0.02 else { throw SmokeFailure("the effects did not touch the other app's sound") }
+        // The pitch stage is wired in and out while the output runs.
+        var shifted = SoundEffectChain()
+        shifted.pitchCents = 1200
+        var heard: [Float] = []
+        for (chain, rounds) in [(shifted, 60), (SoundEffectChain.neutral, 12), (shifted, 12)] {
+            output.apply(chain)
+            guard output.graph.isPitchWired == chain.shiftsPitch else { throw SmokeFailure("the pitch stage was not rewired") }
+            for _ in 0..<rounds {
+                feed(chunk(), interleaved: true)
+                guard output.ring.availableSamples >= frames * 4 else { continue }
+                let part = try output.render(frames: frames).left
+                if chain.shiftsPitch, rounds == 60 { heard += part }
+            }
+        }
+        let octave = Array(heard.suffix(frames * 20))
+        let up = goertzel(octave, frequency: 600, rate: rate) / max(1e-9, goertzel(octave, frequency: 300, rate: rate))
+        guard up > 3 else { throw SmokeFailure("the other app's sound was not shifted (600 Hz at \(up)× of 300 Hz)") }
+        return "another app's sound: the tap's stereo hand-over (interleaved and separate) reaches a silent output through the ring in order, "
+            + "with a buffer in reserve, silence when dry and a jump to the newest after falling behind; "
+            + "the pitch stage is wired in and out while it runs (600 Hz \(Int(up))× over 300 Hz)"
+    }
+
     // MARK: Ahenk's own player
 
     /// A generated tone played by the local player, muted, with the effects
@@ -295,6 +441,10 @@ enum EffectsCheck {
 
     /// The amplitude of `frequency` in the signal (Goertzel).
     static func level(_ samples: [Float], at frequency: Double) -> Double {
+        goertzel(samples, frequency: frequency, rate: rate)
+    }
+
+    static func goertzel(_ samples: [Float], frequency: Double, rate: Double) -> Double {
         let coefficient = 2 * cos(2 * .pi * frequency / rate)
         var previous = 0.0
         var beforePrevious = 0.0

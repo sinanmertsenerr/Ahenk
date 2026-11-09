@@ -253,7 +253,7 @@ final class SoundEffectsController {
             localProcessor = processor
             localPlayer.tap.effectsHook.storePointer(UnsafeMutableRawPointer(processor.context), at: 0)
             localFailure = nil
-            log.notice("Sound effects run in Ahenk's own player (\(Int(rate)) Hz)")
+            log.notice("Sound effects run in Ahenk's own player (\(Int(rate)) Hz\(chain.shiftsPitch ? ", with the pitch stage" : ""))")
         } catch {
             localFailure = String(describing: error)
             log.error("The effects engine for song files could not be made: \(error)")

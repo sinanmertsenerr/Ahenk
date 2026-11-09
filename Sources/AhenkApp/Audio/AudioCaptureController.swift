@@ -60,6 +60,8 @@ final class AudioCaptureController: @unchecked Sendable {
     /// Whether the running tap was built for the effects' wish as it is now
     /// (a tap that could not be muted is not rebuilt over and over).
     private var builtForEffects = false
+    /// When the effects' output was last interrupted (see `effectsInterrupted`).
+    private var interruptions: [Double] = []
     /// The player the running analysis belongs to; a new tap for the same
     /// player keeps the analysis (and its tempo) going.
     private var analysisTarget: AudioTapTarget?
@@ -147,6 +149,7 @@ final class AudioCaptureController: @unchecked Sendable {
             } else {
                 effects = nil
             }
+            interruptions = []
             guard !isStopped, wantsEffects != builtForEffects || (playingSink != nil && playingSink !== effects?.sink) else { return }
             if session != nil { forceRebuild = true }
             apply()
@@ -158,7 +161,17 @@ final class AudioCaptureController: @unchecked Sendable {
     func effectsInterrupted() {
         control.async { [self] in
             guard !isStopped, playingSink != nil else { return }
-            log.notice("The effects' output was interrupted; building the tap again")
+            // An output that keeps stopping must not keep an app muted on
+            // and off: after three times in ten seconds the app gets its
+            // own sound back until the effects are asked for again.
+            let now = AudioClock.now()
+            interruptions = interruptions.filter { now - $0 < 10 } + [now]
+            if interruptions.count >= 3 {
+                log.error("The effects' output keeps being interrupted; the app keeps its own sound")
+                effects = nil
+            } else {
+                log.notice("The effects' output was interrupted; building the tap again")
+            }
             forceRebuild = true
             apply()
         }
