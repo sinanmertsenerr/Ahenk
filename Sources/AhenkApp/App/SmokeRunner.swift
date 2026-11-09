@@ -45,6 +45,10 @@ final class SmokeRunner {
         if selected("desktopPlayer") { await report.check("desktopPlayer") { try await self.checkDesktopPlayer() } }
         if selected("menus") { await report.check("menus") { try self.checkMenus() } }
         if selected("lyrics") { await report.check("lyrics") { try await self.checkLyrics() } }
+        if selected("wallpaper") { await report.check("wallpaper") { try await self.checkWallpaper() } }
+        if selected("wallpaperSwitch") {
+            await report.check("wallpaperSwitch") { try await WallpaperCheck.runSwitch(environment: self.environment, snapshots: self.snapshotDirectory()) }
+        }
         if selected("settingsWindow") { await report.check("settingsWindow") { try await self.checkSettingsWindow() } }
         if selected("bridge") {
             await report.check("bridge") { try await BridgeCheck.run(settings: self.environment.settings, snapshots: self.snapshotDirectory()) }
@@ -117,7 +121,7 @@ final class SmokeRunner {
             throw SmokeFailure("Shaders/EdgeLight.metal missing from the resource bundle")
         }
         let symbols = Set(QuickMenu.symbolNames + SettingsPane.allCases.map(\.symbolName) + DesktopSymbols.all
-            + [BrowserExtensionInstaller.symbolName]
+            + [BrowserExtensionInstaller.symbolName] + WallpaperSymbols.all
             + ["backward.fill", "forward.fill", "play.fill", "pause.fill", "plus", "minus", "waveform", "app.dashed", "globe"])
         let missing = symbols.filter { NSImage(systemSymbolName: $0, accessibilityDescription: nil) == nil }
         guard missing.isEmpty else { throw SmokeFailure("Missing SF Symbols: \(missing.sorted().joined(separator: ", "))") }
@@ -513,6 +517,13 @@ final class SmokeRunner {
         return "\(frames) style frames (8 styles × 4 moments × 2 languages) with the right line and countdown, \(states) states, "
             + "\(widgets) widget renders; found, listed, picked, nudged and searched lyrics; a 32 s sync window measured in \(milliseconds) ms "
             + "(\(measured.stage.rawValue)); fonts \(fonts.joined(separator: ", "))\(saved)"
+    }
+
+    /// The live wallpaper offscreen: a window per display, a crossfade,
+    /// frames of the generated motion and the moving cover, the states.
+    private func checkWallpaper() async throws -> String {
+        guard let demo = environment.demo else { throw SmokeFailure("No demo provider") }
+        return try await WallpaperCheck.run(demo: demo, snapshots: snapshotDirectory())
     }
 
     private func checkSettingsWindow() async throws -> String {
