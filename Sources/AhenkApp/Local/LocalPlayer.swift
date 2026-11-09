@@ -32,6 +32,9 @@ final class LocalPlayerEngine: LocalPlaybackEngine, @unchecked Sendable {
 final class LocalPlayer {
     private(set) var queue = LocalQueue()
     private(set) var isPlaying = false
+    /// How fast the songs play (the sound effects' speed); 1 is their own
+    /// speed. The pitch stays where it is: shifting it is the effects' job.
+    private(set) var speed = 1.0
 
     /// Says what went wrong (a file that cannot be played).
     @ObservationIgnored var onProblem: ((String) -> Void)?
@@ -149,6 +152,22 @@ final class LocalPlayer {
     func pause() {
         guard isPlaying else { return }
         player.pause()
+        publish()
+    }
+
+    /// Plays `value` times as fast from now on (0.5…2), also the songs that
+    /// follow. The snapshot reports the speed, so the lyrics and the
+    /// progress keep up.
+    func setSpeed(_ value: Double) {
+        let speed = value.isFinite ? value.clamped(to: SoundEffectSettings.speedRange) : 1
+        guard speed != self.speed else { return }
+        self.speed = speed
+        tap.playbackSpeed = speed
+        // `play()` starts at the default rate; a playing song changes now.
+        player.defaultRate = Float(speed)
+        if player.rate != 0 { player.rate = Float(speed) }
+        log.info("Song files play at \(String(format: "%.2f", speed))× speed")
+        if isPlaying { measureLead() }
         publish()
     }
 
@@ -289,6 +308,8 @@ final class LocalPlayer {
         guard FileManager.default.isReadableFile(atPath: song.path) else { return nil }
         let asset = AVURLAsset(url: song.url)
         let item = AVPlayerItem(asset: asset)
+        // Faster or slower without moving the pitch (music, not speech).
+        item.audioTimePitchAlgorithm = .timeDomain
         item.audioMix = await LocalAudioTap.audioMix(for: asset, tap: tap)
         return item
     }
@@ -424,7 +445,8 @@ final class LocalPlayer {
                 ticks += 1
                 guard ticks > 2, let newest = self.tap.newestMediaTime else { return }
                 let heard = self.player.currentTime().seconds
-                let lead = newest - heard
+                // Media seconds ahead, as seconds of listening.
+                let lead = (newest - heard) / self.speed
                 if heard.isFinite, lead > 0.05, lead < 1.5 { self.leadSamples.append(lead) }
                 if self.leadSamples.count >= 8 {
                     let mean = self.leadSamples.reduce(0, +) / Double(self.leadSamples.count)
@@ -448,7 +470,7 @@ final class LocalPlayer {
         let data = cover?.path == song.path ? cover?.data : nil
         return NowPlayingSnapshot(
             track: track, bundleIdentifier: KnownApps.ahenk, processIdentifier: ProcessInfo.processInfo.processIdentifier,
-            elapsedTime: position, playbackRate: isPlaying ? 1 : 0, timestamp: now, isShuffled: queue.isShuffled,
+            elapsedTime: position, playbackRate: isPlaying ? speed : 0, timestamp: now, isShuffled: queue.isShuffled,
             repeatMode: queue.repeatMode, isLiked: nil, capabilities: Self.capabilities, contentKind: .music,
             artworkData: data, artworkIdentifier: data == nil ? nil : "local:\(song.path)"
         )

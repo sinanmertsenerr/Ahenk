@@ -15,6 +15,9 @@ struct AudioEngineStatus: Equatable, Sendable {
     var lastFailure: String?
     /// The analysis hears Ahenk's own player (song files), from inside.
     var isOwnPlayback = false
+    /// The sound effects are on for the tapped app: its own sound is muted
+    /// and Ahenk plays it, processed.
+    var playsEffects = false
 }
 
 /// Carries out ``AudioCapturePolicy``: builds, retargets and tears down the
@@ -27,6 +30,12 @@ struct AudioEngineStatus: Equatable, Sendable {
 ///   drains the ring into the analyzer and publishes to the store.
 /// The tap's IOProc runs on Core Audio's own real-time thread. While nothing
 /// plays there is no tap, no timer and no listener.
+///
+/// Sound effects for another app (``setEffects(_:for:)``): the tap on that
+/// app is built muted and its stereo sound goes to the effects' output,
+/// which is started first and stopped last, so the app is never silent
+/// without Ahenk playing it. What may be muted is `SoundEffectTapRule`'s
+/// decision: one app's processes, never the tap on everything.
 final class AudioCaptureController: @unchecked Sendable {
     let pipeline: AudioAnalysisPipeline
     /// Called on the control queue when the status changes.
@@ -44,6 +53,13 @@ final class AudioCaptureController: @unchecked Sendable {
     private var policy: AudioCapturePolicy
     private var session: AnyObject?
     private var built: (request: AudioTapRequest, scope: TapScope?)?
+    /// The sound effects and the app they were asked for.
+    private var effects: (sink: EffectsTapSink, target: AudioTapTarget)?
+    /// The sink that plays the running (muted) tap's sound.
+    private var playingSink: EffectsTapSink?
+    /// Whether the running tap was built for the effects' wish as it is now
+    /// (a tap that could not be muted is not rebuilt over and over).
+    private var builtForEffects = false
     /// The player the running analysis belongs to; a new tap for the same
     /// player keeps the analysis (and its tempo) going.
     private var analysisTarget: AudioTapTarget?
@@ -59,6 +75,10 @@ final class AudioCaptureController: @unchecked Sendable {
     private var pump: DispatchSourceTimer?
     private var demoFeed: DemoAudioFeed?
     private var ownPacer: OwnAudioPacer?
+    /// What the features wait for the output, and what they wait on top
+    /// for the sound effects (their pitch stage holds the sound back).
+    private var baseDelay = 0.0
+    private var effectsDelay = 0.0
     private var ticks = 0
     private var lastSamplesAt = 0.0
     private var stallReported = false
@@ -103,9 +123,51 @@ final class AudioCaptureController: @unchecked Sendable {
         analysis.async { [pipeline] in pipeline.sensitivity = Float(sensitivity) }
     }
 
+    /// The sound effects hold the sound back by this long: the features
+    /// wait as much, so the light stays with what is heard.
+    func setEffectsDelay(_ seconds: Double) {
+        analysis.async { [self] in
+            effectsDelay = seconds.isFinite ? max(0, seconds) : 0
+            pipeline.presentationDelay = baseDelay + effectsDelay
+        }
+    }
+
     /// Automatic lyrics sync listens along with the analysis (`nil` stops).
     func setLyricsCapture(_ capture: LyricsSyncCapture?) {
         analysis.async { [pipeline] in pipeline.lyricsCapture = capture }
+    }
+
+    /// Sound effects for `target`'s sound (`nil` ends them): the tap on that
+    /// app is rebuilt muted with its sound handed to `sink`, or rebuilt
+    /// unmuted.
+    func setEffects(_ sink: EffectsTapSink?, for target: AudioTapTarget?) {
+        control.async { [self] in
+            if let sink, let target {
+                effects = (sink, target)
+            } else {
+                effects = nil
+            }
+            guard !isStopped, wantsEffects != builtForEffects || (playingSink != nil && playingSink !== effects?.sink) else { return }
+            if session != nil { forceRebuild = true }
+            apply()
+        }
+    }
+
+    /// The effects' output stopped by itself (a new output device): build
+    /// the tap again, and the output with it.
+    func effectsInterrupted() {
+        control.async { [self] in
+            guard !isStopped, playingSink != nil else { return }
+            log.notice("The effects' output was interrupted; building the tap again")
+            forceRebuild = true
+            apply()
+        }
+    }
+
+    /// The effects are asked for the app the running tap hears.
+    private var wantsEffects: Bool {
+        guard let built, case .processes = built.scope else { return false }
+        return SoundEffectTapRule.wantsMute(request: built.request, tapsProcesses: true, effectsFor: effects?.target)
     }
 
     /// Tears everything down and waits for it (on quit).
@@ -170,7 +232,7 @@ final class AudioCaptureController: @unchecked Sendable {
                 return
             }
             policy.noteResolved(now: now)
-            if let built, built.request == .app(target), built.scope == scope { return }
+            if let built, built.request == .app(target), built.scope == scope, wantsEffects == builtForEffects { return }
             build(.app(target), scope: scope, now: now)
         case .everything(let target):
             let scope = TapScope.everythingExcept(ahenkObjects())
@@ -205,10 +267,40 @@ final class AudioCaptureController: @unchecked Sendable {
             policy.noteTapFailed(now: now)
             return
         }
+        // Sound effects for this app: Ahenk's output plays first, then the
+        // tap mutes the app. Without the output the tap stays unmuted.
+        var tapsProcesses = false
+        if case .processes = scope { tapsProcesses = true }
+        var stereo: AudioRingBuffer?
+        var sink: EffectsTapSink?
+        let clockRate = CoreAudioQueries.clockDevice().flatMap(CoreAudioQueries.nominalSampleRate(of:))
+        if SoundEffectTapRule.wantsMute(request: request, tapsProcesses: tapsProcesses, effectsFor: effects?.target),
+           let effects, let clockRate, let ring = effects.sink.startOutput(sampleRate: clockRate) {
+            stereo = ring
+            sink = effects.sink
+        }
         do {
-            let session = try ProcessTapSession(scope: scope, ring: pipeline.ring)
+            var session = try ProcessTapSession(
+                scope: scope, ring: pipeline.ring,
+                effects: SoundEffectTapRule.mutes(request: request, tapsProcesses: tapsProcesses, effectsFor: effects?.target, outputRuns: stereo != nil) ? stereo : nil
+            )
+            if session.isMuted, session.sampleRate != clockRate {
+                // The output plays at another rate than the tap delivers:
+                // the app keeps its own sound.
+                log.notice("The tap runs at \(Int(session.sampleRate)) Hz, not the output's rate; no effects for this app")
+                session.stop()
+                sink?.stopOutput()
+                sink = nil
+                session = try ProcessTapSession(scope: scope, ring: pipeline.ring)
+            }
+            if !session.isMuted, let unused = sink {
+                unused.stopOutput()
+                sink = nil
+            }
+            playingSink = sink
             self.session = session
             built = (request, scope)
+            builtForEffects = wantsEffects
             status.lastFailure = nil
             policy.noteTapStarted(now: now)
             startAnalysis(sampleRate: session.sampleRate, delay: session.outputLatency, feed: nil, target: request.target)
@@ -218,9 +310,13 @@ final class AudioCaptureController: @unchecked Sendable {
             case .processes(let objects): what = "\(request.target?.description ?? "?") (\(objects.count) process\(objects.count == 1 ? "" : "es"))"
             case .everythingExcept: what = "every app but Ahenk (for \(request.target?.description ?? "?"))"
             }
-            log.notice("Listening to \(what), \(Int(session.sampleRate)) Hz, output latency \(Int(session.outputLatency * 1000)) ms, clock \(session.clockDeviceUID)")
+            let mode = session.isMuted ? ", muted and played with effects" : ""
+            log.notice("Listening to \(what), \(Int(session.sampleRate)) Hz, output latency \(Int(session.outputLatency * 1000)) ms, clock \(session.clockDeviceUID)\(mode)")
         } catch {
+            sink?.stopOutput()
+            playingSink = nil
             built = nil
+            builtForEffects = false
             stopAnalysis()
             status.lastFailure = String(describing: error)
             log.error("Could not start listening to \(request.target?.description ?? "?"): \(error)")
@@ -246,7 +342,7 @@ final class AudioCaptureController: @unchecked Sendable {
         }
         built = (.own(target), nil)
         policy.noteTapStarted(now: now)
-        let rate = ownAudio.sampleRate > 0 ? ownAudio.sampleRate : 44_100
+        let rate = ownAudio.analysisRate > 0 ? ownAudio.analysisRate : 44_100
         let pacer = OwnAudioPacer(source: ownAudio.ring)
         pacer.reset()
         startAnalysis(sampleRate: rate, delay: Self.ownDelay(ownAudio), feed: nil, target: target, own: pacer)
@@ -266,6 +362,11 @@ final class AudioCaptureController: @unchecked Sendable {
         }
         session = nil
         built = nil
+        builtForEffects = false
+        // The app has its own sound back (the tap is gone); only now does
+        // Ahenk stop playing it.
+        playingSink?.stopOutput()
+        playingSink = nil
     }
 
     /// Stops the pump and publishes silence.
@@ -297,7 +398,8 @@ final class AudioCaptureController: @unchecked Sendable {
         analysisTarget = target
         analysis.async { [self] in
             pipeline.configure(sampleRate: sampleRate)
-            pipeline.presentationDelay = delay
+            baseDelay = delay
+            pipeline.presentationDelay = delay + effectsDelay
             pipeline.setGate(open: gate, at: AudioClock.now())
             demoFeed = feed
             ownPacer = own
@@ -316,14 +418,16 @@ final class AudioCaptureController: @unchecked Sendable {
         let now = AudioClock.now()
         demoFeed?.render(until: now, into: pipeline.ring.writer)
         if let ownPacer, let ownAudio {
-            // A song file with another rate: the analysis follows it.
-            let rate = ownAudio.sampleRate
+            // A song file with another rate, or another speed: the analysis
+            // follows it.
+            let rate = ownAudio.analysisRate
             if rate > 0, rate != pipeline.analyzer?.sampleRate {
                 pipeline.configure(sampleRate: rate)
                 ownPacer.reset()
             }
             ownPacer.pump(until: now, sampleRate: rate, into: pipeline.ring.writer)
-            pipeline.presentationDelay = Self.ownDelay(ownAudio)
+            baseDelay = Self.ownDelay(ownAudio)
+            pipeline.presentationDelay = baseDelay + effectsDelay
         }
         if pipeline.ring.availableSamples > 0 { lastSamplesAt = now }
         pipeline.pump(now: now)
@@ -416,7 +520,7 @@ final class AudioCaptureController: @unchecked Sendable {
         }
         if case .own = built?.request {
             next.isOwnPlayback = true
-            next.sampleRate = ownAudio?.sampleRate ?? 0
+            next.sampleRate = ownAudio?.analysisRate ?? 0
             next.presentationDelay = ownAudio.map(Self.ownDelay) ?? 0
         } else {
             next.isOwnPlayback = false
@@ -428,6 +532,7 @@ final class AudioCaptureController: @unchecked Sendable {
             next.sampleRate = built?.request == .demo ? DemoAudioFeed.sampleRate : 0
             next.presentationDelay = 0
         }
+        next.playsEffects = playingSink != nil
         guard next != status else { return }
         status = next
         onStatus?(next)

@@ -4,7 +4,9 @@ import MediaToolbox
 
 /// Puts Ahenk's own audio tap on a player item: MediaToolbox's processing
 /// tap hands every buffer the item plays to `OwnAudioTap`, which mixes it to
-/// mono for the analysis. The sound itself passes through untouched.
+/// mono for the analysis. The sound itself passes through untouched, unless
+/// the sound effects are on: then their processor changes it in place
+/// (`LocalEffectsProcessor`), after the analysis took the dry sound.
 ///
 /// The callbacks are plain C functions; the tap keeps the `OwnAudioTap`
 /// alive (retained when created, released in `finalize`) and reaches it
@@ -59,6 +61,13 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = { tap, numberFrame
     guard MTAudioProcessingTapGetSourceAudio(tap, numberFrames, bufferList, flagsOut, &range, framesOut) == noErr else { return }
     let end = range.isValid ? CMTimeGetSeconds(CMTimeAdd(range.start, range.duration)) : Double.nan
     Unmanaged<OwnAudioTap>.fromOpaque(MTAudioProcessingTapGetStorage(tap))._withUnsafeGuaranteedRef { owner in
-        owner.context.pointee.mix(bufferList, frames: Int(framesOut.pointee), mediaTimeEnd: end.isFinite ? end : nil)
+        let frames = Int(framesOut.pointee)
+        // The dry sound first: the analysis never hears the effects.
+        owner.context.pointee.mix(bufferList, frames: frames, mediaTimeEnd: end.isFinite ? end : nil)
+        // Then the sound effects, in place, when they are on.
+        if let effects = owner.effectsHook.pointer(0) {
+            effects.assumingMemoryBound(to: LocalEffectsContext.self).pointee
+                .process(bufferList, frames: frames, sampleRate: owner.context.pointee.sampleRate)
+        }
     }
 }

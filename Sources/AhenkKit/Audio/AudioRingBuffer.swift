@@ -72,6 +72,12 @@ public final class AudioRingBuffer: @unchecked Sendable {
             ahenk_store_release(counters, written + Int64(accepted))
             return accepted
         }
+
+        /// Samples that fit right now. A producer that must not split what
+        /// it writes (interleaved frames) checks this first.
+        public var free: Int {
+            (mask + 1) - Int(ahenk_load_relaxed(counters) - ahenk_load_acquire(counters + 1))
+        }
     }
 
     /// The consumer side. Use from one thread at a time.
@@ -109,6 +115,17 @@ public final class AudioRingBuffer: @unchecked Sendable {
             let read = ahenk_load_relaxed(counters + 1)
             ahenk_store_release(counters + 1, written)
             return Int(written - read)
+        }
+
+        /// Throws away up to `count` of the oldest samples; returns how many.
+        @discardableResult
+        public func skip(_ count: Int) -> Int {
+            let written = ahenk_load_acquire(counters)
+            let read = ahenk_load_relaxed(counters + 1)
+            let skipped = min(max(0, count), Int(written - read))
+            guard skipped > 0 else { return 0 }
+            ahenk_store_release(counters + 1, read + Int64(skipped))
+            return skipped
         }
     }
 }

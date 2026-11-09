@@ -66,6 +66,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment.lyrics.start()
         // Listens to the followed player's app while music plays.
         environment.audio.start(hub: services.hub, settings: settings)
+        // The sound effects follow the player and the settings.
+        environment.effects.start()
         // Checks the lyrics' timing against the vocals, when allowed.
         environment.lyricsSync.start()
         // Battery, Low Power Mode and heat make drawing lighter.
@@ -182,6 +184,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment.lyrics.stop()
         environment.light.stop()
         environment.power.stop()
+        // The sound effects go first: no app stays muted, no tab sped up.
+        environment.effects.stop()
         // Ahenk's own player lets go of its files and the system's Now Playing.
         environment.localPlayer.shutdown()
         environment.localLibrary.flush()

@@ -134,6 +134,30 @@ final class AudioTapEngine {
         controller.setLyricsCapture(capture)
     }
 
+    /// Sound effects for another app's sound (`nil` ends them); see
+    /// `AudioCaptureController.setEffects`.
+    func setEffects(_ sink: EffectsTapSink?, for target: AudioTapTarget?) {
+        controller.setEffects(sink, for: target)
+    }
+
+    /// The sound effects hold the sound back by `seconds`; the features
+    /// wait that long on top of the output's latency.
+    func setEffectsDelay(_ seconds: Double) {
+        controller.setEffectsDelay(seconds)
+    }
+
+    /// The effects' output stopped by itself; the tap is built again.
+    nonisolated func effectsInterrupted() {
+        controller.effectsInterrupted()
+    }
+
+    /// Ahenk hears every app at once (the followed app's own sound was not
+    /// found), so that app's sound cannot be taken for the effects.
+    var hearsEverything: Bool {
+        if case .listening(.everything) = status.state { return true }
+        return false
+    }
+
     /// The analysis hears the followed player itself (a tap on its
     /// processes, or the demo), not every app at once.
     var hearsFollowedPlayer: Bool {

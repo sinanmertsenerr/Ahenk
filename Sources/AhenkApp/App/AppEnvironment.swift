@@ -50,6 +50,10 @@ final class AppEnvironment {
         controller.siteLyrics = services.siteLyrics
         return controller
     }()
+    /// The sound effects, wherever the followed player's sound can be reached.
+    private(set) lazy var effects = SoundEffectsController(
+        settings: settings, nowPlaying: nowPlaying, audio: audio, localPlayer: localPlayer, bridge: services.bridgeServer
+    )
     /// Keeps the lyrics on time by listening (Settings › Lyrics).
     private(set) lazy var lyricsSync = LyricsAutoSync(lyrics: lyrics, nowPlaying: nowPlaying, audio: audio, settings: settings)
     /// The live wallpaper on every display (started with the services).
@@ -94,6 +98,12 @@ final class AppEnvironment {
         deskController = options.mode == .normal
             ? ClearDeskController(workspace: SystemDeskWorkspace(), store: ClearDeskStore(fileURL: ClearDeskStore.standardURL))
             : ClearDeskController(workspace: InventedDeskWorkspace.demo(), store: ClearDeskStore(fileURL: nil))
+        // Only a normal run may play another app's sound with effects, and
+        // so only a normal run can mute an app; demo and smoke runs cannot.
+        EffectsOutput.isAllowed = options.mode == .normal
+        if #available(macOS 14.2, *) {
+            ProcessTapSession.mutingAllowed = options.mode == .normal
+        }
         let ownAudio = OwnAudioTap()
         // Silent in smoke runs and for the demo's generated tones.
         localPlayer = LocalPlayer(tap: ownAudio, publishesNowPlaying: options.mode == .normal, muted: options.mode == .smoke || options.demoLocal)

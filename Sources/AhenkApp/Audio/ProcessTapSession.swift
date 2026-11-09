@@ -4,11 +4,18 @@ import AudioToolbox
 import CoreAudio
 import Foundation
 
-/// One running Core Audio process tap (macOS 14.2+): a private, unmuted
-/// stereo tap on some processes (or on everything but some), inside a
-/// private aggregate device clocked by an output-only device, with an
-/// IOProc that mixes each buffer to mono and writes it into the analysis
-/// ring.
+/// One running Core Audio process tap (macOS 14.2+): a private stereo tap
+/// on some processes (or on everything but some), inside a private
+/// aggregate device clocked by an output-only device, with an IOProc that
+/// mixes each buffer to mono and writes it into the analysis ring.
+///
+/// The tap is unmuted: the app is heard as always. The one exception is
+/// the sound effects (`muted`): then the tapped processes fall silent for
+/// as long as the tap is read, the IOProc also hands the stereo sound to
+/// the effects' output, and Ahenk plays it instead. A muted tap is only
+/// ever made on the processes of one app, never on everything, and only in
+/// a normal run (``mutingAllowed``); when the tap or Ahenk goes away,
+/// macOS gives the app its own sound back.
 ///
 /// The IOProc is real-time safe: a C function with a plain context (raw
 /// pointers, no reference counting), vDSP for the mixdown and the ring's
@@ -42,6 +49,12 @@ final class ProcessTapSession {
     let outputLatency: Double
     /// The device that clocks the tap (normally the default output).
     let clockDeviceUID: String
+    /// The tapped processes are silent while this tap runs (sound effects).
+    let isMuted: Bool
+
+    /// Set once at launch: true in a normal run only. Demo and smoke runs
+    /// can never silence an app, whatever asks for it.
+    nonisolated(unsafe) static var mutingAllowed = false
 
     private let ring: AudioRingBuffer
     private var tapID = AudioObjectID(kAudioObjectUnknown)
@@ -50,11 +63,23 @@ final class ProcessTapSession {
     private let context: UnsafeMutablePointer<TapIOContext>
     private var isStopped = false
 
-    init(scope: TapScope, ring: AudioRingBuffer) throws {
+    /// - Parameter effects: where the stereo sound goes for the sound
+    ///   effects. With it the tap mutes the processes it hears, so it is
+    ///   refused for a tap on everything and outside a normal run.
+    init(scope: TapScope, ring: AudioRingBuffer, effects: AudioRingBuffer? = nil) throws {
+        if effects != nil {
+            guard Self.mutingAllowed else {
+                throw Failure(stage: "muting an app in a demo or smoke run (refused)", status: OSStatus(kAudioHardwareIllegalOperationError))
+            }
+            guard case .processes = scope else {
+                throw Failure(stage: "muting every app (refused)", status: OSStatus(kAudioHardwareIllegalOperationError))
+            }
+        }
         self.scope = scope
         self.ring = ring
+        isMuted = effects != nil
         let context = UnsafeMutablePointer<TapIOContext>.allocate(capacity: 1)
-        context.initialize(to: TapIOContext(writer: ring.writer, scratchCapacity: 8_192))
+        context.initialize(to: TapIOContext(writer: ring.writer, stereo: effects?.writer, scratchCapacity: 8_192))
         self.context = context
 
         // Fill everything in a local first so a failure can tear down what
@@ -79,8 +104,9 @@ final class ProcessTapSession {
         description.uuid = UUID()
         description.name = "Ahenk"
         description.isPrivate = true
-        // Never silence the music while listening to it.
-        description.muteBehavior = .unmuted
+        // Never silence the music while listening to it, except to play it
+        // again with the sound effects.
+        description.muteBehavior = effects != nil ? .mutedWhenTapped : .unmuted
 
         var status = AudioHardwareCreateProcessTap(description, &tap)
         guard status == noErr, tap != kAudioObjectUnknown else {
@@ -170,23 +196,75 @@ final class ProcessTapSession {
     }
 }
 
-/// What the IOProc needs: the ring's writer and a mono scratch buffer.
-/// Plain values and raw pointers only, so the I/O thread does no reference
+/// What the IOProc needs: the ring's writer and a mono scratch buffer, and
+/// for the sound effects a second writer for the stereo sound. Plain
+/// values and raw pointers only, so the I/O thread does no reference
 /// counting.
 struct TapIOContext {
     let writer: AudioRingBuffer.Writer
+    /// Interleaved stereo for the sound effects' output, when they are on.
+    let stereo: AudioRingBuffer.Writer?
     let scratch: UnsafeMutablePointer<Float>
     let scratchCapacity: Int
+    let stereoScratch: UnsafeMutablePointer<Float>?
 
-    init(writer: AudioRingBuffer.Writer, scratchCapacity: Int) {
+    init(writer: AudioRingBuffer.Writer, stereo: AudioRingBuffer.Writer? = nil, scratchCapacity: Int) {
         self.writer = writer
+        self.stereo = stereo
         self.scratchCapacity = scratchCapacity
         scratch = .allocate(capacity: scratchCapacity)
         scratch.initialize(repeating: 0, count: scratchCapacity)
+        if stereo != nil {
+            let buffer = UnsafeMutablePointer<Float>.allocate(capacity: scratchCapacity * 2)
+            buffer.initialize(repeating: 0, count: scratchCapacity * 2)
+            stereoScratch = buffer
+        } else {
+            stereoScratch = nil
+        }
     }
 
     func release() {
         scratch.deallocate()
+        stereoScratch?.deallocate()
+    }
+
+    /// Hands the buffer on as interleaved stereo for the sound effects'
+    /// output: the first two channels as they are (one channel twice).
+    /// Whole chunks only, so left and right can never swap; a chunk that
+    /// does not fit is dropped.
+    func feed(_ list: UnsafePointer<AudioBufferList>) {
+        guard let stereo, let stereoScratch else { return }
+        let buffers = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: list))
+        // Where the left and the right channel are, and how far apart
+        // their samples.
+        var left: (data: UnsafeMutablePointer<Float>, stride: Int)?
+        var right: (data: UnsafeMutablePointer<Float>, stride: Int)?
+        var frames = Int.max
+        for buffer in buffers {
+            guard let data = buffer.mData?.assumingMemoryBound(to: Float.self), buffer.mNumberChannels > 0 else { continue }
+            let channels = Int(buffer.mNumberChannels)
+            frames = min(frames, Int(buffer.mDataByteSize) / (MemoryLayout<Float>.size * channels))
+            for channel in 0..<channels {
+                if left == nil {
+                    left = (data + channel, channels)
+                } else if right == nil {
+                    right = (data + channel, channels)
+                }
+            }
+            if right != nil { break }
+        }
+        guard let left, frames > 0, frames != Int.max else { return }
+        let second = right ?? left
+        var done = 0
+        while done < frames {
+            let count = min(scratchCapacity, frames - done)
+            guard stereo.free >= count * 2 else { return }
+            var one: Float = 1
+            vDSP_vsmul(left.data + done * left.stride, left.stride, &one, stereoScratch, 2, vDSP_Length(count))
+            vDSP_vsmul(second.data + done * second.stride, second.stride, &one, stereoScratch + 1, 2, vDSP_Length(count))
+            stereo.write(stereoScratch, count: count * 2)
+            done += count
+        }
     }
 
     /// Averages every channel of every buffer into mono and writes it to the
@@ -235,6 +313,10 @@ private func tapIOProc(
     _ outputTime: UnsafePointer<AudioTimeStamp>,
     _ clientData: UnsafeMutableRawPointer?
 ) -> OSStatus {
-    clientData?.assumingMemoryBound(to: TapIOContext.self).pointee.mix(inputData)
+    guard let context = clientData?.assumingMemoryBound(to: TapIOContext.self) else { return noErr }
+    // The analysis hears the sound as the app made it; the effects' output
+    // gets its own copy in stereo.
+    context.pointee.mix(inputData)
+    context.pointee.feed(inputData)
     return noErr
 }

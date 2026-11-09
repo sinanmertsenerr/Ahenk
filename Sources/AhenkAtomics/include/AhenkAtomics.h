@@ -32,6 +32,11 @@ static inline int64_t ahenk_fetch_add_relaxed(int64_t *value, int64_t delta) {
     return __atomic_fetch_add(value, delta, __ATOMIC_RELAXED);
 }
 
+/// Stores `desired` if the value still is `expected`; true when it did.
+static inline bool ahenk_compare_exchange(int64_t *value, int64_t expected, int64_t desired) {
+    return __atomic_compare_exchange_n(value, &expected, desired, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
+}
+
 // Seqlock over `count` 64-bit words: one writer, any number of readers, no
 // one ever waits. The writer makes the sequence odd, writes the words and
 // makes it even again; a reader copies the words and keeps the copy only if

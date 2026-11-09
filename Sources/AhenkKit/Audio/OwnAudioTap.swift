@@ -23,13 +23,23 @@ public final class OwnAudioTap: @unchecked Sendable {
     /// counting on that thread).
     public let context: UnsafeMutablePointer<Context>
     /// `[0]` sample rate bits, `[1]` frames per buffer, `[2]` media time of
-    /// the newest sample (bits), `[3]` measured lead (bits), `[4]` buffers seen.
+    /// the newest sample (bits), `[3]` measured lead (bits), `[4]` buffers
+    /// seen, `[5]` playback speed (bits).
     private let shared: UnsafeMutablePointer<Int64>
+    private let hookStorage = AtomicSlotStorage(count: 1)
+
+    /// Where the sound effects hang their processor for the player's audio
+    /// thread: slot 0 holds a pointer to it, or nothing. The tap's callback
+    /// reads it after the dry sound went to the analysis, so the light and
+    /// the beat never follow an echo or a reverb tail.
+    public let effectsHook: AtomicSlots
 
     public init(ringCapacity: Int = 1 << 16) {
+        effectsHook = hookStorage.slots
         ring = AudioRingBuffer(capacity: ringCapacity)
-        shared = .allocate(capacity: 5)
-        shared.initialize(repeating: 0, count: 5)
+        shared = .allocate(capacity: 6)
+        shared.initialize(repeating: 0, count: 6)
+        ahenk_store_release(shared + 5, Int64(bitPattern: (1.0).bitPattern))
         context = .allocate(capacity: 1)
         context.initialize(to: Context(writer: ring.writer, shared: shared, scratchCapacity: 8_192))
         // Before anything is measured: AVFoundation's usual lead.
@@ -59,6 +69,22 @@ public final class OwnAudioTap: @unchecked Sendable {
         guard ahenk_load_acquire(shared + 4) > 0 else { return nil }
         return Double(bitPattern: UInt64(bitPattern: ahenk_load_acquire(shared + 2)))
     }
+
+    /// How fast the player plays (1 is the song's own speed). The player
+    /// hands its audio over before it is sped up or slowed down, so at
+    /// speed 1.25 a second of listening brings 1.25 s of samples: the
+    /// analysis reads them as ``analysisRate`` samples a second, and so
+    /// hears the beat as fast as the listener does.
+    public var playbackSpeed: Double {
+        get { Double(bitPattern: UInt64(bitPattern: ahenk_load_acquire(shared + 5))) }
+        set {
+            let value = newValue.isFinite && newValue > 0 ? min(4, max(0.25, newValue)) : 1
+            ahenk_store_release(shared + 5, Int64(bitPattern: value.bitPattern))
+        }
+    }
+
+    /// Samples per second of listening: the audio's rate times the speed.
+    public var analysisRate: Double { sampleRate * playbackSpeed }
 
     /// Buffers handed over so far.
     public var buffersSeen: Int { Int(ahenk_load_acquire(shared + 4)) }
@@ -103,6 +129,11 @@ public final class OwnAudioTap: @unchecked Sendable {
             }
             ahenk_store_release(shared, Int64(bitPattern: sampleRate.bitPattern))
             ahenk_store_release(shared + 1, Int64(max(1, maxFrames)))
+        }
+
+        /// The rate of the audio that flows now (0 before the first item).
+        public var sampleRate: Double {
+            Double(bitPattern: UInt64(bitPattern: ahenk_load_acquire(shared)))
         }
 
         /// Averages every channel of every buffer (interleaved or not) into
