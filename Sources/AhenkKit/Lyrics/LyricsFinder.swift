@@ -127,6 +127,27 @@ public final class LyricsFinder: Sendable {
         await cache?.remove(Self.choiceKey(query))
     }
 
+    /// The name lyrics timed on this Mac go by (in place of a provider's).
+    public static let alignedSource = "aligned"
+
+    /// Makes lyrics that were timed on this Mac (plain words aligned to
+    /// the song, `LyricAligner`) the song's lyrics from now on: kept like
+    /// a picked version, so they come back with the song, and dropped the
+    /// same way ("use the lyrics Ahenk found"). They were timed against
+    /// this very recording, so nothing corrects them afterwards.
+    @discardableResult
+    public func adopt(_ lyrics: SyncedLyrics, for query: LyricsQuery) async -> (response: LyricsResponse, version: LyricsVersion) {
+        let response = LyricsResponse(result: .synced(lyrics), source: Self.alignedSource, timingAuthority: .canonicalRecording)
+        let version = LyricsVersion(
+            provider: Self.alignedSource, reference: lyrics.timingFingerprint, title: query.title, artist: query.artist,
+            album: query.album, duration: query.duration, kind: .synced
+        )
+        await cache?.store(response, for: Self.choiceKey(query))
+        songs.setChoice(version, for: query.cacheKey)
+        misses.withLock { $0[query.cacheKey] = nil }
+        return (response, version)
+    }
+
     public func versions(for query: LyricsQuery) async -> [LyricsVersion] {
         await chain.versions(for: query)
     }
