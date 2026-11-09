@@ -265,6 +265,10 @@ public protocol LyricsProvider: Sendable {
     /// `LyricsQuery.spotifyTrackID`; the chain then waits for it before a
     /// faster fuzzy result may win a Spotify lookup.
     var supportsCanonicalSpotifyLookup: Bool { get }
+    /// True for a provider that answers from memory at once with lyrics the
+    /// playing source itself supplied (a music site's own lyrics): the
+    /// finder asks it before the cache.
+    var answersFromMemory: Bool { get }
     func fetch(_ query: LyricsQuery) async throws -> LyricsResult
     /// Provenance-aware form the chain uses.
     func fetchResponse(_ query: LyricsQuery) async throws -> LyricsResponse
@@ -279,6 +283,7 @@ public protocol LyricsProvider: Sendable {
 public extension LyricsProvider {
     var reliability: Int { 0 }
     var supportsCanonicalSpotifyLookup: Bool { false }
+    var answersFromMemory: Bool { false }
 
     func fetchResponse(_ query: LyricsQuery) async throws -> LyricsResponse {
         LyricsResponse(result: try await fetch(query), source: name)

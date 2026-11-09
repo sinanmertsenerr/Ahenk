@@ -50,6 +50,14 @@ public enum MusicSource: String, CaseIterable, Codable, Sendable, Identifiable {
         }
     }
 
+    /// A music site the browser extension reports and controls.
+    public var isSite: Bool {
+        switch self {
+        case .spotifyWeb, .youtubeMusic, .soundCloud, .amazonMusic, .deezer, .tidal, .youtube: true
+        case .appleMusic, .spotify, .otherApp, .local, .demo: false
+        }
+    }
+
     /// Sources a user can pick as "where I listen". The catch-all and the
     /// demo are never pinned.
     public static var pinnable: [MusicSource] {

@@ -2,7 +2,9 @@ import Foundation
 import os
 
 /// Finds a song's lyrics in this order: the version the user picked for
-/// it, the disk cache, then the providers (whose answer is cached).
+/// it, the lyrics the playing source supplied itself (a music site's own,
+/// held in memory, never cached), the disk cache, then the providers (whose
+/// answer is cached).
 ///
 /// A song the providers had nothing for is not asked about again for
 /// `missMemory` seconds (a repeated song does not cost requests every
@@ -12,6 +14,8 @@ public final class LyricsFinder: Sendable {
     public enum Origin: String, Sendable, Equatable {
         /// The version the user picked.
         case choice
+        /// The playing source's own lyrics (a music site in the browser).
+        case playingSource
         case cache
         case providers
         /// Remembered as not found a short while ago.
@@ -67,6 +71,11 @@ public final class LyricsFinder: Sendable {
             }
             Self.log.notice("The picked lyrics could not be loaded again; looking them up anew")
         }
+        for provider in chain.providers where provider.answersFromMemory {
+            if let response = try? await provider.fetchResponse(query), case .synced = response.result {
+                return Found(response: response, origin: .playingSource, allFailed: false, choice: nil)
+            }
+        }
         if let stored = await cache?.load(key) {
             return Found(response: stored, origin: .cache, allFailed: false, choice: nil)
         }
@@ -90,7 +99,17 @@ public final class LyricsFinder: Sendable {
     }
 
     /// Makes `version` the song's lyrics from now on and returns them.
+    ///
+    /// The playing source's own lyrics come first by themselves, so picking
+    /// them is going back to the automatic pick: no choice is kept and
+    /// nothing is cached (they live in memory only).
     public func choose(_ version: LyricsVersion, for query: LyricsQuery) async throws -> LyricsResponse {
+        if let own = chain.providers.first(where: { $0.answersFromMemory && $0.name == version.provider }) {
+            let response = try await own.fetchResponse(query)
+            guard response.result.hasLyrics else { throw LyricsError.malformed }
+            await clearChoice(for: query)
+            return response
+        }
         let result = try await chain.lyrics(of: version)
         guard result.hasLyrics || result == .instrumental else { throw LyricsError.malformed }
         let response = LyricsResponse(result: result, source: version.provider)

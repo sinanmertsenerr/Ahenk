@@ -10,6 +10,10 @@ public struct HubInput: Sendable {
 
     public let id: String
     public let priority: Int
+    /// Its reports for an app hide lower-priority reports for the same app
+    /// that describe the same song (the browser bridge over the system's
+    /// guess for that browser; see `HubCore`).
+    public let shadowsSameApp: Bool
     /// Everything the provider sees, as a list (several browser tabs).
     public let reports: @Sendable () -> AsyncStream<[NowPlayingSnapshot]>
     public let perform: @Sendable (PlaybackCommand, PlayerID) async -> Bool
@@ -17,11 +21,13 @@ public struct HubInput: Sendable {
     public init(
         id: String,
         priority: Int,
+        shadowsSameApp: Bool = false,
         reports: @escaping @Sendable () -> AsyncStream<[NowPlayingSnapshot]>,
         perform: @escaping @Sendable (PlaybackCommand, PlayerID) async -> Bool
     ) {
         self.id = id
         self.priority = priority
+        self.shadowsSameApp = shadowsSameApp
         self.reports = reports
         self.perform = perform
     }
@@ -113,7 +119,10 @@ public final class NowPlayingHub: NowPlayingProvider, Sendable {
         self.clock = clock
         self.usesTimer = usesTimer
         var core = HubCore(configuration: configuration)
-        for input in inputs { core.setPriority(input.priority, for: input.id) }
+        for input in inputs {
+            core.setPriority(input.priority, for: input.id)
+            if input.shadowsSameApp { core.setShadowing(true, for: input.id) }
+        }
         state = OSAllocatedUnfairLock(initialState: DriverState(core: core))
     }
 

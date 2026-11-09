@@ -1,8 +1,9 @@
 import Foundation
 
-/// What the Ahenk browser extension reports for one tab (Step 7).
-public struct BrowserTabReport: Sendable, Equatable {
-    /// Stable for the tab's lifetime.
+/// What the Ahenk browser extension reports for one tab.
+public struct BrowserTabReport: Sendable, Equatable, Identifiable {
+    /// Stable for the tab's lifetime and across reconnects: the browser
+    /// profile and the browser's tab ID (`BridgeRegistry.tabKey`).
     public var tabID: String
     public var browserBundleIdentifier: String?
     /// The site, exactly (the extension knows the page).
@@ -22,6 +23,26 @@ public struct BrowserTabReport: Sendable, Equatable {
     public var repeatMode: RepeatMode?
     public var contentKind: ContentKind
     public var capabilities: PlaybackCapabilities
+    /// The song's ID in `Track.id` form (`spotify:track:…`, a watch URL);
+    /// `nil` falls back to the page URL, then to the metadata.
+    public var trackIdentifier: String?
+    /// The browser's main process (the audio engine taps its helpers).
+    public var processIdentifier: Int32?
+    public var isPositionKnown = true
+    public var playbackRate: Double = 1
+    /// The browser's own tab ID and the connection it came through.
+    public var browserTabID: Int?
+    public var connectionID: Int?
+    /// What the extension can do in this tab beyond transport commands.
+    public var bridgeCapabilities: Set<BridgeCapability> = []
+    public var volume: Double?
+    /// The tab is the selected one in its window.
+    public var isActiveTab = false
+    public var lastActive: Date?
+    /// The browser's own name ("Chrome", "Firefox").
+    public var browserName: String?
+
+    public var id: String { tabID }
 
     public init(
         tabID: String, browserBundleIdentifier: String?, site: MusicSource, title: String, artist: String,
@@ -53,7 +74,7 @@ public struct BrowserTabReport: Sendable, Equatable {
     public var snapshot: NowPlayingSnapshot {
         NowPlayingSnapshot(
             track: Track(
-                id: pageURL?.absoluteString ?? TrackMatching.metadataKey(title: title, artist: artist, album: album),
+                id: trackIdentifier ?? pageURL?.absoluteString ?? TrackMatching.metadataKey(title: title, artist: artist, album: album),
                 source: site,
                 title: title,
                 artist: artist,
@@ -62,10 +83,12 @@ public struct BrowserTabReport: Sendable, Equatable {
                 artworkURL: artworkURL
             ),
             bundleIdentifier: browserBundleIdentifier,
+            processIdentifier: processIdentifier,
             instanceIdentifier: tabID,
             elapsedTime: elapsedTime,
-            playbackRate: isPlaying ? 1 : 0,
+            playbackRate: isPlaying ? (playbackRate > 0 ? playbackRate : 1) : 0,
             timestamp: sampledAt,
+            isPositionKnown: isPositionKnown,
             isShuffled: isShuffled,
             repeatMode: repeatMode,
             isLiked: isLiked,
@@ -73,19 +96,23 @@ public struct BrowserTabReport: Sendable, Equatable {
             contentKind: contentKind
         )
     }
+
+    /// The player this tab is in the hub.
+    public var playerID: PlayerID {
+        PlayerID(source: site, bundleIdentifier: browserBundleIdentifier, instance: tabID)
+    }
 }
 
-/// The app side of the browser extension (Step 7 implements it with a
-/// local WebSocket server).
+/// The app side of the browser extension (`BrowserBridgeServer`).
 public protocol BrowserBridge: AnyObject, Sendable {
     /// Every tab that plays or paused media, now and on every change.
     func tabs() -> AsyncStream<[BrowserTabReport]>
     func send(_ command: PlaybackCommand, toTab tabID: String) async -> Bool
 }
 
-/// Browser tabs reported by the extension, one player per tab. Without a
-/// bridge (until Step 7) it reports nothing; browser playback still shows
-/// up through the system's Now Playing.
+/// Browser tabs reported by the extension, one player per tab. Its reports
+/// hide the system reader's guess for the same browser (the same song seen
+/// twice), see `HubCore`. Without a bridge it reports nothing.
 public final class BrowserProvider: Sendable {
     public static let providerID = "browser"
     public let bridge: (any BrowserBridge)?
@@ -99,6 +126,7 @@ public final class BrowserProvider: Sendable {
         return HubInput(
             id: Self.providerID,
             priority: HubInput.dedicatedPriority,
+            shadowsSameApp: true,
             reports: {
                 guard let bridge else {
                     let (stream, continuation) = AsyncStream<[NowPlayingSnapshot]>.makeStream()
@@ -144,17 +172,60 @@ public final class LocalPlaybackProvider: NowPlayingProvider, Sendable {
     }
 }
 
-/// What the desktop player asks of a music site in the browser (Step 7's
-/// extension implements it): play a pick found in the catalog, the site's
-/// playlists and its volume.
+/// What the desktop player asks of a music site in the browser (the
+/// extension through `BridgePlaybackRouter`): play a pick found in the
+/// catalog, the site's playlists, its queue and its volume.
 public protocol BrowserPlaybackRouting: AnyObject, Sendable {
     func play(_ request: BrowserPlayRequest) async -> BrowserPlayOutcome
     /// `nil` when the site shares no playlists.
     func playlists(on site: MusicSource) async -> [CatalogPlaylist]?
     func songs(ofPlaylist id: String, on site: MusicSource) async -> [CatalogSong]
+    /// Plays a playlist of the site from `index` (its own order and queue).
+    func playPlaylist(_ id: String, from index: Int?, on site: MusicSource) async -> BrowserPlayOutcome
+    /// The site's own queue (`nil`: the site does not show it).
+    func queue(on site: MusicSource) async -> BrowserQueue?
+    func playQueueItem(_ index: Int, on site: MusicSource) async -> Bool
+    func removeQueueItem(_ index: Int, on site: MusicSource) async -> Bool
     /// 0…1, `nil` when the site's player has no volume to read.
     func volume(on site: MusicSource) async -> Double?
     func setVolume(_ volume: Double, on site: MusicSource) async
+    /// The site has a tab whose player reports a volume.
+    func hasVolume(on site: MusicSource) -> Bool
+    /// An extension is connected.
+    var isConnected: Bool { get }
+}
+
+/// The songs of a site's own queue.
+public struct BrowserQueue: Sendable, Equatable {
+    public struct Item: Sendable, Equatable, Identifiable {
+        public var index: Int
+        public var song: CatalogSong
+        public var isCurrent: Bool
+        public var id: Int { index }
+
+        public init(index: Int, song: CatalogSong, isCurrent: Bool) {
+            self.index = index
+            self.song = song
+            self.isCurrent = isCurrent
+        }
+    }
+
+    public var site: MusicSource
+    public var items: [Item]
+    /// Songs can be taken out of it.
+    public var canRemove: Bool
+
+    public init(site: MusicSource, items: [Item], canRemove: Bool) {
+        self.site = site
+        self.items = items
+        self.canRemove = canRemove
+    }
+
+    /// What comes after the song that plays.
+    public var upNext: [Item] {
+        guard let current = items.firstIndex(where: \.isCurrent) else { return items }
+        return Array(items[(current + 1)...])
+    }
 }
 
 /// A song to play on a site: found there by its title, artist and album,
@@ -176,7 +247,11 @@ public enum BrowserPlayOutcome: Hashable, Sendable {
     case started
     /// The site has no such song.
     case notFound
-    /// No tab of the site is open (the extension may open one).
+    /// No tab of the site is open and none could be opened.
     case noTab
+    /// No browser extension is connected.
+    case noExtension
+    /// The site opened with the song; the user starts it there.
+    case opened
     case failed(String)
 }

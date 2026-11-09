@@ -12,8 +12,11 @@ import AppKit
 /// - Spotify: `play track "spotify:track:…"`, with the track ID from the
 ///   song's own ID (Continue Playing) or from `SpotifyTrackFinding`; an
 ///   unmatched song opens Spotify's search instead.
-/// - Music sites: through `BrowserPlaybackRouting` (Step 7's extension);
-///   until then the player says the extension is needed.
+/// - Music sites: through `BrowserPlaybackRouting` (the browser extension):
+///   the site's tab searches for the pick and plays it (a tab of the site
+///   opens when none is), its playlists play in the site's own order, its
+///   queue and volume are read there. Without the extension the player says
+///   it is needed.
 ///
 /// Playing a pick is something the user asked for, so the source's app is
 /// launched if needed (in the background) and macOS may ask once for the
@@ -166,14 +169,51 @@ final class PlaybackRouter {
             let query = SongQuery(song: song)
             spotifyID = await finder.spotifyTrackIDs(for: [query])[query]
         }
-        switch await bridge.play(BrowserPlayRequest(site: site, song: song, spotifyTrackID: spotifyID)) {
+        return outcome(of: await bridge.play(BrowserPlayRequest(site: site, song: song, spotifyTrackID: spotifyID)), song: true)
+    }
+
+    private func outcome(of answer: BrowserPlayOutcome, song: Bool) -> Outcome {
+        switch answer {
         case .started: return .started
-        case .notFound: return .failed("The site did not find this song.".l10n)
+        case .opened: return .shown("The site shows it now: press Play there.".l10n)
+        case .notFound: return .failed(song ? "The site did not find this song.".l10n : "The site did not find this playlist.".l10n)
         case .noTab: return .failed("Open the site in your browser first.".l10n)
+        case .noExtension: return .unavailable("Playing on music sites needs the Ahenk browser extension.".l10n)
         case .failed(let reason):
             log.notice("Browser playback failed: \(reason)")
             return .failed("The browser did not start the song.".l10n)
         }
+    }
+
+    /// A site's playlist plays in the site itself, from `index` on, in its
+    /// own order (the site's queue carries on from there).
+    func playSitePlaylist(_ playlist: CatalogPlaylist, from index: Int?, in source: MusicSource) async -> Outcome {
+        guard let bridge = services.browserPlayback else {
+            return .unavailable("Playing on music sites needs the Ahenk browser extension.".l10n)
+        }
+        log.info("Playing a playlist of \(source.rawValue)\(index.map { " from song \($0 + 1)" } ?? "")")
+        return outcome(of: await bridge.playPlaylist(playlist.id, from: index, on: source), song: false)
+    }
+
+    /// Whether a playlist belongs to a music site (it then plays there).
+    static func isSitePlaylist(_ playlist: CatalogPlaylist) -> Bool {
+        BrowserPlaybackPolicy.parsePlaylistID(playlist.id) != nil
+    }
+
+    // MARK: The site's own queue
+
+    /// The queue of the site that plays (`nil`: not a site, or it shows none).
+    func siteQueue(of source: MusicSource) async -> BrowserQueue? {
+        guard source.isSite, let bridge = services.browserPlayback else { return nil }
+        return await bridge.queue(on: source)
+    }
+
+    func playSiteQueueItem(_ index: Int, in source: MusicSource) async -> Bool {
+        await services.browserPlayback?.playQueueItem(index, on: source) ?? false
+    }
+
+    func removeSiteQueueItem(_ index: Int, in source: MusicSource) async -> Bool {
+        await services.browserPlayback?.removeQueueItem(index, on: source) ?? false
     }
 
     /// Launches the app in the background when it is not running and waits
@@ -218,8 +258,11 @@ final class PlaybackRouter {
         case .spotify:
             return .unavailable("The Spotify app does not share its playlists with other apps.".l10n)
         case .youtubeMusic, .soundCloud, .amazonMusic, .deezer, .tidal, .spotifyWeb, .youtube:
-            guard let bridge = services.browserPlayback, let lists = await bridge.playlists(on: source) else {
+            guard let bridge = services.browserPlayback, bridge.isConnected else {
                 return .unavailable("Playlists from music sites need the Ahenk browser extension.".l10n)
+            }
+            guard let lists = await bridge.playlists(on: source) else {
+                return .unavailable("Open the site in your browser to see its playlists.".l10n)
             }
             return .playlists(lists)
         case .demo, .otherApp, .local:
@@ -280,7 +323,8 @@ final class PlaybackRouter {
         switch source {
         case .demo: demo != nil
         case .appleMusic, .spotify: services.statuses[source]?.hasFullAccess == true
-        case .youtubeMusic, .soundCloud, .amazonMusic, .deezer, .tidal, .spotifyWeb, .youtube: services.browserPlayback != nil
+        case .youtubeMusic, .soundCloud, .amazonMusic, .deezer, .tidal, .spotifyWeb, .youtube:
+            services.browserPlayback?.hasVolume(on: source) ?? false
         case .otherApp, .local: false
         }
     }
