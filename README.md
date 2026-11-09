@@ -17,8 +17,9 @@ shows what is playing, and your own files.
 > search, the player bar and a play queue; synced lyrics beside the album
 > cover in eight styles (Fisheye, Spread, Karaoke, Typewriter, Neon, Echo,
 > Glitch, Cinema), with a countdown in instrumental parts, other versions,
-> search and timing. The features arrive step by step; see
-> [docs/PROGRESS.md](docs/PROGRESS.md).
+> search and timing; and the browser extension for YouTube Music, YouTube,
+> Spotify, SoundCloud, Amazon Music, Deezer and TIDAL. The features arrive
+> step by step; see [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ### Requirements
 
@@ -31,8 +32,28 @@ macOS 14.2 or later, Xcode 16 or later (Swift 6).
 ./Scripts/run-demo.sh              # launch with invented songs (no music needed)
 ./Scripts/test.sh                  # lint and unit tests
 ./Scripts/smoke.sh                 # headless check of every subsystem
+./Scripts/bridge-e2e.sh            # the browser extension end to end in a headless test browser
 ./Scripts/install.sh               # install to /Applications
 ```
+
+### Browser extension
+
+Music sites in the browser (YouTube Music, YouTube, Spotify, SoundCloud,
+Amazon Music, Deezer and TIDAL) report exactly what plays through the Ahenk
+browser extension, and the desktop player plays your picks, playlists and
+queue there. Install it once; the menu bar menu's **Install Browser
+Extension…** shows its folders in Finder (`make-app.sh` puts them into
+`Ahenk.app/Contents/Resources/Extension`):
+
+- **Chrome, Edge, Brave, Arc, Opera, Vivaldi:** open the extensions page
+  (`chrome://extensions`), turn on Developer mode, click **Load unpacked** and
+  choose the `Chromium` folder. If you move Ahenk, load it again.
+- **Search:** the puzzle button › **Load Unpacked…** › the `Chromium` folder.
+- **Firefox:** `about:debugging` › This Firefox › **Load Temporary Add-on…** ›
+  `manifest.json` in the `Firefox` folder. Firefox forgets it when it quits.
+
+The extension's button shows whether it is connected; Settings › Sources
+lists the connected browsers and their music tabs.
 
 Ahenk uses two permissions: system audio (so the light hears the music;
 nothing is recorded, never the microphone) and Automation (to read the song,
@@ -51,8 +72,11 @@ Spotify's public page for a track's cover; to play a pick in Spotify, it asks
 ListenBrainz (MetaBrainz) for the song's Spotify ID by its title, artist and
 album. While lyrics are on, it sends the playing song's title, artist, album
 and length to LRCLIB, Musixmatch and NetEase to find its lyrics (each can be
-turned off in Settings › Lyrics) and keeps what it finds on your Mac.
-Nothing else leaves your Mac.
+turned off in Settings › Lyrics) and keeps what it finds on your Mac. The
+browser extension talks only to Ahenk on this Mac (127.0.0.1, which accepts
+nothing but the extension): it reads what the music site's own page shows
+(the song, its position, and the site's own synced lyrics when its lyrics view
+loads them) and carries out your commands there. Nothing else leaves your Mac.
 
 ### License
 
@@ -78,8 +102,9 @@ sitelerini, çalan şarkıyı gösteren her uygulamayı ve kendi dosyalarınız�
 > çalma sırası; albüm kapağının yanında sekiz stilde (Balıkgözü, Yayılma,
 > Karaoke, Daktilo, Neon, Yankı, Bozulma, Sinema) eşzamanlı şarkı sözleri,
 > enstrümantal bölümlerde geri sayım, sözlerin diğer sürümleri, söz arama ve
-> zamanlama ayarı. Özellikler adım adım geliyor; ayrıntılar
-> [docs/PROGRESS.md](docs/PROGRESS.md) dosyasında.
+> zamanlama ayarı; YouTube Music, YouTube, Spotify, SoundCloud, Amazon Music,
+> Deezer ve TIDAL için tarayıcı eklentisi. Özellikler adım adım geliyor;
+> ayrıntılar [docs/PROGRESS.md](docs/PROGRESS.md) dosyasında.
 
 ### Gereksinimler
 
@@ -92,8 +117,30 @@ macOS 14.2 ya da sonrası, Xcode 16 ya da sonrası (Swift 6).
 ./Scripts/run-demo.sh              # kurgusal şarkılarla açar (müzik gerekmez)
 ./Scripts/test.sh                  # denetimler ve birim testleri
 ./Scripts/smoke.sh                 # tüm alt sistemleri arayüzsüz dener
+./Scripts/bridge-e2e.sh            # tarayıcı eklentisini arayüzsüz bir test tarayıcısında baştan sona dener
 ./Scripts/install.sh               # /Applications klasörüne kurar
 ```
+
+### Tarayıcı eklentisi
+
+Tarayıcıdaki müzik siteleri (YouTube Music, YouTube, Spotify, SoundCloud,
+Amazon Music, Deezer ve TIDAL), Ahenk tarayıcı eklentisi sayesinde neyin
+çaldığını tam olarak bildirir; masaüstü oynatıcı da seçtiğiniz şarkıları,
+çalma listelerini ve çalma sırasını orada çalar. Eklentiyi bir kez kurmanız
+yeterli; menü çubuğu menüsündeki **Tarayıcı Eklentisini Kur…** komutu
+klasörlerini Finder'da gösterir (`make-app.sh` bu klasörleri
+`Ahenk.app/Contents/Resources/Extension` içine koyar):
+
+- **Chrome, Edge, Brave, Arc, Opera, Vivaldi:** uzantılar sayfasını açın
+  (`chrome://extensions`), Geliştirici modunu açın, **Paketlenmemiş öğe
+  yükle** düğmesine tıklayın ve `Chromium` klasörünü seçin. Ahenk'i başka bir
+  yere taşırsanız klasörü yeniden yükleyin.
+- **Search:** yapboz düğmesi › **Load Unpacked…** › `Chromium` klasörü.
+- **Firefox:** `about:debugging` › Bu Firefox › **Geçici Eklenti Yükle…** ›
+  `Firefox` klasöründeki `manifest.json`. Firefox kapanınca eklentiyi unutur.
+
+Eklentinin düğmesi bağlı olup olmadığını gösterir; Ayarlar › Kaynaklar bağlı
+tarayıcıları ve müzik sekmelerini listeler.
 
 Ahenk iki izin kullanır: sistem sesi (ışık müziği duysun diye; hiçbir şey
 kaydedilmez, mikrofon asla kullanılmaz) ve Otomasyon (Apple Music ile
@@ -114,8 +161,12 @@ Spotify'da çalmak için şarkının adını, sanatçısını ve albümünü Lis
 (MetaBrainz) göndererek Spotify kimliğini bulur. Şarkı sözleri açıkken, çalan
 şarkının sözlerini bulmak için adını, sanatçısını, albümünü ve süresini
 LRCLIB, Musixmatch ve NetEase hizmetlerine gönderir (her biri Ayarlar › Şarkı
-Sözleri'nden kapatılabilir) ve bulduklarını Mac'inizde saklar. Mac'inizden
-başka hiçbir şey çıkmaz.
+Sözleri'nden kapatılabilir) ve bulduklarını Mac'inizde saklar. Tarayıcı
+eklentisi yalnızca bu Mac'teki Ahenk'le konuşur (127.0.0.1; Ahenk eklentiden
+başkasını kabul etmez): müzik sitesinin kendi sayfasında görünenleri (şarkıyı,
+konumunu ve sitenin sözler görünümü yüklediğinde sitenin kendi eşzamanlı
+sözlerini) okur ve komutlarınızı orada yerine getirir. Mac'inizden başka hiçbir
+şey çıkmaz.
 
 ### Lisans
 
