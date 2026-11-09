@@ -142,6 +142,15 @@ struct MemoryLRU<Value: Sendable>: Sendable {
 public protocol HTTPFetching: Sendable {
     /// The body and status code of a GET request.
     func get(_ url: URL) async throws -> (data: Data, status: Int)
+    /// The body and status code of a POST request with a JSON body (batch
+    /// lookups). Fetchers that only read covers need not implement it.
+    func post(_ url: URL, json body: Data) async throws -> (data: Data, status: Int)
+}
+
+extension HTTPFetching {
+    public func post(_ url: URL, json body: Data) async throws -> (data: Data, status: Int) {
+        throw URLError(.unsupportedURL)
+    }
 }
 
 /// `URLSession` without its own cache (Ahenk caches covers itself).
@@ -160,6 +169,15 @@ public struct URLSessionFetcher: HTTPFetching {
 
     public func get(_ url: URL) async throws -> (data: Data, status: Int) {
         let (data, response) = try await session.data(from: url)
+        return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
+    }
+
+    public func post(_ url: URL, json body: Data) async throws -> (data: Data, status: Int) {
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = body
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let (data, response) = try await session.data(for: request)
         return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
     }
 }
