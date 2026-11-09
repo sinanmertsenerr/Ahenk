@@ -1,0 +1,12 @@
+{
+  "name": "ahenk-extension-tests",
+  "private": true,
+  "description": "Tests for the Ahenk browser extension: node --test for its pure helpers, Playwright for the end-to-end run.",
+  "scripts": {
+    "test": "node --test \"*.test.mjs\"",
+    "e2e": "node e2e.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

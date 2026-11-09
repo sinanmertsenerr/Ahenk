@@ -46,6 +46,12 @@ final class SmokeRunner {
         if selected("menus") { await report.check("menus") { try self.checkMenus() } }
         if selected("lyrics") { await report.check("lyrics") { try await self.checkLyrics() } }
         if selected("settingsWindow") { await report.check("settingsWindow") { try await self.checkSettingsWindow() } }
+        if selected("bridge") {
+            await report.check("bridge") { try await BridgeCheck.run(settings: self.environment.settings, snapshots: self.snapshotDirectory()) }
+        }
+        if let wait = environment.options.bridgeWait, let port = environment.options.bridgePort, selected("bridgeLive") {
+            await report.check("bridgeLive") { try await BridgeCheck.runLive(port: port, wait: wait) }
+        }
         report.finish()
         for entry in report.subsystems {
             log.info("\(entry.name): \(entry.status.rawValue), \(entry.detail)")
@@ -111,7 +117,8 @@ final class SmokeRunner {
             throw SmokeFailure("Shaders/EdgeLight.metal missing from the resource bundle")
         }
         let symbols = Set(QuickMenu.symbolNames + SettingsPane.allCases.map(\.symbolName) + DesktopSymbols.all
-            + ["backward.fill", "forward.fill", "play.fill", "pause.fill", "plus", "minus", "waveform", "app.dashed"])
+            + [BrowserExtensionInstaller.symbolName]
+            + ["backward.fill", "forward.fill", "play.fill", "pause.fill", "plus", "minus", "waveform", "app.dashed", "globe"])
         let missing = symbols.filter { NSImage(systemSymbolName: $0, accessibilityDescription: nil) == nil }
         guard missing.isEmpty else { throw SmokeFailure("Missing SF Symbols: \(missing.sorted().joined(separator: ", "))") }
         return "shader sources and \(symbols.count) SF Symbols present"
@@ -525,6 +532,11 @@ final class SmokeRunner {
                 if let directory, let png = bitmap.representation(using: .png, properties: [:]) {
                     try png.write(to: directory.appendingPathComponent("settings-\(pane.rawValue)-\(language.rawValue).png"))
                 }
+                // Sources is taller than the window: its lower sections (the
+                // browser extension) in a tall copy.
+                if let directory, pane == .sources, let png = try await render(pane, height: 2_000).representation(using: .png, properties: [:]) {
+                    try png.write(to: directory.appendingPathComponent("settings-\(pane.rawValue)-full-\(language.rawValue).png"))
+                }
             }
         }
         if let directory {
@@ -755,11 +767,12 @@ final class SmokeRunner {
     /// far outside every screen (so nobody sees it, but AppKit really draws
     /// it) and copies it into a bitmap. The glass sidebar cannot be captured
     /// this way and comes out blank; the panes render in full.
-    private func render(_ pane: SettingsPane) async throws -> NSBitmapImageRep {
+    private func render(_ pane: SettingsPane, height: CGFloat? = nil) async throws -> NSBitmapImageRep {
         let navigation = SettingsNavigation()
         navigation.selection = pane
         let hosting = NSHostingView(rootView: SettingsRootView(environment: environment, navigation: navigation))
-        let size = SettingsWindowController.defaultSize
+        var size = SettingsWindowController.defaultSize
+        if let height { size.height = height }
         let window = NSWindow(
             contentRect: NSRect(origin: NSPoint(x: -30_000, y: -30_000), size: size),
             styleMask: [.borderless], backing: .buffered, defer: false

@@ -96,16 +96,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func runSmoke() {
         log.notice("Smoke test started")
-        // Never hang: if a check blocks, report that and leave anyway.
+        // Never hang: if a check blocks, report that and leave anyway (the
+        // live bridge check may wait for a browser on top).
+        let limit = 60 + (environment.options.bridgeWait ?? 0) + (environment.options.bridgeWait == nil ? 0 : 60)
         let watchdog = DispatchWorkItem {
             var report = SmokeReport(version: AppInfo.version, build: AppInfo.build, commit: AppInfo.commit, bundlePath: Bundle.main.bundlePath)
-            report.record(.init(name: "smoke", status: .error, detail: "timed out after 60 s", milliseconds: 60_000))
+            report.record(.init(name: "smoke", status: .error, detail: "timed out after \(Int(limit)) s", milliseconds: limit * 1000))
             report.finish()
             try? report.write(to: SmokeReport.standardURL)
             Log.flush()
             exit(0)
         }
-        DispatchQueue.global().asyncAfter(deadline: .now() + 60, execute: watchdog)
+        DispatchQueue.global().asyncAfter(deadline: .now() + limit, execute: watchdog)
 
         Task { @MainActor in
             let report = await SmokeRunner(environment: environment).run()

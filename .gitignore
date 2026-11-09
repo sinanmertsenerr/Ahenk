@@ -30,3 +30,6 @@ Vendor/mediaremote-adapter/build/
 # Local planning notes. PLAN.md points at private reference material on the
 # author's Mac, so it stays out of the public repository.
 docs/PLAN.md
+
+# Node packages for the extension tests (Tests/Extension)
+node_modules/

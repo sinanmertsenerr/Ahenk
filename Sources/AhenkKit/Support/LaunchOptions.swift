@@ -28,6 +28,11 @@ import Foundation
 ///   others are left out of the report).
 /// - `--draw-covered`: in demo mode, the lyrics keep moving while app
 ///   windows cover them (captures and CPU measurements).
+/// - `--bridge-port <port>`: with `--smoke`, the first port of the browser
+///   bridge the live end-to-end check (`bridgeLive`) listens on.
+/// - `--bridge-wait <s>`: with `--smoke`, run the live end-to-end check:
+///   wait this long for a real browser with the extension (a test browser
+///   on a mock music page), then drive it; see Scripts/bridge-e2e.sh.
 /// - `--settings [pane]` / `--settings=pane`: open Settings at launch.
 /// - `--allow-multiple`: skip the single-instance hand-off (development).
 ///
@@ -64,6 +69,10 @@ public struct LaunchOptions: Equatable, Sendable {
     public var smokeChecks: Set<String>?
     /// Demo only: draw the lyrics even while windows cover them (`--draw-covered`).
     public var drawCovered = false
+    /// The live bridge check's first port (`--bridge-port`).
+    public var bridgePort: Int?
+    /// Seconds the live bridge check waits for a browser (`--bridge-wait`).
+    public var bridgeWait: Double?
 
     /// Demo content is used in both `--demo` and `--smoke`.
     public var usesDemoContent: Bool { mode != .normal }
@@ -113,6 +122,10 @@ public struct LaunchOptions: Equatable, Sendable {
                 demoPosition = Self.seconds(inlineValue ?? Self.popValue(&remaining))
             case "--draw-covered":
                 drawCovered = true
+            case "--bridge-port":
+                bridgePort = (inlineValue ?? Self.popValue(&remaining)).flatMap(Int.init).flatMap { (1024...65_535).contains($0) ? $0 : nil }
+            case "--bridge-wait":
+                bridgeWait = Self.seconds(inlineValue ?? Self.popValue(&remaining))
             case "--smoke-only":
                 let names = (inlineValue ?? Self.popValue(&remaining) ?? "")
                     .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }

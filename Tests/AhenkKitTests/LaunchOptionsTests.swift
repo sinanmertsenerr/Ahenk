@@ -82,4 +82,12 @@ struct LaunchOptionsTests {
         #expect(options.usesDetachedSettings, "a style for one run is never saved")
         #expect(LaunchOptions(arguments: ["Ahenk", "--smoke-only"]).smokeChecks == nil)
     }
+
+    @Test("Launch options for the live bridge check")
+    func bridgeOptions() {
+        let options = LaunchOptions(arguments: ["Ahenk", "--smoke", "--smoke-only", "bridgeLive", "--bridge-port", "43120", "--bridge-wait=45"])
+        #expect(options.mode == .smoke && options.bridgePort == 43_120 && options.bridgeWait == 45)
+        #expect(LaunchOptions(arguments: ["Ahenk", "--bridge-port", "80"]).bridgePort == nil, "a privileged port is refused")
+        #expect(LaunchOptions(arguments: ["Ahenk", "--bridge-wait", "-3"]).bridgeWait == nil)
+    }
 }
