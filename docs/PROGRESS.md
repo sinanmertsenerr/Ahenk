@@ -1326,3 +1326,230 @@ Extension/Chromium`; the Search browser: the puzzle button › **Load Unpacked�
 › This Firefox › **Load Temporary Add-on…** › `Extension/Firefox/manifest.json` (again after each Firefox restart). Then open a
 music site; the extension's button turns green and Settings › Sources lists the browser and its music tabs. No permission is
 asked.
+
+## Step 8 — Live wallpaper (done, 2026-11-09)
+
+### What exists
+
+```
+Sources/AhenkKit/Models/SongVideoKind      YouTube's musicVideoType: officialVideo, userVideo, artTrack (the cover as a still), other
+Sources/AhenkKit/Wallpaper/
+  WallpaperCandidate    one thing to show (motion artwork, the song's video, another by the artist, the user's video, the
+                        moving cover, generated motion) and how it plays (YouTube embed, AVPlayer stream or file, Ahenk-drawn)
+  WallpaperRequest      the song as the wallpaper looks it up (the typed artist name, the tab's own video, the art-track rule)
+  YouTubeSearch         YouTubeSearchDecoder (web client JSON or the results page's ytInitialData → YouTubeVideo),
+                        YouTubeVideoSearch (keyless, cached, throttled; oEmbed embeddability)
+  VideoRanking          the song's own video and the artist's other videos among search results
+  MotionArtwork         MotionArtworkDecoder + MotionArtworkFinder (ported from DynamicIsland's AppleMotionArtwork)
+  WallpaperStage        per display: melt in/out, front/back crossfade, play/pause/let go, hidden handling
+  WallpaperSelection    the dots' order, the choice (pinned, picked, failed, waiting for a better source), WallpaperPowerPolicy
+  VideoSync             follow the song (lengths close) or loop; start position; drift correction
+  WallpaperCoverage     how much of a display other apps' windows cover
+  YouTubeEmbed          the embedded player's page (IFrame API, privacy-enhanced host, the app's origin) and its messages
+  WallpaperVideoList    the user's list: parse a link/address/file, add, show, rename, remove
+  WallpaperSongStore    ~/Library/Application Support/Ahenk/WallpaperSongs.json: dot picks per song, typed names per artist
+  WallpaperDemo         the demo's generated candidates and their colours
+Sources/AhenkApp/Wallpaper/
+  WallpaperController   inputs → lookups → per-display stages → windows and media; sync, coverage, status, the dots' model
+  WallpaperWindow       WallpaperWindow (desktop picture level) + WallpaperScreenView (stage, blurred canvas, scrim, vignette)
+  WallpaperMedia        WallpaperMediaView (base), SharedVideoPlayer (one AVPlayer per video for every display), VideoPlayerMediaView
+  YouTubeMediaView      WKWebView with the embedded player: in-memory data store, mute guard in every frame, scaled for 1080p/720p
+  MotionMediaViews      CoverMotionView (blurred drifting cover), GeneratedMotionView (demo looks, a band that follows the song)
+  WallpaperPicker       the dots above the player and the artist name field (+ WallpaperSymbols)
+  WallpaperCheck        smoke checks `wallpaper` and `wallpaperSwitch`
+Sources/AhenkApp/Settings/Panes/WallpaperPane   the whole pane (sources, playback, look, displays, the user's videos)
+Extension/              1.1.0: musicVideoType for YouTube Music and YouTube (C.musicVideoType; "- Topic" uploads are art tracks)
+Tests/AhenkKitTests/    469 tests in 84 suites (was 434/72): WallpaperTests (search decoding, ranking, motion artwork, sync,
+                        stage, selection, power, coverage, requests and art tracks, video IDs, the user's list, the song
+                        store, the embed page, the demo), bridge fixtures with musicVideoType, layout, launch options
+Tests/Extension/        24 node tests (was 23): the video type
+```
+
+How it plays: a song that the light would react to (music, or unlabelled content except on YouTube; never plain videos,
+podcasts or adverts) starts a lookup: the YouTube tab's own video (when the page says it is a real video), the motion
+artwork (Apple's catalog: the song's album through the player's ITunesCatalog, then `amp-api` with the web player's
+anonymous token), the song's video and the artist's other videos (YouTube search), the cover. The dots list them in the
+preferred order (motion artwork first by default; Settings › Live Wallpaper › First choice), the user's own videos after
+them. What shows: a video pinned from the user's list, else the dot picked for this song, else the first that has not
+failed; while a lookup for a better source runs, nothing is chosen for up to 3 s. A YouTube candidate is checked with
+oEmbed once before it loads (401/403: embedding disabled → the next). On every display that shows the wallpaper, a
+window at the desktop picture's level (`CGWindowLevelForKey(.desktopWindow)`, above the system's wallpaper windows,
+below the icons, every Space, stationary, never clicked) is ordered in at opacity 0, the media loads under it and the
+layer melts in over the crossfade time once it has frames (YouTube: 2.5 s after it plays, when its title has faded).
+A new pick loads under the one showing and crossfades in. A pause keeps the frame 3 s, then the layer melts back to
+the user's own wallpaper and everything is let go (or, with "Go back to your wallpaper" off, the paused frame stays).
+
+### Build, run, verify
+
+```sh
+swift build && ./Scripts/test.sh      # 469 Swift tests + 24 node tests, no warnings
+./Scripts/make-app.sh && ./Scripts/smoke.sh --snapshots   # wallpaper-*.png, desktop-wallpaper-dots-*.png, settings-wallpaper-full-*.png
+./Scripts/bridge-e2e.sh               # also checks that the mock page's art-track type reaches the hub
+open -n dist/Ahenk.app --args --demo --demo-backdrop      # generated "videos" over the dusk backdrop, the dots above the player
+open -n dist/Ahenk.app --args --demo --draw-covered --demo-pause-after 12 --demo-resume-after 22   # melt back, come back
+open -n dist/Ahenk.app --args --demo --draw-covered --wallpaper-song "<title>|<artist>" --wallpaper-source motionArtwork
+open -n dist/Ahenk.app --args --demo --draw-covered --wallpaper-song "<title>|<artist>|<video seconds>" --wallpaper-source songVideo
+pkill -x Ahenk
+```
+
+New launch arguments: `--wallpaper-song "<title>|<artist>[|<seconds>]"` (demo: the wallpaper looks up this real song
+online while the demo plays; with a length the song's video follows the demo's position), `--wallpaper-source
+<motionArtwork|songVideo|artistVideo|artwork|off>` (this kind first, or no wallpaper; in-memory settings), `--optimized`
+(Optimized Mode for the run). `--draw-covered` also keeps the wallpaper playing under app windows (captures, measurements).
+
+Smoke checks (all `ok`): `wallpaper` — per display a wallpaper window with the right level, Spaces and no clicks (never
+ordered in); a WallpaperScreenView with two generated pictures crossfading, drawn offscreen before and after; the
+moving cover from a generated demo cover; the state machine through a song; the embed page; the official video ranked
+over the audio upload. `wallpaperSwitch` — the running controller with every display switched off in the in-memory
+settings offers the demo song's four candidates, two dots are chosen and an artist name typed and forgotten, the menu
+bar's Live Wallpaper item turns it off and on, and the dots are drawn in both languages. `resources` checks the new symbols.
+
+Live checks on this Mac (2026-11-09; real media looked at only in /tmp and deleted, nothing of it in the repo): a real
+album's motion artwork was found (token, iTunes, amp-api in ~1 s) and played (square cut over the 16:10 screen); the
+song's official video was found by search, passed oEmbed and played in the embedded player muted, full screen, with no
+YouTube chrome; with a length given it started at the demo's position and, when the demo jumped to the next song, was
+"91.4 s off; moved to 0.1 s". The video element inside YouTube's frame reports muted, volume 0; the system's Now Playing
+stayed empty while it played. Blur covers the web view too.
+
+Measured on the M5 (release build, demo with the light (Soft Glow), the player and the lyrics (Fisheye) on, one 1512 × 982
+display, `--draw-covered`; CPU = Ahenk plus every process it is responsible for: WebKit's WebContent, GPU and
+Networking processes, the video decoder service), 20 s means:
+
+| Wallpaper | CPU (all processes) | Of which outside Ahenk | Memory |
+|---|---|---|---|
+| off (baseline) | 7.6 % | — | Ahenk 144 MB |
+| generated motion (demo) | 7.4 % | — | 144 MB |
+| the moving cover | 7.7 % | — | 147 MB |
+| motion artwork (AVPlayer, HLS) | 7.9–8.1 % | decoder 0.1–0.2 % | 157–170 MB + decoder 11 MB |
+| YouTube embed, 1080p | 19.3–20.7 % | WebContent 4.4–4.6 %, GPU 4.2–4.5 %, Networking 0.7 %, decoder 2.1 % | 152–171 MB + WebContent 189 MB, GPU 25 MB, Networking 12 MB |
+| YouTube embed, 720p (Optimized Mode) | 16.2 % | WebContent 3.6 %, GPU 3.6 %, Networking 0.2 %, decoder 2.3 % | 137 MB + WebContent 144 MB |
+| YouTube song, desktop covered by windows (no `--draw-covered`) | 5.7 % (nothing loads) | — | 121 MB |
+| paused, melted back (also after a YouTube video) | 0.00 % | 0.00 % (idle WebKit GPU/Networking stay) | 72–94 MB |
+| live, nothing playing | 0.00 % | — | 31 MB |
+
+So motion artwork costs ~0.3–0.5 % and the YouTube embed ~12–13 % (~9 % at 720p) on top of light + player + lyrics; the
+window server (system-wide, noisy) read ~27–29 % with motion artwork or Ahenk's own motion and ~38–43 % with the embed.
+Generated motion and the cover run as Core Animation in the window server at 30 fps (20 lighter, 15 in Low Power Mode).
+
+### Decisions
+
+- **Window level: the desktop picture's own** (`desktopWindow`, −2147483623 here). On macOS 26 the wallpaper itself is a
+  window of the Wallpaper agent two levels lower and the Dock keeps a desktop window one level lower; the icons sit at
+  `desktopIconWindow`. `ignoresMouseEvents`, so "click the wallpaper to reveal the desktop" still works. Not on
+  full-screen Spaces (no `.fullScreenAuxiliary`). The user's wallpaper setting is never read or changed; quitting just
+  closes the windows. The `--demo-backdrop` window moved one level under it and stands in for the user's wallpaper.
+- **Finding videos without an account or key: YouTube's own web search endpoint** (`youtubei/v1/search`, client WEB,
+  filter "videos", `gl` = the store country; Ahenk's normal User-Agent is accepted), with the results page's
+  `ytInitialData` as a fallback (the "reject all" consent cookie `SOCS=CAI` avoids the consent screen some regions get).
+  Evaluated and not used: the YouTube Data API (needs a key), Invidious/Piped instances (unreliable, often blocked),
+  MusicBrainz/Wikidata video links (sparse), iTunes `musicVideo` previews (30 s clips, a different service). Each song
+  costs at most two searches (the song: "<artist> <title> official video"; the artist: "<artist> official music video",
+  shared by the artist's songs), cached a week (an empty answer a day) in `~/Library/Caches/Ahenk/Catalog`, at most 8
+  requests a minute, 10 minutes of silence after a 429. Only titles, channels, IDs, lengths, badges, view counts and one
+  bit of the description ("Provided to YouTube by …" = art track) are kept.
+- **Ranking** (VideoRanking, checked on real answers for six songs in /tmp, never committed): the song's core title as
+  whole words and the artist in the title or as the channel ("Artist", "ArtistVEVO", "Artist Official", the Official
+  Artist Channel badge); never art tracks, "- Topic" channels, an artist channel's upload titled only with the track
+  name, live streams, audio, lyrics, karaoke, slowed/sped-up/8D edits, loops, reactions, lessons, teasers; it must say it
+  is a video (an official-video marker in several languages, or an official channel). Score: markers, official channels,
+  a length close to the song's (an intro/outro costs little), views as a tie-breaker; live versions, remixes, acoustic
+  takes, covers rank down. Artist videos: from the artist's channel (or naming the artist with a marker), 60 s–15 min,
+  one per title, the song itself excluded.
+- **Art tracks.** The extension now sends `musicVideoType` (YouTube Music and YouTube; a "- Topic" channel's upload is
+  sent as an art track); the hub carries it as `NowPlayingSnapshot.songVideoKind`. A YouTube Music tab's video counts as
+  the song's own only when the page says official video or upload (most songs there are art tracks; unknown counts as an
+  art track); on YouTube a music page is a video unless the page says art track. Its ID is never searched for.
+- **Motion artwork, ported**: the album comes from the player's own `ITunesCatalog.artist(for:)` (cached a month, shared
+  with the cover flow) instead of a separate album search; the web player's token is read from `music.apple.com/us/new`'s
+  script once, kept (memory and the catalog cache) until a day before its `exp`, and read again once on 401/403; answers
+  cached a week, "none" three days. The square cut for landscape screens, the tall one for portrait screens.
+- **The embedded player**: loaded with `loadHTMLString(_:baseURL:)` and the base URL `https://com.sinanmertsener.ahenk`
+  (YouTube's "Required Minimum Functionality" for WebView apps: the bundle ID as the Referer; without it, error 153),
+  the IFrame Player API with `host: www.youtube-nocookie.com`, `mute`, `controls 0`, `disablekb`, `fs 0`,
+  `iv_load_policy 3`, `rel 0`, `playsinline`, `start`, `origin`; loops in the page (ENDED → seek 0) unless it follows
+  the song; captions are unloaded (a muted player turns them on by itself). A user script in every frame keeps every
+  media element muted at volume 0 and reports it; the player's errors 101/150 (embedding disabled), 100 (gone), 2, 5
+  move to the next candidate, 152/153 and a failed script load (offline) give up on every YouTube candidate for the
+  song; no `PLAYING` within 20 s is a failure. The web view uses `WKWebsiteDataStore.nonPersistent()` (nothing on disk),
+  never navigates away (links, new windows refused) and never takes a click. Cover-fit: the player is 16:9 at the larger
+  of the screen's width and height, centred and cut. Quality follows the player's size, so the web view is laid out
+  smaller and scaled up: about 1080p, 720p on battery/Optimized Mode. One web view per display (a web view cannot be
+  shared).
+- **AVPlayer** for motion artwork, web addresses and files: one `SharedVideoPlayer` per video for every display (one
+  decode), muted, `preventsDisplaySleepDuringVideoPlayback = false`, no AirPlay, no Now Playing; files loop seamlessly
+  with `AVPlayerLooper`, streams by seeking to zero at the end; starts without waiting to minimise stalls, buffers 4 s;
+  `preferredMaximumResolution` / `preferredPeakBitRate` from the power plan.
+- **Following the song**: only the song's own video, only when the lengths are within 10 s or 6 %; it starts at the
+  song's position plus the player's start-up (YouTube 1.5 s, AVPlayer 0.3 s), is compared every 4 s and after every seek or
+  resume, and moved when more than 1.2 s off; past the video's end it holds. Everything else loops.
+- **Hidden means**: asleep (`screensDidSleep`), locked or another user (`com.apple.screenIsLocked`, session resign), a
+  full-screen app on that display (no full-screen Spaces; borderless full-screen windows via DesktopWatcher), occluded,
+  or covered by windows: a desktop-level window is never "occluded" (the translucent menu bar and Dock show a strip of
+  it), so while music plays Ahenk samples each display's usable area against other apps' window bounds every 2 s and on
+  app/Space changes (no contents, no permission); ≥ 97 % covered counts as hidden. Hidden pauses at once and lets go after
+  20 s; seen again, it loads and melts in.
+- **Readability**: a uniform black scrim (Dimming, 15 % by default) and a radial vignette darker at the edges (for the
+  edge light and the widgets), above the media and not blurred; Blur blurs a canvas that reaches past the screen's edges
+  (and is clipped) so the desktop never shows at a soft edge.
+- **Power**: full = 1080p, 30 fps motion; Optimized Mode or battery (with "run lighter on battery") = 720p at
+  2.5 Mbit/s, 20 fps; Low Power Mode or a hot Mac = the cover only (no video decoding) unless the user picked a video.
+- **The user's videos** stay in `AppSettings.wallpaper.savedVideos` (small, user-curated; a new `url` kind joins
+  `youtube` and `file`); `selectedVideoID` pins one (shown while music plays, instead of the song's). Dot picks and typed
+  artist names, which grow with listening, live in their own store.
+- **Demo**: each demo song offers its own generated "video" (as long as the song, so it follows the song; a band of
+  light crosses the screen once per song), two other looks and the cover; IDs are per song so every new song crossfades.
+
+### Deviations from PLAN.md
+
+- Beyond the plan: the user's own video list also takes web addresses of video files; the wallpaper also pauses under
+  app windows (see Decisions); a "dots above the player" switch; launch arguments `--wallpaper-song`,
+  `--wallpaper-source`, `--optimized`.
+- Low Power Mode shows only the cover (the plan's "lighter"); Optimized Mode and battery lower the resolution.
+- The picker dots are a row of the player window (`PlayerLayout.pickerHeight`), so the window grows 36 pt upwards
+  when they are on; the bar stays where it was.
+- **Shared API changes** (call sites and tests updated): `NowPlayingSnapshot.songVideoKind` (+ `differsNoticeably`, hub
+  merge); `BridgeTab.musicVideoType`; `BrowserTabReport.songVideoKind`; `SavedVideo.Kind.url`; `WallpaperSettings`
+  gained `preferredSource`, `blur`, `followSong`, `returnsOnPause`, `showPicker`, `disabledDisplays`;
+  `PlayerLayoutState.showsWallpaperPicker`, `PlayerLayout.pickerHeight`; `DesktopPlayerModel.wallpaper`;
+  `AppEnvironment.wallpaper`; `LaunchOptions` gained `wallpaperSongArgument`/`wallpaperSong`, `wallpaperSource`,
+  `optimized` (and `usesDetachedSettings` covers the last two); the demo backdrop's window level; the extension is 1.1.0.
+
+### For Step 9 (desktop extras)
+
+- **Clear Desk** hides other apps; the wallpaper is Ahenk's own window and stays. With the apps hidden, the coverage
+  check sees the desktop within 2 s and the wallpaper loads and melts in, which is what the feature wants. Ahenk's own
+  windows never count as covering (owner PID check).
+- **Stickers** on the desktop: windows at the widgets' level are above the wallpaper; nothing to do. A sticker window at
+  the wallpaper's level would sit under it.
+- **Local songs** (`.local`): `WallpaperRequest.follows` already accepts them (music or unlabelled); title and artist from
+  the file's metadata are searched like any song. If the local player publishes `MPNowPlayingInfoCenter`, make sure the
+  hub does not see Ahenk twice. Its AVQueuePlayer must not share the wallpaper's players (`SharedVideoPlayer` is muted
+  and keyed by candidate ID).
+- **Dock art** can read `environment.wallpaper.status`/`currentID` if the icon should hint at what shows.
+- `WallpaperController.drawsWhenCovered` (`--draw-covered`) and `--wallpaper-song` make captures possible without music.
+
+### Known gaps and risks
+
+- **YouTube's embed rules.** YouTube's Required Minimum Functionality asks that nothing be drawn in front of an embedded
+  player or obscure it and that a player autoplay only when more than half of it is visible. The wallpaper is muted and
+  identifies itself as asked, but cover-fit cuts the player's edges, the scrim (Dimming) and the vignette sit over it, the
+  desktop widgets and lyrics are above it, and captions are unloaded with the player's `unloadModule` (not in the
+  documented API). Dimming at 0 shows the player unobscured apart from the widgets. YouTube may also limit embeds that
+  make many requests.
+- **Unofficial endpoints.** The YouTube search endpoint and the Apple Music web token are what the sites' own pages use,
+  not published APIs; either can change shape or start refusing. Failures fall back quietly (other sources, the cover).
+- No real music was played (the rules): lookups and playback were checked live with `--wallpaper-song` over the demo.
+  Not tried live: an embedding-disabled video, a YouTube Music tab's official video through the extension, a portrait
+  display, several displays, sleep and screen lock, Low Power Mode (the policy is unit-tested), a user's file or address.
+- Two displays decode a YouTube video twice (one web view each); turn the second display off in Settings to save it.
+- WebKit keeps its GPU and networking helpers alive (idle, 0 % CPU, ~37 MB) after the last web view went away.
+- The embed's cost is high (~12 % CPU across helpers, more window-server work) compared with motion artwork (~0.5 %),
+  which is why motion artwork is the default first choice.
+- A song whose title and artist are generic can find another song's official video (ranked by title, artist and
+  length; the dots can pick another or the artist can be typed).
+- Motion artwork exists only for some albums; the album comes from Apple's catalog in the store country.
+
+### What the user must do once
+
+Nothing new is asked. To get the art-track signal from YouTube Music, reload the browser extension (1.1.0) from
+`Ahenk.app/Contents/Resources/Extension` after installing this build.
