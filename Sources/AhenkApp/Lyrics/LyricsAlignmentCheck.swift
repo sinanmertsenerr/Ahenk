@@ -151,8 +151,39 @@ enum LyricsAlignmentCheck {
         guard result.quality == .good, result.anchoredLines == lines.count, starts == starts.sorted(), starts[0] < 1, starts[2] < seconds else {
             throw SmokeFailure("whisper heard \(transcript.words.map(\.text)); \(result.anchoredLines) of \(lines.count) lines timed at \(starts)")
         }
+        // The way another app's song takes: the same sound as the analysis
+        // would hand it over (48 kHz mono in small chunks, from a moment in
+        // the middle of a song), collected in memory, written for whisper,
+        // recognised, and timed as positions in that song.
+        let wavData = try Data(contentsOf: wav)
+        let spokenSamples: [Float] = stride(from: 44, to: wavData.count - 1, by: 2).map { offset in
+            Float(Int16(littleEndian: wavData.subdata(in: offset..<(offset + 2)).withUnsafeBytes { $0.loadUnaligned(as: Int16.self) })) / 32_768
+        }
+        let position = 30.0
+        let capture = LyricsSyncCapture(seconds: seconds - 0.2) { _ in }
+        var chunk = [Float](repeating: 0, count: 480)
+        var fed = 0
+        while fed < spokenSamples.count, !capture.isFinished {
+            // Each 16 kHz sample three times is the same sound at 48 kHz.
+            for index in 0..<480 { chunk[index] = spokenSamples[min(spokenSamples.count - 1, fed + index / 3)] }
+            capture.append(chunk, count: 480, rate: 48_000, hostTime: 1_000 + Double(fed) / 16_000)
+            fed += 160
+        }
+        guard capture.isFinished, capture.sampleRate == 16_000, abs(capture.duration - (seconds - 0.2)) < 0.1 else {
+            throw SmokeFailure("the capture holds \(capture.duration) s at \(capture.sampleRate) Hz")
+        }
+        let heardFile = folder.appendingPathComponent("heard.wav")
+        try WhisperAudio.write(capture.samples, rate: capture.sampleRate, to: heardFile)
+        let again = try await WhisperRunner(executable: executable, model: model).transcribe(heardFile, timeout: 40)
+        let later = LyricAligner.align(lines: lines, words: again.words, audioStart: position, audioEnd: position + capture.duration, songDuration: 200)
+        let shifted = zip(later.lyrics.lines.map(\.start), starts).map { abs($0 - $1 - position) }.max() ?? 99
+        guard later.quality == .good, shifted < 0.4 else {
+            func show(_ words: [RecognizedWord]) -> String { words.map { "\($0.text)@\(String(format: "%.2f", $0.start))" }.joined(separator: " ") }
+            throw SmokeFailure("heard through a capture the lines are \(shifted) s off (\(later.anchoredLines) of \(lines.count) found): \(show(transcript.words)) / \(show(again.words))")
+        }
         return "\(executable.lastPathComponent) with \(model.deletingPathExtension().lastPathComponent) recognised \(transcript.words.count) spoken words "
             + "of \(String(format: "%.1f", seconds)) s in \(String(format: "%.1f", took)) s and timed \(lines.count) lines at "
-            + starts.map { String(format: "%.1f", $0) }.joined(separator: ", ") + " s"
+            + starts.map { String(format: "%.1f", $0) }.joined(separator: ", ") + " s; the same sound collected as from another app's song at 0:30 "
+            + "is timed \(String(format: "%.2f", shifted)) s from there at most"
     }
 }

@@ -70,6 +70,42 @@ struct WhisperTranscriptTests {
         #expect(abs(words[1].confidence - 0.7) < 1e-9)
     }
 
+    @Test("With the attention's times a word ends where the model heard it end, and a pause is not part of the next word")
+    func attendedTimes() throws {
+        // whisper's own times put "We" right after "road." (1.92 s) although
+        // a second of silence lies between; `t_dtw` (hundredths) does not.
+        let json = """
+        {"transcription": [
+          {"offsets": {"from": 10, "to": 210}, "text": " The", "tokens": [{"text": " The", "offsets": {"from": 10, "to": 210}, "p": 0.9, "t_dtw": 10}]},
+          {"offsets": {"from": 1610, "to": 1920}, "text": " road.", "tokens": [
+            {"text": " road", "offsets": {"from": 1610, "to": 1900}, "p": 0.9, "t_dtw": 186},
+            {"text": ".", "offsets": {"from": 1900, "to": 1920}, "p": 0.9, "t_dtw": 250}]},
+          {"offsets": {"from": 1920, "to": 2740}, "text": " We", "tokens": [{"text": " We", "offsets": {"from": 1920, "to": 2740}, "p": 0.9, "t_dtw": 318}]},
+          {"offsets": {"from": 2740, "to": 3050}, "text": " count", "tokens": [{"text": " count", "offsets": {"from": 2740, "to": 3050}, "p": 0.9, "t_dtw": 348}]},
+          {"offsets": {"from": 3500, "to": 3900}, "text": " windows", "tokens": [{"text": " windows", "offsets": {"from": 3500, "to": 3900}, "p": 0.9, "t_dtw": -1}]}
+        ]}
+        """
+        let words = try WhisperTranscript(json: Data(json.utf8)).words
+        #expect(words.map(\.text) == ["The", "road.", "We", "count", "windows"])
+        #expect(words[0].start == 0 && words[0].end == 0.1)
+        #expect(abs(words[1].end - 1.86) < 1e-9, "the word's end, not the full stop's")
+        // "We": a two-letter word's length before its end, not the end of "road".
+        #expect(abs(words[2].end - 3.18) < 1e-9 && abs(words[2].start - 2.94) < 1e-9)
+        // "count" follows at once: it starts where "We" ended.
+        #expect(abs(words[3].start - 3.18) < 1e-9 && abs(words[3].end - 3.48) < 1e-9)
+        // A piece without the attention's time keeps whisper's own.
+        #expect(words[4].start == 3.5 && words[4].end == 3.9)
+        #expect(abs(WhisperTranscript.plausibleLength(of: "We") - 0.24) < 1e-9 && abs(WhisperTranscript.plausibleLength(of: "a") - 0.17) < 1e-9)
+        #expect(WhisperTranscript.plausibleLength(of: "extraordinarily") == 0.8)
+    }
+
+    @Test("Without them, a word that swallowed a pause is cut to a plausible length")
+    func smearedPause() throws {
+        let json = #"{"transcription": [{"offsets": {"from": 1900, "to": 2740}, "text": " we", "tokens": [{"text": " we", "offsets": {"from": 1900, "to": 2740}, "p": 0.9}]}]}"#
+        let word = try #require(try WhisperTranscript(json: Data(json.utf8)).words.first)
+        #expect(abs(word.start - 2.26) < 1e-9 && word.end == 2.74)
+    }
+
     @Test("Segments without pieces share their time by the words' lengths; nonsense is refused")
     func plainSegments() throws {
         let json = #"{"transcription": [{"offsets": {"from": 2000, "to": 4000}, "text": " slow engines"}, {"text": "no times"}]}"#
@@ -344,8 +380,22 @@ struct WhisperToolsTests {
         let arguments = WhisperRunner.arguments(
             model: URL(fileURLWithPath: "/m/ggml-base.bin"), audio: URL(fileURLWithPath: "/t/song.wav"), outputBase: URL(fileURLWithPath: "/t/song.heard")
         )
-        #expect(arguments == ["-m", "/m/ggml-base.bin", "-f", "/t/song.wav", "-l", "auto", "--output-json-full", "--output-file", "/t/song.heard",
-                              "--max-len", "1", "--split-on-word", "--print-progress"])
+        let plain = ["-m", "/m/ggml-base.bin", "-f", "/t/song.wav", "-l", "auto", "--output-json-full", "--output-file", "/t/song.heard",
+                     "--max-len", "1", "--split-on-word", "--print-progress"]
+        #expect(arguments == plain)
+        let attended = WhisperRunner.arguments(
+            model: URL(fileURLWithPath: "/m/ggml-base.bin"), audio: URL(fileURLWithPath: "/t/song.wav"), outputBase: URL(fileURLWithPath: "/t/song.heard"),
+            dtw: "base"
+        )
+        #expect(attended == plain + ["--dtw", "base", "--no-flash-attn"])
+        let presets = [
+            "ggml-large-v3-turbo-q5_0.bin": "large.v3.turbo", "ggml-large-v3.bin": "large.v3", "ggml-large-v2-q8_0.bin": "large.v2",
+            "ggml-medium.en.bin": "medium.en", "ggml-base.bin": "base", "ggml-tiny.en-q5_1.bin": "tiny.en", "GGML-Small.bin": "small",
+        ]
+        for (file, preset) in presets { #expect(WhisperRunner.dtwPreset(forModel: file) == preset, "\(file)") }
+        for file in ["ggml-large.bin", "ggml-distil-large-v3.bin", "model.bin", "ggml-base.gguf", "notes.txt"] {
+            #expect(WhisperRunner.dtwPreset(forModel: file) == nil, "\(file)")
+        }
         #expect(WhisperRunner.progress(inLine: "whisper_print_progress_callback: progress =  40%") == 0.4)
         #expect(WhisperRunner.progress(inLine: "progress = 100%") == 1)
         #expect(WhisperRunner.progress(inLine: "whisper_init_from_file_with_params_no_state: loading model") == nil)

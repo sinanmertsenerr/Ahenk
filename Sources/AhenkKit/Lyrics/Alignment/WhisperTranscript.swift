@@ -40,27 +40,64 @@ public struct WhisperTranscript: Sendable, Equatable {
     /// for segments without tokens (the words share the segment's time by
     /// their length). Sounds that are not words ("[Music]", "♪") and
     /// whisper's own markers are left out.
+    ///
+    /// Times: whisper's own word times smear a pause into the word after
+    /// it (the first word after a silence can "start" where the last one
+    /// ended), and differ from run to run. With `--dtw` every token also
+    /// carries the moment it ends, taken from the model's attention
+    /// (`t_dtw`, hundredths of a second), which holds across pauses: when
+    /// it is there a word ends at its last piece's `t_dtw` and starts where
+    /// the word before it ended, or a plausible word's length before its
+    /// own end when that is later (after a pause). Without it the same
+    /// limit is put on whisper's own times.
     public init(json data: Data) throws {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ParseError.notJSON }
         guard let segments = root["transcription"] as? [[String: Any]] else { throw ParseError.noTranscription }
         language = (root["result"] as? [String: Any])?["language"] as? String
-        var words: [RecognizedWord] = []
+        var pieces: [Piece] = []
         for segment in segments {
             guard let span = Self.span(segment["offsets"]) else { continue }
             let text = (segment["text"] as? String) ?? ""
             let tokens = (segment["tokens"] as? [[String: Any]]) ?? []
-            var pieces = Self.words(fromTokens: tokens)
-            if pieces.isEmpty {
-                pieces = Self.words(fromText: text, start: span.start, end: span.end)
-            } else if pieces.count == 1 {
+            var found = Self.words(fromTokens: tokens)
+            if found.isEmpty {
+                found = Self.words(fromText: text, start: span.start, end: span.end).map { Piece(word: $0, attendedEnd: nil) }
+            } else if found.count == 1 {
                 // A word per segment: the segment's own times are the
                 // better ones (the token's end stops before the word does).
-                pieces[0].start = span.start
-                pieces[0].end = max(span.start, span.end)
+                found[0].word.start = span.start
+                found[0].word.end = max(span.start, span.end)
             }
-            words.append(contentsOf: pieces)
+            pieces.append(contentsOf: found)
         }
-        self.words = words.filter { Self.isWord($0.text) }.sorted { $0.start < $1.start }
+        var words: [RecognizedWord] = []
+        var previousEnd = 0.0
+        for piece in pieces where Self.isWord(piece.word.text) {
+            var word = piece.word
+            let length = Self.plausibleLength(of: word.text)
+            if let attended = piece.attendedEnd {
+                word.end = max(attended, previousEnd)
+                word.start = max(min(previousEnd, word.end), word.end - length)
+            } else {
+                word.start = max(word.start, word.end - 2 * length)
+            }
+            previousEnd = max(previousEnd, word.end)
+            words.append(word)
+        }
+        self.words = words.sorted { $0.start < $1.start }
+    }
+
+    /// A word as read, with the end the model's attention gives it.
+    private struct Piece {
+        var word: RecognizedWord
+        var attendedEnd: Double?
+    }
+
+    /// How long a sung or spoken word of this many letters plausibly is:
+    /// what a word is given when only its end is known.
+    static func plausibleLength(of text: String) -> Double {
+        let letters = max(1, LyricAligner.matchWord(text).count)
+        return min(0.8, 0.1 + 0.07 * Double(letters))
     }
 
     /// Milliseconds `{"from": 190, "to": 640}` as seconds.
@@ -74,12 +111,12 @@ public struct WhisperTranscript: Sendable, Equatable {
 
     /// Tokens are pieces of words: one that starts with a space starts a
     /// word, the others continue it.
-    private static func words(fromTokens tokens: [[String: Any]]) -> [RecognizedWord] {
-        var words: [RecognizedWord] = []
+    private static func words(fromTokens tokens: [[String: Any]]) -> [Piece] {
+        var words: [Piece] = []
         var probabilities: [Double] = []
         func close() {
             guard !words.isEmpty, !probabilities.isEmpty else { return }
-            words[words.count - 1].confidence = probabilities.reduce(0, +) / Double(probabilities.count)
+            words[words.count - 1].word.confidence = probabilities.reduce(0, +) / Double(probabilities.count)
             probabilities = []
         }
         for token in tokens {
@@ -88,12 +125,20 @@ public struct WhisperTranscript: Sendable, Equatable {
             let startsWord = text.first?.isWhitespace == true || words.isEmpty
             let piece = text.trimmingCharacters(in: .whitespaces)
             guard !piece.isEmpty else { continue }
+            // The end the attention gives this piece; a full stop's own
+            // "end" is the pause after the word, not the word's.
+            let attended = (token["t_dtw"] as? NSNumber).map(\.doubleValue).flatMap { $0 >= 0 ? $0 / 100 : nil }
+            let isSpoken = !LyricAligner.matchWord(piece).isEmpty
             if startsWord {
                 close()
-                words.append(RecognizedWord(text: piece, start: span.start, end: span.end, confidence: probability))
+                words.append(Piece(
+                    word: RecognizedWord(text: piece, start: span.start, end: span.end, confidence: probability),
+                    attendedEnd: isSpoken ? attended : nil
+                ))
             } else {
-                words[words.count - 1].text += piece
-                words[words.count - 1].end = max(words[words.count - 1].end, span.end)
+                words[words.count - 1].word.text += piece
+                words[words.count - 1].word.end = max(words[words.count - 1].word.end, span.end)
+                if isSpoken, let attended { words[words.count - 1].attendedEnd = attended }
             }
             probabilities.append(probability)
         }

@@ -156,13 +156,35 @@ public struct WhisperRunner: Sendable {
     }
 
     /// The command line: the language is found by whisper itself, the
-    /// result is a JSON file with a word per segment and its times.
-    public static func arguments(model: URL, audio: URL, outputBase: URL) -> [String] {
-        [
+    /// result is a JSON file with a word per segment and its times. With a
+    /// `dtw` preset every piece also gets the time the model's attention
+    /// puts it at (far steadier across pauses; it needs whisper's flash
+    /// attention off, which makes the run about twice as long).
+    public static func arguments(model: URL, audio: URL, outputBase: URL, dtw: String? = nil) -> [String] {
+        var arguments = [
             "-m", model.path, "-f", audio.path, "-l", "auto",
             "--output-json-full", "--output-file", outputBase.path,
             "--max-len", "1", "--split-on-word", "--print-progress",
         ]
+        if let dtw { arguments += ["--dtw", dtw, "--no-flash-attn"] }
+        return arguments
+    }
+
+    /// whisper.cpp's name for a model's attention heads (`--dtw`), from
+    /// the model file's name: "ggml-large-v3-turbo-q5_0.bin" →
+    /// "large.v3.turbo". `nil` for a name that says no known model; the run
+    /// then does without.
+    public static func dtwPreset(forModel fileName: String) -> String? {
+        var name = fileName.lowercased()
+        guard name.hasPrefix("ggml-"), name.hasSuffix(".bin") else { return nil }
+        name = String(name.dropFirst(5).dropLast(4))
+        if let quantized = name.range(of: "-q[0-9]", options: .regularExpression) { name = String(name[..<quantized.lowerBound]) }
+        let known = [
+            "tiny", "tiny.en", "base", "base.en", "small", "small.en", "medium", "medium.en",
+            "large-v1", "large-v2", "large-v3", "large-v3-turbo",
+        ]
+        guard known.contains(name) else { return nil }
+        return name.replacingOccurrences(of: "-", with: ".")
     }
 
     /// The progress in a line whisper prints ("… progress =  40%"), 0...1.
@@ -172,14 +194,30 @@ public struct WhisperRunner: Sendable {
         return Int(digits).map { min(1, Double($0) / 100) }
     }
 
-    /// Recognises the words in `audio` (16 kHz mono WAV).
+    /// Recognises the words in `audio` (16 kHz mono WAV): with the
+    /// attention's times when the model's name is one whisper.cpp knows,
+    /// and once more without them if that run fails.
     public func transcribe(_ audio: URL, timeout: TimeInterval = 900, onProgress: (@Sendable (Double) -> Void)? = nil) async throws -> WhisperTranscript {
+        if let preset = Self.dtwPreset(forModel: model.lastPathComponent) {
+            do {
+                return try await run(audio, dtw: preset, timeout: timeout, onProgress: onProgress)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // An older whisper.cpp, or a model whose heads it does not
+                // know: its own times will do.
+            }
+        }
+        return try await run(audio, dtw: nil, timeout: timeout, onProgress: onProgress)
+    }
+
+    private func run(_ audio: URL, dtw: String?, timeout: TimeInterval, onProgress: (@Sendable (Double) -> Void)?) async throws -> WhisperTranscript {
         let base = audio.deletingPathExtension().appendingPathExtension("heard")
         let output = base.appendingPathExtension("json")
         defer { try? FileManager.default.removeItem(at: output) }
         let process = Process()
         process.executableURL = executable
-        process.arguments = Self.arguments(model: model, audio: audio, outputBase: base)
+        process.arguments = Self.arguments(model: model, audio: audio, outputBase: base, dtw: dtw)
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
         let errors = Pipe()
