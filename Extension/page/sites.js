@@ -166,6 +166,11 @@
       if (/PODCAST/i.test(String(details.musicVideoType || ''))) return 'podcast';
       return 'music';
     },
+    musicVideoType() {
+      if (ytIsAd()) return undefined;
+      const details = (ytResponse() || {}).videoDetails || {};
+      return C.musicVideoType({ musicVideoType: details.musicVideoType });
+    },
     likeRenderer() {
       return $(['ytmusic-player-bar ytmusic-like-button-renderer', 'ytmusic-like-button-renderer#like-button-renderer']);
     },
@@ -328,6 +333,13 @@
         author: data.author || details.author,
         title: data.title || details.title,
       });
+    },
+    musicVideoType() {
+      if (ytIsAd()) return undefined;
+      const details = (ytResponse() || {}).videoDetails || {};
+      const player = ytPlayer();
+      const data = player && player.getVideoData ? player.getVideoData() : {};
+      return C.musicVideoType({ musicVideoType: details.musicVideoType, author: data.author || details.author });
     },
     likeButton: () => $(['like-button-view-model button', '#top-level-buttons-computed like-button-view-model button', 'ytd-toggle-button-renderer#like-button button']),
     liked() {

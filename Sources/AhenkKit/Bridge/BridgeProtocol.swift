@@ -187,6 +187,10 @@ public struct BridgeTab: Codable, Equatable, Sendable {
     public var trackURL: String?
     /// "music", "video", "podcast", "advertisement", "unknown".
     public var kind: ContentKind
+    /// YouTube's own `MUSIC_VIDEO_TYPE_…` for the song (YouTube Music and
+    /// YouTube): an official video, an upload or an art track (the cover as
+    /// a still). Kept as the page says it; see `SongVideoKind`.
+    public var musicVideoType: String?
     public var capabilities: Set<BridgeCapability>
     /// 0…1 when the site's player has a volume the extension can read.
     public var volume: Double?
@@ -199,7 +203,7 @@ public struct BridgeTab: Codable, Equatable, Sendable {
         tabID: Int, site: String, url: String? = nil, title: String, artist: String, album: String = "",
         artworkURL: String? = nil, duration: Double? = nil, position: Double? = nil, sampledAt: Double,
         playbackRate: Double? = nil, state: State, liked: Bool? = nil, shuffle: Bool? = nil, repeatMode: RepeatMode? = nil,
-        trackID: String? = nil, trackURL: String? = nil, kind: ContentKind = .unknown,
+        trackID: String? = nil, trackURL: String? = nil, kind: ContentKind = .unknown, musicVideoType: String? = nil,
         capabilities: Set<BridgeCapability> = [.playPause], volume: Double? = nil, isActive: Bool? = nil, lastActive: Double? = nil
     ) {
         self.tabID = tabID
@@ -220,6 +224,7 @@ public struct BridgeTab: Codable, Equatable, Sendable {
         self.trackID = trackID
         self.trackURL = trackURL
         self.kind = kind
+        self.musicVideoType = musicVideoType
         self.capabilities = capabilities
         self.volume = volume
         self.isActive = isActive
@@ -229,7 +234,7 @@ public struct BridgeTab: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case tabID = "tabId", site, url, title, artist, album, artworkURL = "artwork", duration, position, sampledAt
         case playbackRate = "rate", state, liked, shuffle, repeatMode = "repeat", trackID = "trackId", trackURL = "trackUrl"
-        case kind, capabilities = "can", volume, isActive = "active", lastActive
+        case kind, musicVideoType, capabilities = "can", volume, isActive = "active", lastActive
     }
 
     public init(from decoder: Decoder) throws {
@@ -252,6 +257,7 @@ public struct BridgeTab: Codable, Equatable, Sendable {
         trackID = c.lenientOptional(.trackID)
         trackURL = c.lenientOptional(.trackURL)
         kind = c.lenient(.kind, .unknown)
+        musicVideoType = c.lenientOptional(.musicVideoType)
         capabilities = c.lenientSet(.capabilities, [])
         volume = Self.finite(c.lenientOptional(.volume), atLeast: 0).map { min(1, $0) }
         isActive = c.lenientOptional(.isActive)
@@ -278,6 +284,7 @@ public struct BridgeTab: Codable, Equatable, Sendable {
         try c.encodeIfPresent(trackID, forKey: .trackID)
         try c.encodeIfPresent(trackURL, forKey: .trackURL)
         try c.encode(kind, forKey: .kind)
+        try c.encodeIfPresent(musicVideoType, forKey: .musicVideoType)
         try c.encode(capabilities.map(\.rawValue).sorted(), forKey: .capabilities)
         try c.encodeIfPresent(volume, forKey: .volume)
         try c.encodeIfPresent(isActive, forKey: .isActive)

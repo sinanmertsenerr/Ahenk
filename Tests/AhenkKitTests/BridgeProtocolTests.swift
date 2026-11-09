@@ -24,14 +24,15 @@ struct BridgeProtocolTests {
         #expect(hello.profile == "0f3a9c1e5b7d2a4c6e8f0a1b" && hello.extensionVersion == "1.0.0")
 
         guard case .tabs(let tabs) = try BridgeInbound.decode(fixture("tabs")) else { Issue.record("not tabs"); return }
-        #expect(tabs.count == 2)
+        #expect(tabs.count == 3)
         let spotify = tabs[0]
         #expect(spotify.tabID == 412 && spotify.site == "spotify" && spotify.state == .playing)
         #expect(spotify.title == "Lanterns Under Ice" && spotify.duration == 223.4 && spotify.position == 61.25)
         #expect(spotify.liked == true && spotify.shuffle == false && spotify.repeatMode == .all && spotify.volume == 0.8)
         #expect(spotify.capabilities.contains(.repeatOne) && spotify.capabilities.contains(.playlists) && spotify.capabilities.count == 12)
         #expect(spotify.trackID == "AhenkMockTrackSpotify1" && spotify.isActive == true)
-        #expect(tabs[1].kind == .video && tabs[1].liked == nil && tabs[1].repeatMode == nil)
+        #expect(tabs[1].kind == .video && tabs[1].liked == nil && tabs[1].repeatMode == nil && tabs[1].musicVideoType == nil)
+        #expect(tabs[2].site == "youtubeMusic" && tabs[2].musicVideoType == "MUSIC_VIDEO_TYPE_OMV")
 
         guard case .tab(let tab) = try BridgeInbound.decode(fixture("tab")) else { Issue.record("not a tab"); return }
         #expect(tab.state == .paused && tab.position == 75.5 && tab.sampledAt == 1_762_700_014_000)
@@ -57,7 +58,8 @@ struct BridgeProtocolTests {
             tabID: 3, site: "deezer", url: "https://www.deezer.com/track/123", title: "Saffron Static", artist: "Kestrel & Vale",
             album: "Paper Comets", artworkURL: "https://cdn.example/c.jpg", duration: 236, position: 10, sampledAt: 1_000,
             playbackRate: 1, state: .playing, liked: false, shuffle: true, repeatMode: .one, trackID: "123",
-            trackURL: "https://www.deezer.com/track/123", kind: .music, capabilities: [.playPause, .seek], volume: 0.5, isActive: false, lastActive: 900
+            trackURL: "https://www.deezer.com/track/123", kind: .music, musicVideoType: "MUSIC_VIDEO_TYPE_UGC",
+            capabilities: [.playPause, .seek], volume: 0.5, isActive: false, lastActive: 900
         )
         let inbound: [BridgeInbound] = [
             .hello(BridgeHello(extensionVersion: "1.0.0", extensionOrigin: "moz-extension://x", browser: BridgeBrowser(name: "Firefox", version: "140"), profile: "p")),

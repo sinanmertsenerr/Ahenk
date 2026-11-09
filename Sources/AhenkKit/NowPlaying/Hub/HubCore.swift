@@ -371,6 +371,7 @@ public struct HubCore: Sendable {
             if merged.track.album.isEmpty { merged.track.album = other.track.album }
             if merged.track.duration == 0 { merged.track.duration = other.track.duration }
             if merged.contentKind == .unknown { merged.contentKind = other.contentKind }
+            merged.songVideoKind = merged.songVideoKind ?? other.songVideoKind
             merged.capabilities.formUnion(other.capabilities)
         }
         return merged

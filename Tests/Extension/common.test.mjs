@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { load } from './load.mjs';
 
-const { C } = load();
+const { C, P } = load();
 
 test('host names map onto the sites the app knows (as BrowserSite does)', () => {
   const cases = [
@@ -123,6 +123,20 @@ test('YouTube: music or a plain video', () => {
   assert.equal(C.cleanYouTubeArtist('Orchid Telemetry - Topic'), 'Orchid Telemetry');
   assert.equal(C.cleanYouTubeArtist('OrchidTelemetryVEVO'), 'OrchidTelemetry');
   assert.equal(C.cleanYouTubeArtist('Slow Lens'), 'Slow Lens');
+});
+
+test("the song's video type: the page's own, else a Topic channel's art track", () => {
+  assert.equal(C.musicVideoType({ musicVideoType: 'MUSIC_VIDEO_TYPE_OMV' }), 'MUSIC_VIDEO_TYPE_OMV');
+  assert.equal(C.musicVideoType({ musicVideoType: ' MUSIC_VIDEO_TYPE_ATV ', author: 'Orchid Telemetry' }), 'MUSIC_VIDEO_TYPE_ATV');
+  assert.equal(C.musicVideoType({ author: 'Orchid Telemetry - Topic' }), 'MUSIC_VIDEO_TYPE_ATV', 'Topic uploads are the cover');
+  assert.equal(C.musicVideoType({ musicVideoType: 'MUSIC_VIDEO_TYPE_UGC', author: 'Orchid Telemetry - Topic' }), 'MUSIC_VIDEO_TYPE_UGC', 'the page wins');
+  assert.equal(C.musicVideoType({ author: 'Slow Lens' }), undefined);
+  assert.equal(C.musicVideoType({ musicVideoType: 'hologram' }), undefined, 'only YouTube\'s own values');
+  assert.equal(C.musicVideoType(null), undefined);
+  assert.equal(P.tab({ tabId: 1, site: 'youtubeMusic', state: 'playing', musicVideoType: 'MUSIC_VIDEO_TYPE_OMV' }).musicVideoType, 'MUSIC_VIDEO_TYPE_OMV');
+  assert.equal(P.tab({ tabId: 1, site: 'youtubeMusic', state: 'playing', musicVideoType: 'omv' }).musicVideoType, undefined);
+  const before = { title: 'Saffron Static', state: 'playing', sampledAt: 1000, position: 1 };
+  assert.ok(C.noticeableChange(before, Object.assign({}, before, { musicVideoType: 'MUSIC_VIDEO_TYPE_ATV' }), 1000), 'a type that arrives late is sent');
 });
 
 test("YouTube Music's bylines", () => {

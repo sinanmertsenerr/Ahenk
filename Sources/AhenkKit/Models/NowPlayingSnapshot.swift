@@ -95,6 +95,10 @@ public struct NowPlayingSnapshot: Hashable, Sendable {
     public var artworkData: Data?
     /// Stable identity of `artworkData`, when the source has one.
     public var artworkIdentifier: String?
+    /// What the song's video shows, for YouTube and YouTube Music tabs (an
+    /// official video, an upload, or the cover as a still): the live
+    /// wallpaper shows only real videos. `nil` when the source does not say.
+    public var songVideoKind: SongVideoKind?
 
     public init(
         track: Track,
@@ -111,7 +115,8 @@ public struct NowPlayingSnapshot: Hashable, Sendable {
         capabilities: PlaybackCapabilities = [],
         contentKind: ContentKind = .unknown,
         artworkData: Data? = nil,
-        artworkIdentifier: String? = nil
+        artworkIdentifier: String? = nil,
+        songVideoKind: SongVideoKind? = nil
     ) {
         self.track = track
         self.bundleIdentifier = bundleIdentifier
@@ -128,6 +133,7 @@ public struct NowPlayingSnapshot: Hashable, Sendable {
         self.contentKind = contentKind
         self.artworkData = artworkData
         self.artworkIdentifier = artworkIdentifier
+        self.songVideoKind = songVideoKind
     }
 
     public var isPlaying: Bool { playbackRate != 0 }
@@ -165,7 +171,8 @@ public struct NowPlayingSnapshot: Hashable, Sendable {
 
     /// True when the change from `other` is worth telling the UI: another
     /// song or metadata, play state, shuffle, repeat, like, artwork, the
-    /// commands, or a jump in position beyond `tolerance` (a seek). Steady
+    /// commands, the video's kind, or a jump in position beyond `tolerance`
+    /// (a seek). Steady
     /// playback re-sampled by a poll is not a change: views interpolate.
     public func differsNoticeably(from other: NowPlayingSnapshot, at now: Date, tolerance: TimeInterval = 0.5) -> Bool {
         if track != other.track || bundleIdentifier != other.bundleIdentifier
@@ -178,7 +185,7 @@ public struct NowPlayingSnapshot: Hashable, Sendable {
         if isShuffled != other.isShuffled || repeatMode != other.repeatMode || isLiked != other.isLiked {
             return true
         }
-        if capabilities != other.capabilities || contentKind != other.contentKind {
+        if capabilities != other.capabilities || contentKind != other.contentKind || songVideoKind != other.songVideoKind {
             return true
         }
         if artworkIdentifier != other.artworkIdentifier || artworkData != other.artworkData {

@@ -254,6 +254,21 @@
     return tags.some((tag) => title.includes(tag)) ? 'music' : 'video';
   }
 
+  /**
+   * What the song's video shows, in YouTube's own words (MUSIC_VIDEO_TYPE_OMV
+   * an official video, _UGC an upload, _ATV the cover as a still): the page's
+   * value when it names one, else an art track for a "- Topic" channel's
+   * upload (those are always the cover). Ahenk's live wallpaper shows only
+   * real videos.
+   */
+  function musicVideoType(info) {
+    if (!info) return undefined;
+    const named = typeof info.musicVideoType === 'string' ? info.musicVideoType.trim() : '';
+    if (/^MUSIC_VIDEO_TYPE_[A-Z_]+$/.test(named)) return named;
+    if (/ - Topic$/.test(String(info.author || ''))) return 'MUSIC_VIDEO_TYPE_ATV';
+    return undefined;
+  }
+
   /** YouTube channel names: "Artist - Topic" → "Artist", "ArtistVEVO" → "Artist". */
   function cleanYouTubeArtist(author) {
     const text = String(author || '').trim();
@@ -284,7 +299,7 @@
   /** Whether a new state is worth telling Ahenk (beyond the position moving on). */
   function noticeableChange(previous, next, now) {
     if (!previous) return true;
-    const keys = ['title', 'artist', 'album', 'artwork', 'state', 'liked', 'shuffle', 'repeat', 'trackId', 'trackUrl', 'kind', 'active', 'url'];
+    const keys = ['title', 'artist', 'album', 'artwork', 'state', 'liked', 'shuffle', 'repeat', 'trackId', 'trackUrl', 'kind', 'musicVideoType', 'active', 'url'];
     for (const key of keys) if ((previous[key] ?? null) !== (next[key] ?? null)) return true;
     if (Math.abs((previous.duration || 0) - (next.duration || 0)) > 1) return true;
     if (Math.abs((previous.volume ?? -1) - (next.volume ?? -1)) > 0.02) return true;
@@ -340,6 +355,7 @@
     searchQuery,
     siteURL,
     youtubeKind,
+    musicVideoType,
     cleanYouTubeArtist,
     splitByline,
     ytMusicByline,

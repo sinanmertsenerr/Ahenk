@@ -156,6 +156,7 @@
       trackId: (profile.trackId && call(() => profile.trackId(), null)) || undefined,
       trackUrl: (profile.trackUrl && call(() => profile.trackUrl(), null)) || undefined,
       kind: profile.kind ? call(() => profile.kind(meta), 'music') : 'music',
+      musicVideoType: (profile.musicVideoType && call(() => profile.musicVideoType(), null)) || undefined,
       can,
       volume: volume === null ? undefined : volume,
     };

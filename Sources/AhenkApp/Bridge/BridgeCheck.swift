@@ -244,6 +244,12 @@ enum BridgeCheck {
         guard let first = current(), let player = hub.currentState.activeID else { throw SmokeFailure("no player") }
         let browser = server.connectedBrowsers.first
         step("\u{201C}\(first.track.title)\u{201D} plays in \(browser?.browserName ?? "?") (\(first.bundleIdentifier ?? "no bundle"), pid \(first.processIdentifier.map(String.init) ?? "?")) as \(first.track.source.rawValue), \(first.contentKind.rawValue), id \(first.track.id)")
+        // The mock page's player says its songs are art tracks (the cover as
+        // a still): the live wallpaper must not take them for videos.
+        guard first.songVideoKind == .artTrack else {
+            throw SmokeFailure("the page's video type did not arrive (\(first.songVideoKind?.rawValue ?? "none"))")
+        }
+        step("video type: \(SongVideoKind.artTrack.rawValue)")
 
         func command(_ name: String, _ playback: PlaybackCommand, until: @escaping () -> Bool) async throws {
             guard await hub.perform(playback, on: player) else { throw SmokeFailure("\(name): the tab refused") }

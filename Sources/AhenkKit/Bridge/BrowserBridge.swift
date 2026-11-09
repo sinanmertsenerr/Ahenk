@@ -41,6 +41,9 @@ public struct BrowserTabReport: Sendable, Equatable, Identifiable {
     public var lastActive: Date?
     /// The browser's own name ("Chrome", "Firefox").
     public var browserName: String?
+    /// YouTube and YouTube Music: what the song's video shows (an official
+    /// video, an upload, the cover as a still).
+    public var songVideoKind: SongVideoKind?
 
     public var id: String { tabID }
 
@@ -93,7 +96,8 @@ public struct BrowserTabReport: Sendable, Equatable, Identifiable {
             repeatMode: repeatMode,
             isLiked: isLiked,
             capabilities: capabilities,
-            contentKind: contentKind
+            contentKind: contentKind,
+            songVideoKind: songVideoKind
         )
     }
 

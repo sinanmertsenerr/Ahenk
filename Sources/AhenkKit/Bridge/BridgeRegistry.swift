@@ -319,6 +319,9 @@ extension BrowserTabReport {
         isActiveTab = tab.isActive ?? false
         lastActive = tab.lastActive.map { Date(timeIntervalSince1970: $0 / 1000) }
         browserName = connection.hello?.browser.name
+        if site == .youtube || site == .youtubeMusic {
+            songVideoKind = SongVideoKind(youTubeType: tab.musicVideoType)
+        }
     }
 
     /// The browser's sample time, unless it is implausible (missing, in the

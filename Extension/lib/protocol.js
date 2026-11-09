@@ -84,6 +84,7 @@
       trackId: str(state.trackId, 200),
       trackUrl: str(state.trackUrl, 2000),
       kind: KINDS.includes(state.kind) ? state.kind : 'unknown',
+      musicVideoType: typeof state.musicVideoType === 'string' && /^MUSIC_VIDEO_TYPE_[A-Z_]{1,40}$/.test(state.musicVideoType) ? state.musicVideoType : undefined,
       can: (state.can || []).filter((c) => CAPABILITIES.includes(c)).sort(),
       volume: finite(state.volume, 0, 1),
       active: bool(state.active),

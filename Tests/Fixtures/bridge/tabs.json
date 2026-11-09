@@ -55,6 +55,30 @@
         "playPause",
         "seek"
       ]
+    },
+    {
+      "tabId": 31,
+      "site": "youtubeMusic",
+      "url": "https://music.youtube.com/watch?v=ahenkMockV2",
+      "title": "Saffron Static",
+      "artist": "Orchid Telemetry",
+      "album": "Tidal Glass",
+      "artwork": "https://i.ytimg.example/vi/ahenkMockV2/mock-cover.jpg",
+      "duration": 214,
+      "position": 12.5,
+      "sampledAt": 1762700000800,
+      "rate": 1,
+      "state": "playing",
+      "trackId": "ahenkMockV2",
+      "trackUrl": "https://music.youtube.com/watch?v=ahenkMockV2",
+      "kind": "music",
+      "musicVideoType": "MUSIC_VIDEO_TYPE_OMV",
+      "can": [
+        "next",
+        "playPause",
+        "previous",
+        "seek"
+      ]
     }
   ]
 }

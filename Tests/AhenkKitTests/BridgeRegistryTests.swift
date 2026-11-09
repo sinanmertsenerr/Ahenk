@@ -183,6 +183,20 @@ struct BridgeTabReportTests {
         let youtube = try #require(report(video)?.snapshot)
         #expect(youtube.track.id == "https://www.youtube.com/watch?v=ahenkMockV1", "the watch URL, for the live wallpaper")
         #expect(youtube.contentKind == .video)
+        #expect(youtube.songVideoKind == nil, "the page named no video type")
+
+        // The page's musicVideoType reaches the hub: an art track (the cover
+        // as a still) is not a video for the wallpaper; other sites never
+        // carry one.
+        var artTrack = tab(5, "Saffron Static")
+        artTrack.musicVideoType = "MUSIC_VIDEO_TYPE_ATV"
+        #expect(try #require(report(artTrack)?.snapshot).songVideoKind == .artTrack)
+        var official = tab(6, "Saffron Static")
+        official.musicVideoType = "MUSIC_VIDEO_TYPE_OMV"
+        #expect(try #require(report(official)?.snapshot).songVideoKind == .officialVideo)
+        var claimed = tab(7, "Lanterns Under Ice", site: "spotify")
+        claimed.musicVideoType = "MUSIC_VIDEO_TYPE_OMV"
+        #expect(try #require(report(claimed)?.snapshot).songVideoKind == nil)
 
         var paused = tab(3, "A", playing: false)
         paused.position = nil
