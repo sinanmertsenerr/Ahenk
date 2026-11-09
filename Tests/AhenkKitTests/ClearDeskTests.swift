@@ -157,6 +157,27 @@ struct ClearDeskTests {
         #expect(restore.toUnhide.isEmpty && restore.activate == nil && !state.isCleared)
     }
 
+    @Test("The owners of full-screen Spaces are read from the list of Spaces, tiles of a split view included")
+    func fullScreenSpaces() {
+        let displays: [[String: Any]] = [
+            [
+                "Display Identifier": "Main",
+                "Spaces": [
+                    ["type": 0, "ManagedSpaceID": 1, "uuid": ""],
+                    ["type": 4, "ManagedSpaceID": 7, "pid": 501, "fs_wid": 90,
+                     "TileLayoutManager": ["TileSpaces": [["pid": 501, "TileType": "Primary"]]]],
+                    ["type": 4, "ManagedSpaceID": 9, "pid": [601, 602],
+                     "TileLayoutManager": ["TileSpaces": [["pid": 601], ["pid": 602], ["TileType": "Divider"]]]],
+                ] as [[String: Any]],
+            ],
+            ["Display Identifier": "Second", "Spaces": [["type": 4, "pid": NSNumber(value: 701)], ["type": 2, "pid": 801]] as [[String: Any]]],
+            ["Display Identifier": "Odd", "Spaces": "not a list"],
+        ]
+        #expect(DeskSpaces.fullScreenPIDs(in: displays) == [501, 601, 602, 701])
+        #expect(DeskSpaces.fullScreenPIDs(in: []).isEmpty)
+        #expect(DeskSpaces.fullScreenPIDs(in: [["Spaces": [["type": 4], ["type": 4, "pid": 0], ["type": 4, "pid": "x"]] as [[String: Any]]]]).isEmpty)
+    }
+
     @Test("A cleared desk is remembered on disk until it is restored, and only for a while")
     func store() throws {
         let scratch = ScratchDirectory()

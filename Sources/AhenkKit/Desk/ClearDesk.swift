@@ -253,3 +253,45 @@ public struct ClearDeskStore: Sendable {
         return state
     }
 }
+
+/// The window server's list of Spaces, as far as Clear Desk reads it: which
+/// apps live in a full-screen Space of their own.
+///
+/// A window's bounds cannot tell: on a display with a notch a full-screen
+/// window stops under the notch, exactly like a zoomed window on a desktop
+/// with a hidden Dock. The list of Spaces names the owner.
+public enum DeskSpaces {
+    /// A Space's `type` when an app is full screen in it (alone or as a
+    /// tile of a split view).
+    public static let fullScreenType = 4
+
+    /// The processes that own a full-screen Space, on any display.
+    ///
+    /// - Parameter displays: one dictionary per display, each with its
+    ///   `Spaces`; a full-screen Space has `type` 4, its owner's `pid` and,
+    ///   for a split view, one `pid` per tile under
+    ///   `TileLayoutManager.TileSpaces`. Anything else is ignored.
+    public static func fullScreenPIDs(in displays: [[String: Any]]) -> Set<Int32> {
+        var pids: Set<Int32> = []
+        for display in displays {
+            for space in display["Spaces"] as? [[String: Any]] ?? [] where number(space["type"]) == Int32(fullScreenType) {
+                collect(space["pid"], into: &pids)
+                let tiles = (space["TileLayoutManager"] as? [String: Any])?["TileSpaces"] as? [[String: Any]] ?? []
+                for tile in tiles { collect(tile["pid"], into: &pids) }
+            }
+        }
+        return pids
+    }
+
+    private static func number(_ value: Any?) -> Int32? {
+        (value as? NSNumber)?.int32Value
+    }
+
+    private static func collect(_ value: Any?, into pids: inout Set<Int32>) {
+        if let pid = number(value), pid > 0 {
+            pids.insert(pid)
+        } else if let list = value as? [Any] {
+            for case let pid? in list.map(number) where pid > 0 { pids.insert(pid) }
+        }
+    }
+}

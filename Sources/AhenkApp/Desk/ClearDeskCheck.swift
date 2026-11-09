@@ -7,7 +7,8 @@ import AppKit
 /// shows, one that quits and one launched meanwhile are handled, the second
 /// click shows exactly the rest and brings the front app back; the menu bar
 /// item drives the environment's controller (also on invented apps in a
-/// smoke run).
+/// smoke run). This Mac's own apps are only read: the first click is worked
+/// out for them and never carried out.
 @MainActor
 enum ClearDeskCheck {
     static func run(environment: AppEnvironment) async throws -> String {
@@ -59,9 +60,18 @@ enum ClearDeskCheck {
         guard environment.clearDesk.isActive != deskBefore else { throw SmokeFailure("the menu item did not clear the desk") }
         try flipMenuItem(environment)
         guard environment.clearDesk.isActive == deskBefore else { throw SmokeFailure("the menu item did not bring it back") }
+
+        // This Mac, looked at only: the apps are read and the first click is
+        // worked out, never carried out.
+        let look = SystemDeskWorkspace().lookOnly()
+        guard look.apps > 0, look.wouldHide + look.fullScreen + look.alreadyHidden < look.apps else {
+            throw SmokeFailure("this Mac's apps could not be read")
+        }
         return "invented desk: hid Finder, Browser, Stubborn and Editor (Ahenk active first; the full-screen app, the hidden one and "
             + "the menu bar extra left alone); the refusing app was let go; after the user showed one, one quit and one started, "
-            + "the second click showed only Editor and brought it to the front; the menu item clears and restores"
+            + "the second click showed only Editor and brought it to the front; the menu item clears and restores; this Mac, looked at "
+            + "only: \(look.apps) apps run, a click would hide \(look.wouldHide) and leave \(look.fullScreen) full-screen and "
+            + "\(look.alreadyHidden) hidden ones alone (Spaces list \(ManagedSpaces.isAvailable ? "read" : "unavailable"))"
     }
 
     private static func flipMenuItem(_ environment: AppEnvironment) throws {

@@ -196,9 +196,12 @@ final class SystemDeskWorkspace: DeskWorkspace {
         return order
     }
 
-    /// Apps with a window exactly as large as a display: a full-screen
-    /// Space (on any Space) or a borderless full-screen window.
+    /// Apps that are full screen: the owners of full-screen Spaces (from
+    /// the window server's list of Spaces, on any Space) and apps with a
+    /// borderless window exactly as large as a display (a game, a
+    /// slideshow).
     private func fullScreenPIDs() -> Set<Int32> {
+        var pids = DeskSpaces.fullScreenPIDs(in: ManagedSpaces.current())
         var count: UInt32 = 0
         CGGetActiveDisplayList(0, nil, &count)
         var displays = [CGDirectDisplayID](repeating: 0, count: Int(count))
@@ -206,8 +209,7 @@ final class SystemDeskWorkspace: DeskWorkspace {
         let bounds = displays.prefix(Int(count)).map { CGDisplayBounds($0) }
         guard !bounds.isEmpty,
               let list = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
-        else { return [] }
-        var pids: Set<Int32> = []
+        else { return pids }
         for window in list where (window[kCGWindowLayer as String] as? Int) == 0 {
             guard let pid = (window[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
                   let info = window[kCGWindowBounds as String] as? NSDictionary,
@@ -267,6 +269,41 @@ final class SystemDeskWorkspace: DeskWorkspace {
 
     private nonisolated static func pid(_ note: Notification) -> Int32? {
         (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier
+    }
+
+    /// What the first click would do on this Mac right now, worked out by
+    /// the rules and not carried out: nothing is hidden, shown or made
+    /// active (the smoke check reads the counts).
+    func lookOnly() -> (apps: Int, wouldHide: Int, fullScreen: Int, alreadyHidden: Int) {
+        var state = ClearDeskState()
+        let apps = runningApps()
+        let plan = state.clear(apps: apps, ownPID: ownPID, windowOrder: windowOrder(), frontmostPID: frontmostPID(), at: Date())
+        func count(_ reason: DeskSkipReason) -> Int { plan.skipped.filter { $0.reason == reason }.count }
+        return (apps.count, plan.toHide.count, count(.fullScreen), count(.alreadyHidden))
+    }
+}
+
+/// The window server's list of Spaces per display (read only: types and
+/// owners, no window contents, no permission). The two functions are
+/// private to macOS and looked up at run time; without them the list is
+/// empty and full-screen apps are told by their windows' bounds alone.
+enum ManagedSpaces {
+    private typealias ConnectionFunction = @convention(c) () -> Int32
+    private typealias SpacesFunction = @convention(c) (Int32) -> Unmanaged<CFArray>?
+
+    private static let functions: (connection: ConnectionFunction, spaces: SpacesFunction)? = {
+        guard let framework = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY),
+              let connection = dlsym(framework, "CGSMainConnectionID"),
+              let spaces = dlsym(framework, "CGSCopyManagedDisplaySpaces")
+        else { return nil }
+        return (unsafeBitCast(connection, to: ConnectionFunction.self), unsafeBitCast(spaces, to: SpacesFunction.self))
+    }()
+
+    static var isAvailable: Bool { functions != nil }
+
+    static func current() -> [[String: Any]] {
+        guard let functions else { return [] }
+        return functions.spaces(functions.connection())?.takeRetainedValue() as? [[String: Any]] ?? []
     }
 }
 
