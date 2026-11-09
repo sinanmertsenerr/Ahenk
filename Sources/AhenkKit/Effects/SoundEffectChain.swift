@@ -142,9 +142,11 @@ public extension SoundEffectSettings {
 
 /// Who can change how fast the followed player plays.
 public enum SoundSpeedControl: String, Sendable, Equatable {
-    /// Ahenk's own player (song files).
+    /// Ahenk's own player (song files). It plays faster the way a record
+    /// does: the pitch rises with the speed.
     case ownPlayer
-    /// A browser tab, through the extension.
+    /// A browser tab, through the extension. The browser keeps the pitch
+    /// where it was.
     case browserTab
     /// Nobody: the player has no speed (Apple Music, Spotify, other apps).
     case none
@@ -208,12 +210,34 @@ public struct SoundEffectChain: Sendable, Equatable {
     /// Nothing to do at all.
     public var isNeutral: Bool { !processesSound && !changesSpeed }
 
-    /// The chain for a player whose speed is controlled as `control` says:
-    /// a player without a speed keeps playing at its own.
+    /// A pitch difference this small (cents) is not worth a pitch stage.
+    public static let pitchTolerance = 30.0
+
+    /// The pitch (cents) a player gains by itself when it plays `speed`
+    /// times as fast the way a record does.
+    public static func naturalPitch(atSpeed speed: Double) -> Double {
+        speed > 0 ? 1200 * log2(speed) : 0
+    }
+
+    /// The chain for a player whose speed is controlled as `control` says.
+    ///
+    /// - A player without a speed keeps playing at its own.
+    /// - Ahenk's own player changes its pitch with its speed, so the pitch
+    ///   stage only does what is left: nothing for Nightcore or Slowed
+    ///   (whose pitch is the speed's own), and the way back to the song's
+    ///   pitch when only the speed was moved.
+    /// - A browser tab keeps its pitch, so the chain stays as asked.
     public func adapted(to control: SoundSpeedControl) -> SoundEffectChain {
-        guard control == .none else { return self }
         var chain = self
-        chain.speed = 1
+        switch control {
+        case .none:
+            chain.speed = 1
+        case .ownPlayer:
+            let rest = pitchCents - Self.naturalPitch(atSpeed: speed)
+            chain.pitchCents = abs(rest) < Self.pitchTolerance ? 0 : rest
+        case .browserTab:
+            break
+        }
         return chain
     }
 

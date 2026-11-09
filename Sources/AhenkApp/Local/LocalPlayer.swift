@@ -33,7 +33,8 @@ final class LocalPlayer {
     private(set) var queue = LocalQueue()
     private(set) var isPlaying = false
     /// How fast the songs play (the sound effects' speed); 1 is their own
-    /// speed. The pitch stays where it is: shifting it is the effects' job.
+    /// speed. The pitch moves with the speed, as on a record player; the
+    /// effects' pitch stage does the rest (`SoundEffectChain.adapted`).
     private(set) var speed = 1.0
 
     /// Says what went wrong (a file that cannot be played).
@@ -308,8 +309,9 @@ final class LocalPlayer {
         guard FileManager.default.isReadableFile(atPath: song.path) else { return nil }
         let asset = AVURLAsset(url: song.url)
         let item = AVPlayerItem(asset: asset)
-        // Faster or slower without moving the pitch (music, not speech).
-        item.audioTimePitchAlgorithm = .timeDomain
+        // Faster or slower the way a record is: no stretching, the pitch
+        // follows (the cheapest and the cleanest for music).
+        item.audioTimePitchAlgorithm = .varispeed
         item.audioMix = await LocalAudioTap.audioMix(for: asset, tap: tap)
         return item
     }

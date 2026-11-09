@@ -386,11 +386,17 @@ enum EffectsCheck {
         player.play(songs.map(\.catalogSong), at: 0, context: nil)
         try await wait("the tone did not start") { player.isPlaying && tap.buffersSeen > 2 && tap.sampleRate == rate }
 
-        // Slowed + Reverb, with a little pitch so every stage runs.
+        // Slowed + Reverb as it is needs no pitch stage in this player (its
+        // pitch is the speed's own); two semitones on top make every stage run.
         var settings = SoundEffectSettings()
         settings.enabled = true
         settings.select(.slowedReverb)
+        guard !SoundEffectChain(settings).adapted(to: .ownPlayer).shiftsPitch else {
+            throw SmokeFailure("Slowed + Reverb asks for a pitch stage in Ahenk's own player")
+        }
+        settings.pitch += 2
         let chain = SoundEffectChain(settings).adapted(to: .ownPlayer)
+        guard chain.shiftsPitch else { throw SmokeFailure("the pitch on top was lost") }
         let processor = try LocalEffectsProcessor(sampleRate: rate, maximumFrames: max(4096, tap.framesPerBuffer), includesPitch: chain.shiftsPitch)
         processor.apply(chain)
         tap.effectsHook.storePointer(UnsafeMutableRawPointer(processor.context), at: 0)

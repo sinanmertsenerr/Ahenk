@@ -104,9 +104,35 @@ struct SoundEffectTests {
         settings.select(.nightcore)
         let chain = SoundEffectChain(settings)
         #expect(chain.adapted(to: .ownPlayer).speed == 1.25)
-        #expect(chain.adapted(to: .browserTab).speed == 1.25)
+        #expect(chain.adapted(to: .browserTab) == chain, "a tab keeps its pitch: the chain stays as asked")
         let fixed = chain.adapted(to: .none)
         #expect(fixed.speed == 1 && fixed.pitchCents == 400 && !fixed.changesSpeed && fixed.processesSound)
+    }
+
+    @Test("Ahenk's own player gains its pitch from the speed; the pitch stage does what is left")
+    func ownPlayerPitch() {
+        #expect(abs(SoundEffectChain.naturalPitch(atSpeed: 2) - 1200) < 1e-9 && SoundEffectChain.naturalPitch(atSpeed: 1) == 0)
+        #expect(abs(SoundEffectChain.naturalPitch(atSpeed: 1.25) - 386.3) < 0.1)
+        var settings = SoundEffectSettings()
+        settings.enabled = true
+        // The speed presets' pitch is the speed's own: nothing is left to shift.
+        for preset in [SoundPreset.nightcore, .slowedReverb, .vaporwave] {
+            settings.select(preset)
+            let own = SoundEffectChain(settings).adapted(to: .ownPlayer)
+            #expect(own.pitchCents == 0 && !own.shiftsPitch && own.speed == preset.recipe.speed, "\(preset)")
+        }
+        // Only the speed moved: the stage brings the song's own pitch back.
+        settings.reset()
+        settings.speed = 1.25
+        let restored = SoundEffectChain(settings).adapted(to: .ownPlayer)
+        #expect(abs(restored.pitchCents + 386.3) < 0.1 && restored.shiftsPitch)
+        // Only the pitch moved: as asked.
+        settings.reset()
+        settings.pitch = 3
+        #expect(SoundEffectChain(settings).adapted(to: .ownPlayer).pitchCents == 300)
+        // Both: the difference.
+        settings.speed = 0.5
+        #expect(abs(SoundEffectChain(settings).adapted(to: .ownPlayer).pitchCents - 1500) < 1e-9)
     }
 
     @Test("Values outside the ranges are clamped on the way into the chain")
