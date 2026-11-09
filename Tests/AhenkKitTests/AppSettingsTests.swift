@@ -90,8 +90,14 @@ struct AppSettingsTests {
             w.useMotionArtwork = false
             w.useMusicVideos = false
             w.useArtworkFallback = false
+            w.preferredSource = .musicVideo
             w.crossfadeDuration = 3
             w.dimming = 0.5
+            w.blur = 0.4
+            w.followSong = false
+            w.returnsOnPause = false
+            w.showPicker = false
+            w.disabledDisplays = ["DISPLAY-B"]
             w.savedVideos = [video]
             w.selectedVideoID = "v1"
             return w

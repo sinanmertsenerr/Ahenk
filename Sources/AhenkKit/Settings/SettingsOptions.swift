@@ -172,6 +172,9 @@ public struct SavedVideo: Hashable, Sendable, Codable, Identifiable {
         case youtube
         /// `reference` is an absolute file path.
         case file
+        /// `reference` is the web address of a video file or stream
+        /// (`https://…`), played with AVPlayer while it shows.
+        case url
     }
 
     public var id: String

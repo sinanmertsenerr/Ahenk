@@ -249,6 +249,8 @@ public struct WallpaperSettings: Codable, Equatable, Sendable {
     public static let crossfadeRange: ClosedRange<Double> = 0.2...5
     /// Darkening over the video so widgets stay readable.
     public static let dimmingRange: ClosedRange<Double> = 0...0.8
+    /// Softening of the picture (0 sharp, 1 a strong blur).
+    public static let blurRange: ClosedRange<Double> = 0...1
 
     public var enabled = true
     public var useMotionArtwork = true
@@ -256,8 +258,22 @@ public struct WallpaperSettings: Codable, Equatable, Sendable {
     public var useMusicVideos = true
     /// Slow-moving, blurred album cover when no video is found.
     public var useArtworkFallback = true
+    /// Which source comes first; the cover is always the last resort.
+    public var preferredSource: WallpaperSourcePreference = .motionArtwork
     public var crossfadeDuration = 1.2
     public var dimming = 0.15
+    public var blur = 0.0
+    /// The song's own video starts at the song's position and stays in
+    /// step (when the two are about as long); everything else loops.
+    public var followSong = true
+    /// Melt back to the user's wallpaper when the music pauses (otherwise
+    /// the paused frame stays).
+    public var returnsOnPause = true
+    /// The dots above the player that choose the video.
+    public var showPicker = true
+    /// Stable display identifiers (CGDisplay UUIDs) without the live
+    /// wallpaper. Every other display, including new ones, shows it.
+    public var disabledDisplays: Set<String> = []
     /// The user's own list of desktop videos.
     public var savedVideos: [SavedVideo] = []
     /// A saved video pinned as the wallpaper; `nil` follows the song.
@@ -272,11 +288,21 @@ public struct WallpaperSettings: Codable, Equatable, Sendable {
         useMotionArtwork = c.lenient(.useMotionArtwork, d.useMotionArtwork)
         useMusicVideos = c.lenient(.useMusicVideos, d.useMusicVideos)
         useArtworkFallback = c.lenient(.useArtworkFallback, d.useArtworkFallback)
+        preferredSource = c.lenient(.preferredSource, d.preferredSource)
         crossfadeDuration = c.lenient(.crossfadeDuration, d.crossfadeDuration, in: Self.crossfadeRange)
         dimming = c.lenient(.dimming, d.dimming, in: Self.dimmingRange)
+        blur = c.lenient(.blur, d.blur, in: Self.blurRange)
+        followSong = c.lenient(.followSong, d.followSong)
+        returnsOnPause = c.lenient(.returnsOnPause, d.returnsOnPause)
+        showPicker = c.lenient(.showPicker, d.showPicker)
+        disabledDisplays = c.lenient(.disabledDisplays, d.disabledDisplays)
         savedVideos = c.lenientArray(.savedVideos, d.savedVideos)
         let selected: String? = c.lenientOptional(.selectedVideoID)
         selectedVideoID = savedVideos.contains { $0.id == selected } ? selected : nil
+    }
+
+    public func isEnabled(onDisplay displayID: String) -> Bool {
+        enabled && !disabledDisplays.contains(displayID)
     }
 }
 
