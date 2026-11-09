@@ -308,6 +308,7 @@ private struct MoreMenu: View {
                 Button("Large Player".l10n, systemImage: "arrow.up.left.and.arrow.down.right") { model.setSize(.large) }
             }
             Button("Reset Layout".l10n, systemImage: "rectangle.3.group") { model.resetLayout() }
+            Button("Add Sticker…".l10n, systemImage: "face.smiling") { model.addSticker() }
             Divider()
             Button("Desktop Player Settings…".l10n, systemImage: "gearshape") { model.openSettings() }
             Button("Hide the Desktop Player".l10n, systemImage: "eye.slash") { model.hidePlayer() }

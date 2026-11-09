@@ -138,6 +138,11 @@ final class DesktopPlayerModel {
     @ObservationIgnored var clearDesk: (() -> DeskClearing)?
     /// The live wallpaper, for the picker dots above the player.
     @ObservationIgnored var wallpaper: WallpaperController?
+    /// Files dropped on a widget (screen point of the drop); `true` when
+    /// they were taken.
+    @ObservationIgnored var onDropFiles: (([URL], DesktopWidget, CGPoint?) -> Bool)?
+    /// "Add Sticker…" in the player's menu.
+    @ObservationIgnored var onAddSticker: (() -> Void)?
 
     @ObservationIgnored private var observers: [AnyObject] = []
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
@@ -828,6 +833,10 @@ final class DesktopPlayerModel {
 
     func openSettings() {
         onOpenSettings?()
+    }
+
+    func addSticker() {
+        onAddSticker?()
     }
 
     func resetLayout() {

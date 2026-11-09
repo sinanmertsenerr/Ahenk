@@ -54,6 +54,9 @@ final class SmokeRunner {
                 try DockArtCheck.run(palette: self.environment.demo?.songs.first?.palette ?? .neutral, snapshots: self.snapshotDirectory())
             }
         }
+        if selected("stickers") {
+            await report.check("stickers") { try await StickerCheck.run(snapshots: self.snapshotDirectory()) }
+        }
         if selected("settingsWindow") { await report.check("settingsWindow") { try await self.checkSettingsWindow() } }
         if selected("bridge") {
             await report.check("bridge") { try await BridgeCheck.run(settings: self.environment.settings, snapshots: self.snapshotDirectory()) }

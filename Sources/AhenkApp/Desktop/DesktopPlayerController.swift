@@ -64,6 +64,10 @@ final class DesktopPlayerController {
 
     var isShowing: Bool { !windows.isEmpty }
 
+    /// Widgets appeared, went away, moved or changed size (stickers on them
+    /// follow).
+    var onWidgetsChanged: (() -> Void)?
+
     /// The windows on screen now (smoke checks).
     var visibleWindows: [DesktopWidget: NSWindow] { windows }
 
@@ -138,6 +142,7 @@ final class DesktopPlayerController {
         model.setPresented(windows.keys.contains { $0 != .lyrics })
         clockVisibilityChanged()
         updateQueue()
+        onWidgetsChanged?()
     }
 
     private func shouldShow(_ widget: DesktopWidget) -> Bool {
@@ -201,7 +206,9 @@ final class DesktopPlayerController {
         // The player's search and the lyrics search take the keyboard.
         window.allowsKeyboard = widget == .player || widget == .lyrics
         window.contentView = DesktopHostingView(rootView: AnyView(
-            WidgetRoot(settings: settings) { self.root(for: widget) }.environment(\.widgetMover, mover)
+            WidgetRoot(settings: settings) { self.root(for: widget) }
+                .acceptsFileDrops(model: model, widget: widget)
+                .environment(\.widgetMover, mover)
         ))
         // SwiftUI focuses the first text field of a new window; the field
         // waits for a click instead.
@@ -234,6 +241,11 @@ final class DesktopPlayerController {
         }
         guard let window = windows.removeValue(forKey: widget) else { return }
         movers[widget] = nil
+        // Stickers on it go away with it, without being closed.
+        for child in window.childWindows ?? [] where child is StickerWindow {
+            window.removeChildWindow(child)
+            child.orderOut(nil)
+        }
         window.orderOut(nil)
         window.contentView = nil
         window.close()
@@ -295,6 +307,7 @@ final class DesktopPlayerController {
             if window.frame != frame { window.setFrame(frame, display: true) }
         }
         positionQueue()
+        onWidgetsChanged?()
     }
 
     /// A drag ended: remember where, on this display.
@@ -305,6 +318,7 @@ final class DesktopPlayerController {
         settings.layout.setPosition(anchor, of: widget.rawValue, on: screenID)
         // The queue may have room beside the player now (or no more).
         updateQueue()
+        onWidgetsChanged?()
     }
 
     /// The player's content changed size: grow now, shrink once the content
@@ -345,6 +359,7 @@ final class DesktopPlayerController {
         let frame = WidgetPlacement.frame(size: size, anchor: .bottomCenter, at: anchor, in: visibleFrame)
         window.setFrame(frame, display: true)
         positionQueue()
+        onWidgetsChanged?()
     }
 
     // MARK: Queue panel

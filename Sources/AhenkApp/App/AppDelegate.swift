@@ -85,6 +85,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if environment.demo != nil, let scene = environment.options.demoScene {
             environment.desktopPlayer.applyDemoScene(scene)
         }
+        // Stickers on the desktop and on the widgets.
+        environment.stickers.start(player: environment.desktopPlayer)
+        if environment.demo != nil {
+            Task { await environment.stickers.addDemoSticker() }
+        }
         scheduleDemoCommands()
 
         observers.append(ChangeObserver({ settings.general.language }) { [weak self] language in
@@ -163,6 +168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment.deskController.restoreOnQuit()
         environment.wallpaper.stop()
         environment.dockArt.stop()
+        environment.stickers.stop()
         environment.desktopPlayer.stop()
         environment.lyricsSync.stop()
         environment.lyrics.stop()

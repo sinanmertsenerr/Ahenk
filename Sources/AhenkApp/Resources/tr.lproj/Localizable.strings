@@ -586,3 +586,31 @@
 "Ahenk's own icon comes back when nothing plays." = "Hiçbir şey çalmadığında Ahenk'in kendi simgesi geri gelir.";
 "A ring that beats along" = "Ritimle atan bir halka";
 "The ring changes a few times a second and stays still while Low Power Mode is on." = "Halka saniyede birkaç kez değişir; Düşük Güç Modu açıkken durgun kalır.";
+
+/* MARK: Stickers on the desktop */
+"Add Sticker…" = "Çıkartma Ekle…";
+"Sticker" = "Çıkartma";
+"Sticker Settings…" = "Çıkartma Ayarları…";
+"Remove Sticker" = "Çıkartmayı Sil";
+"Bring to Front" = "Öne Getir";
+"Original Size and Angle" = "İlk Boyut ve Açı";
+"Leave on the Desktop" = "Masaüstünde Bırak";
+"Stick to the Clock" = "Saate Yapıştır";
+"Stick to the List" = "Listeye Yapıştır";
+"Stick to the Player" = "Oynatıcıya Yapıştır";
+"Stick to the Lyrics" = "Sözlere Yapıştır";
+"On the desktop" = "Masaüstünde";
+"On the clock" = "Saatin üstünde";
+"On the list" = "Listenin üstünde";
+"On the player" = "Oynatıcının üstünde";
+"On the lyrics" = "Sözlerin üstünde";
+"Choose photos; Ahenk cuts out their subjects on this Mac." = "Fotoğrafları seçin; Ahenk öznelerini bu Mac'te arka plandan ayırır.";
+"Make Stickers" = "Çıkartma Yap";
+"This picture could not be opened." = "Bu resim açılamadı.";
+"Ahenk keeps up to 60 stickers. Remove one to add another." = "Ahenk en fazla 60 çıkartma tutar. Yenisini eklemek için birini silin.";
+"The sticker could not be saved." = "Çıkartma kaydedilemedi.";
+"No subject was found in this photo, so the whole photo became the sticker." = "Bu fotoğrafta bir özne bulunamadı; fotoğrafın tamamı çıkartma oldu.";
+"The subject is cut out on this Mac; photos and stickers never leave it." = "Özne bu Mac'te ayrılır; fotoğraflar ve çıkartmalar bu Mac'ten hiç çıkmaz.";
+"Drop to make stickers" = "Çıkartma yapmak için bırakın";
+"Drop photos here, or on the clock, the list or the player." = "Fotoğrafları buraya ya da saatin, listenin veya oynatıcının üstüne bırakın.";
+"Drag a sticker to move it, its corner to resize it and the handle above it to turn it; right-click it to stick it to the clock, the list or the player, or to remove it." = "Çıkartmayı taşımak için kendisini, boyutunu değiştirmek için köşesini, döndürmek için üstündeki tutamacı sürükleyin. Saate, listeye ya da oynatıcıya yapıştırmak veya silmek için sağ tıklayın.";

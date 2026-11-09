@@ -153,7 +153,7 @@ public enum StickerGeometry {
     /// known (a damaged file).
     public static let mainDisplayKey = "main"
     /// Room around the sticker in its window: the handles and the shadow.
-    public static let windowMargin: Double = 22
+    public static let windowMargin: Double = 26
     /// A sticker's centre stays at least this far inside its display's
     /// visible frame, so at least half of it can always be grabbed.
     public static let edgeInset: Double = 12

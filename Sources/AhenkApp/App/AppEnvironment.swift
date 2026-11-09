@@ -28,6 +28,13 @@ final class AppEnvironment {
     private(set) lazy var light = EdgeLightController(
         settings: settings, nowPlaying: nowPlaying, features: audio.store, power: power
     )
+    /// The user's stickers (kept in memory in demo and smoke runs).
+    private(set) lazy var stickers: StickerController = {
+        let store = StickerStore(directory: options.mode == .normal ? StickerStore.standardDirectory : nil)
+        let controller = StickerController(settings: settings, store: store)
+        controller.onOpenSettings = { [weak self] in self?.showSettings(.stickers) }
+        return controller
+    }()
     /// The Dock icon as the playing song's cover with a beating ring.
     private(set) lazy var dockArt = DockArtController(settings: settings, nowPlaying: nowPlaying, features: audio.store, power: power)
     /// The lyrics of the song that plays (started with the services).
@@ -66,6 +73,10 @@ final class AppEnvironment {
         controller.model.onOpenSettings = { [weak self] in self?.showSettings(.player) }
         controller.model.clearDesk = { [weak self] in self?.clearDesk ?? UnavailableDeskClearing() }
         controller.model.wallpaper = wallpaper
+        controller.model.onDropFiles = { [weak self] urls, widget, point in
+            self?.dropped(urls, onto: widget, at: point) ?? false
+        }
+        controller.model.onAddSticker = { [weak self] in self?.stickers.pickPhotos() }
         return controller
     }()
 
@@ -129,5 +140,15 @@ final class AppEnvironment {
 
     func showSettings(_ pane: SettingsPane? = nil) {
         settingsWindow.show(pane: pane)
+    }
+
+    /// Files dropped on a desktop widget: pictures become stickers there.
+    @discardableResult
+    func dropped(_ urls: [URL], onto widget: DesktopWidget, at point: CGPoint?) -> Bool {
+        let pictures = urls.filter(FileKinds.isPicture)
+        for url in pictures {
+            Task { await stickers.add(photoAt: url, at: point, onto: widget) }
+        }
+        return !pictures.isEmpty
     }
 }
