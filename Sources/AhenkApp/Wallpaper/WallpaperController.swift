@@ -628,8 +628,9 @@ final class WallpaperController {
         if offer != ordered { offer = ordered }
         let videos = ordered.contains { $0.kind.isVideo && $0.kind != .userVideo }
         let nextPhase: PickerPhase
-        if request == nil, pinned == nil {
-            nextPhase = .idle
+        if request == nil {
+            // No song: only the user's own videos can be chosen.
+            nextPhase = pinned == nil ? .idle : .ready
         } else if !pending.isEmpty, !videos {
             nextPhase = .looking
         } else if !videos, pending.isEmpty, wallpaper.useMusicVideos, lookups.videos != nil {

@@ -43,15 +43,20 @@ final class WallpaperWindow: NSWindow {
     }
 }
 
-/// One display's wallpaper: the media views stacked in `stage` (the one in
-/// front on top), a scrim over them for readability, all inside a layer
-/// whose opacity melts the whole thing in and out.
+/// One display's wallpaper: the media views stacked on `canvas` (the one in
+/// front on top), a scrim over them for readability, all inside `stage`,
+/// whose opacity melts the whole thing in and out. With blur on, the canvas
+/// reaches past the screen's edges (and is clipped), so the blur's soft
+/// edge is never seen.
 final class WallpaperScreenView: NSView {
-    /// Holds the media views; its opacity is the melt.
+    /// Clips, and its opacity is the melt.
     let stage = NSView()
+    /// Holds the media views; blurred as a whole.
+    let canvas = NSView()
     private let scrim = CALayer()
     private let vignette = CAGradientLayer()
     private(set) var opacity: Double = 0
+    private var blurMargin: CGFloat = 0
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -62,9 +67,13 @@ final class WallpaperScreenView: NSView {
         stage.autoresizingMask = [.width, .height]
         stage.wantsLayer = true
         stage.layer?.backgroundColor = NSColor.black.cgColor
+        stage.layer?.masksToBounds = true
         stage.layer?.opacity = 0
-        stage.layerUsesCoreImageFilters = true
         addSubview(stage)
+        canvas.wantsLayer = true
+        canvas.layer?.backgroundColor = NSColor.black.cgColor
+        canvas.layerUsesCoreImageFilters = true
+        stage.addSubview(canvas)
         let actions: [String: CAAction] = ["opacity": NSNull(), "bounds": NSNull(), "position": NSNull(), "colors": NSNull()]
         scrim.actions = actions
         scrim.backgroundColor = NSColor.black.cgColor
@@ -78,6 +87,7 @@ final class WallpaperScreenView: NSView {
         vignette.zPosition = 101
         stage.layer?.addSublayer(scrim)
         stage.layer?.addSublayer(vignette)
+        placeCanvas()
     }
 
     @available(*, unavailable)
@@ -87,13 +97,19 @@ final class WallpaperScreenView: NSView {
 
     override func layout() {
         super.layout()
+        placeCanvas()
+    }
+
+    private func placeCanvas() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         scrim.frame = stage.bounds
         vignette.frame = stage.bounds
         CATransaction.commit()
-        for media in stage.subviews {
-            media.frame = stage.bounds
+        let frame = stage.bounds.insetBy(dx: -blurMargin, dy: -blurMargin)
+        if canvas.frame != frame { canvas.frame = frame }
+        for media in canvas.subviews where media.frame != canvas.bounds {
+            media.frame = canvas.bounds
         }
     }
 
@@ -126,22 +142,25 @@ final class WallpaperScreenView: NSView {
         CATransaction.commit()
         let radius = max(0, min(1, blur)) * 28
         if radius < 0.5 {
-            stage.contentFilters = []
+            canvas.contentFilters = []
+            blurMargin = 0
         } else if let filter = CIFilter(name: "CIGaussianBlur", parameters: [kCIInputRadiusKey: radius]) {
-            stage.contentFilters = [filter]
+            canvas.contentFilters = [filter]
+            blurMargin = (radius * 2.5).rounded(.up)
         }
+        placeCanvas()
     }
 
-    /// Puts `media` under the scrim; the newest front goes on top.
+    /// Puts `media` on the canvas, under what shows.
     func host(_ media: WallpaperMediaView) {
-        guard media.superview !== stage else { return }
-        media.frame = stage.bounds
+        guard media.superview !== canvas else { return }
+        media.frame = canvas.bounds
         media.autoresizingMask = [.width, .height]
-        stage.addSubview(media, positioned: .below, relativeTo: nil)
+        canvas.addSubview(media, positioned: .below, relativeTo: nil)
     }
 
     func bringToFront(_ media: WallpaperMediaView) {
-        guard media.superview === stage else { return }
-        stage.addSubview(media, positioned: .above, relativeTo: nil)
+        guard media.superview === canvas else { return }
+        canvas.addSubview(media, positioned: .above, relativeTo: nil)
     }
 }

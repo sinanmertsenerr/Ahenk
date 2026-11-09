@@ -66,7 +66,7 @@ enum WallpaperCheck {
                 second.animator().alphaValue = 1
             }, completionHandler: nil)
             try await Task.sleep(for: .milliseconds(260))
-            guard content.stage.subviews.last === second, second.alphaValue == 1 else {
+            guard content.canvas.subviews.last === second, second.alphaValue == 1 else {
                 throw SmokeFailure("the crossfade did not bring the next picture to the front")
             }
             content.layoutSubtreeIfNeeded()
