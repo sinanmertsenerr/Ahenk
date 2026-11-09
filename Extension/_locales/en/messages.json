@@ -1,0 +1,61 @@
+{
+  "extensionName": {
+    "message": "Ahenk Browser Bridge"
+  },
+  "extensionDescription": {
+    "message": "Lets Ahenk on your Mac see and control the music you play on YouTube Music, YouTube, Spotify, SoundCloud, Amazon Music, Deezer and TIDAL."
+  },
+  "actionTitle": {
+    "message": "Ahenk"
+  },
+  "statusOpen": {
+    "message": "Connected to Ahenk"
+  },
+  "statusConnecting": {
+    "message": "Looking for Ahenk…"
+  },
+  "statusIdle": {
+    "message": "Ahenk is not open on this Mac."
+  },
+  "hintIdle": {
+    "message": "Open Ahenk; the extension connects by itself."
+  },
+  "hintOpen": {
+    "message": "Ahenk sees the music sites below. Only this Mac can connect."
+  },
+  "listeningOn": {
+    "message": "Port $PORT$",
+    "placeholders": {
+      "port": {
+        "content": "$1"
+      }
+    }
+  },
+  "tabsTitle": {
+    "message": "Music tabs"
+  },
+  "noTabs": {
+    "message": "No music site is open."
+  },
+  "playing": {
+    "message": "Playing"
+  },
+  "paused": {
+    "message": "Paused"
+  },
+  "advanced": {
+    "message": "Connection"
+  },
+  "portLabel": {
+    "message": "First port"
+  },
+  "portHelp": {
+    "message": "Change it only if you changed the first port in Ahenk (Settings › Sources)."
+  },
+  "save": {
+    "message": "Save"
+  },
+  "retry": {
+    "message": "Try Again"
+  }
+}

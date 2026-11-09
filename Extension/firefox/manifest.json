@@ -1,0 +1,131 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extensionName__",
+  "short_name": "Ahenk",
+  "description": "__MSG_extensionDescription__",
+  "version": "1.0.0",
+  "default_locale": "en",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "ahenk-bridge@sinanmertsenerr.github.io",
+      "strict_min_version": "128.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "__MSG_actionTitle__",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "scripts": [
+      "lib/common.js",
+      "lib/protocol.js",
+      "background.js"
+    ]
+  },
+  "permissions": [
+    "storage",
+    "alarms",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://music.youtube.com/*",
+    "https://www.youtube.com/*",
+    "https://m.youtube.com/*",
+    "https://open.spotify.com/*",
+    "https://soundcloud.com/*",
+    "https://music.amazon.com/*",
+    "https://music.amazon.co.uk/*",
+    "https://music.amazon.de/*",
+    "https://music.amazon.fr/*",
+    "https://music.amazon.it/*",
+    "https://music.amazon.es/*",
+    "https://music.amazon.ca/*",
+    "https://music.amazon.com.au/*",
+    "https://music.amazon.com.br/*",
+    "https://music.amazon.com.mx/*",
+    "https://music.amazon.co.jp/*",
+    "https://music.amazon.in/*",
+    "https://www.deezer.com/*",
+    "https://listen.tidal.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://music.youtube.com/*",
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://open.spotify.com/*",
+        "https://soundcloud.com/*",
+        "https://music.amazon.com/*",
+        "https://music.amazon.co.uk/*",
+        "https://music.amazon.de/*",
+        "https://music.amazon.fr/*",
+        "https://music.amazon.it/*",
+        "https://music.amazon.es/*",
+        "https://music.amazon.ca/*",
+        "https://music.amazon.com.au/*",
+        "https://music.amazon.com.br/*",
+        "https://music.amazon.com.mx/*",
+        "https://music.amazon.co.jp/*",
+        "https://music.amazon.in/*",
+        "https://www.deezer.com/*",
+        "https://listen.tidal.com/*"
+      ],
+      "js": [
+        "lib/common.js",
+        "lib/lyrics.js",
+        "page/hooks.js",
+        "page/sites.js",
+        "page/engine.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "https://music.youtube.com/*",
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://open.spotify.com/*",
+        "https://soundcloud.com/*",
+        "https://music.amazon.com/*",
+        "https://music.amazon.co.uk/*",
+        "https://music.amazon.de/*",
+        "https://music.amazon.fr/*",
+        "https://music.amazon.it/*",
+        "https://music.amazon.es/*",
+        "https://music.amazon.ca/*",
+        "https://music.amazon.com.au/*",
+        "https://music.amazon.com.br/*",
+        "https://music.amazon.com.mx/*",
+        "https://music.amazon.co.jp/*",
+        "https://music.amazon.in/*",
+        "https://www.deezer.com/*",
+        "https://listen.tidal.com/*"
+      ],
+      "js": [
+        "content/relay.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="color-scheme" content="light dark">
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <header>
+      <img src="../icons/icon32.png" width="20" height="20" alt="">
+      <h1 data-i18n="extensionName"></h1>
+    </header>
+    <section class="status" id="status">
+      <span class="dot" id="dot"></span>
+      <div>
+        <p class="title" id="statusTitle"></p>
+        <p class="detail" id="statusDetail"></p>
+      </div>
+    </section>
+    <section>
+      <h2 data-i18n="tabsTitle"></h2>
+      <ul id="tabs"></ul>
+    </section>
+    <details>
+      <summary data-i18n="advanced"></summary>
+      <form id="portForm">
+        <label for="port" data-i18n="portLabel"></label>
+        <div class="row">
+          <input id="port" type="number" min="1024" max="49151" step="1" required>
+          <button type="submit" data-i18n="save"></button>
+        </div>
+        <p class="detail" data-i18n="portHelp"></p>
+      </form>
+      <button type="button" id="retry" data-i18n="retry"></button>
+    </details>
+    <script src="popup.js"></script>
+  </body>
+</html>

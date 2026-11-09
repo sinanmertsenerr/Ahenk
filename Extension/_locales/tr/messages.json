@@ -1,0 +1,61 @@
+{
+  "extensionName": {
+    "message": "Ahenk Tarayıcı Köprüsü"
+  },
+  "extensionDescription": {
+    "message": "Mac'inizdeki Ahenk, bu sitelerde çaldığınız müziği görür ve yönetir: YouTube Music, YouTube, Spotify, SoundCloud, Amazon Music, Deezer ve TIDAL."
+  },
+  "actionTitle": {
+    "message": "Ahenk"
+  },
+  "statusOpen": {
+    "message": "Ahenk'e bağlı"
+  },
+  "statusConnecting": {
+    "message": "Ahenk aranıyor…"
+  },
+  "statusIdle": {
+    "message": "Bu Mac'te Ahenk açık değil."
+  },
+  "hintIdle": {
+    "message": "Ahenk'i açın; eklenti kendiliğinden bağlanır."
+  },
+  "hintOpen": {
+    "message": "Ahenk aşağıdaki müzik sitelerini görüyor. Yalnızca bu Mac bağlanabilir."
+  },
+  "listeningOn": {
+    "message": "Bağlantı noktası $PORT$",
+    "placeholders": {
+      "port": {
+        "content": "$1"
+      }
+    }
+  },
+  "tabsTitle": {
+    "message": "Müzik sekmeleri"
+  },
+  "noTabs": {
+    "message": "Açık bir müzik sitesi yok."
+  },
+  "playing": {
+    "message": "Çalıyor"
+  },
+  "paused": {
+    "message": "Duraklatıldı"
+  },
+  "advanced": {
+    "message": "Bağlantı"
+  },
+  "portLabel": {
+    "message": "İlk bağlantı noktası"
+  },
+  "portHelp": {
+    "message": "Yalnızca Ahenk'te (Ayarlar › Kaynaklar) ilk bağlantı noktasını değiştirdiyseniz değiştirin."
+  },
+  "save": {
+    "message": "Kaydet"
+  },
+  "retry": {
+    "message": "Yeniden Dene"
+  }
+}
