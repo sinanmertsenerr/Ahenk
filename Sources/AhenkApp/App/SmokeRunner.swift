@@ -597,10 +597,11 @@ final class SmokeRunner {
                 if let directory, let png = bitmap.representation(using: .png, properties: [:]) {
                     try png.write(to: directory.appendingPathComponent("settings-\(pane.rawValue)-\(language.rawValue).png"))
                 }
-                // Sources and Live Wallpaper are taller than the window: their
-                // lower sections (the browser extension, the user's videos)
-                // in a tall copy.
-                if let directory, [.sources, .wallpaper].contains(pane), let png = try await render(pane, height: 2_000).representation(using: .png, properties: [:]) {
+                // Sources, Live Wallpaper, Lyrics and Sound are taller than
+                // the window: their lower sections (the browser extension,
+                // the user's videos, lyric alignment, the sound effects and
+                // the equalizer) in a tall copy.
+                if let directory, [.sources, .wallpaper, .lyrics, .sound].contains(pane), let png = try await render(pane, height: 2_000).representation(using: .png, properties: [:]) {
                     try png.write(to: directory.appendingPathComponent("settings-\(pane.rawValue)-full-\(language.rawValue).png"))
                 }
             }
