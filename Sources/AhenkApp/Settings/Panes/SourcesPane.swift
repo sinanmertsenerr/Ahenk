@@ -57,7 +57,7 @@ struct SourcesPane: View {
                 } header: {
                     Text("Browsers and Other Apps".l10n)
                 } footer: {
-                    Text("Browsers and other apps report what plays through macOS. A browser does not say which site is playing, so Ahenk guesses it from the song's details.".l10n)
+                    Text("Apps report what plays through macOS. With the Ahenk browser extension, each music site in the browser reports exactly what plays; without it, Ahenk guesses the site from the song's details.".l10n)
                 }
             }
 
@@ -73,11 +73,62 @@ struct SourcesPane: View {
                     detail: "Music sites in the browser report what is playing through the Ahenk extension. Only connections from this Mac are accepted.".l10n,
                     isOn: $settings.sources.browserBridgeEnabled
                 )
+                LabeledContent("Status".l10n) {
+                    Text(bridgeStatus)
+                        .foregroundStyle(.secondary)
+                }
+                if settings.sources.browserBridgeEnabled {
+                    if services.browsers.isEmpty {
+                        EmptyRow(text: "No browser is connected. Install the extension, then open a music site.".l10n)
+                    } else {
+                        ForEach(services.browsers) { browser in
+                            BrowserRow(browser: browser, services: services)
+                        }
+                    }
+                }
+                LabeledContent {
+                    Button("Install Browser Extension…".l10n) { BrowserExtensionInstaller.present() }
+                } label: {
+                    Text("Chrome, Edge, Brave, Arc, Firefox and other browsers".l10n)
+                }
+                LabeledContent {
+                    TextField("First Port".l10n, value: firstPort, format: .number.grouping(.never))
+                        .labelsHidden()
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 72)
+                } label: {
+                    Text("First Port".l10n)
+                    Text("Ahenk listens on the first free port of the four from this one. If you change it, enter the same number in the extension's popup (Connection › First port).".l10n)
+                }
             } header: {
                 Text("Browser Extension".l10n)
+            } footer: {
+                Text("The extension reports YouTube Music, YouTube, Spotify, SoundCloud, Amazon Music, Deezer and TIDAL, and plays your picks, playlists and queue there.".l10n)
             }
         }
         .onAppear { services.refreshPermissions() }
+    }
+
+    private var bridgeStatus: String {
+        switch services.bridgeStatus {
+        case .stopped: return "Off".l10n
+        case .starting: return "Starting…".l10n
+        // Port numbers are never grouped ("42617", not "42.617").
+        case .listening(let port): return L10n.format("Ready on port %@", String(port))
+        case .failed:
+            let ports = BridgeProtocol.ports(base: settings.sources.browserBridgePort)
+            return L10n.format("No free port between %@ and %@", String(ports.first ?? 0), String(ports.last ?? 0))
+        }
+    }
+
+    /// The bridge's first port, kept in its range.
+    private var firstPort: Binding<Int> {
+        Binding {
+            settings.sources.browserBridgePort
+        } set: { port in
+            let range = SourceSettings.portRange
+            settings.sources.browserBridgePort = min(range.upperBound, max(range.lowerBound, port))
+        }
     }
 
     private var followedName: String {
@@ -152,6 +203,52 @@ private struct MusicAppRow: View {
     }
 }
 
+/// A browser connected through the extension: its name, the extension's
+/// version and its music tabs.
+private struct BrowserRow: View {
+    let browser: BridgeBrowserSummary
+    let services: NowPlayingServices
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                AppIcon(image: browser.bundleIdentifier.flatMap { services.apps.icon(for: $0) }, placeholder: "globe")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            ForEach(browser.tabs) { tab in
+                HStack(spacing: 6) {
+                    Text(tab.site.title)
+                        .font(.caption.weight(.semibold))
+                    Text([tab.title, tab.artist].filter { !$0.isEmpty }.joined(separator: " \u{2014} "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer()
+                    Text(tab.isPlaying ? "Playing".l10n : "Paused".l10n)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.leading, 32)
+            }
+        }
+    }
+
+    private var name: String {
+        if let bundle = browser.bundleIdentifier { return services.apps.name(for: bundle) }
+        return browser.browserName.isEmpty ? "Browser".l10n : browser.browserName
+    }
+
+    private var detail: String {
+        let tabs = browser.tabs.count == 1 ? "1 music tab".l10n : L10n.format("%d music tabs", browser.tabs.count)
+        return [L10n.format("Extension %@", browser.extensionVersion), tabs].joined(separator: " \u{00B7} ")
+    }
+}
+
 /// A browser or other app that reports a song through the system.
 private struct PlayerRow: View {
     let player: HubPlayer
@@ -182,13 +279,15 @@ private struct PlayerRow: View {
 
 private struct AppIcon: View {
     let image: NSImage?
+    /// Drawn when the app is not known.
+    var placeholder = "app.dashed"
 
     var body: some View {
         Group {
             if let image {
                 Image(nsImage: image).resizable()
             } else {
-                Image(systemName: "app.dashed").resizable().foregroundStyle(.secondary)
+                Image(systemName: placeholder).resizable().foregroundStyle(.secondary)
             }
         }
         .frame(width: 22, height: 22)

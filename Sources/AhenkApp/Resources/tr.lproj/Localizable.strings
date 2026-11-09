@@ -101,7 +101,7 @@
 "Automation is off for Ahenk" = "Ahenk için Otomasyon kapalı";
 "Checking…" = "Denetleniyor…";
 "Browsers and Other Apps" = "Tarayıcılar ve Diğer Uygulamalar";
-"Browsers and other apps report what plays through macOS. A browser does not say which site is playing, so Ahenk guesses it from the song's details." = "Tarayıcılar ve diğer uygulamalar, neyin çaldığını macOS aracılığıyla bildirir. Tarayıcı hangi sitenin çaldığını söylemediği için Ahenk bunu şarkının bilgilerinden tahmin eder.";
+"Apps report what plays through macOS. With the Ahenk browser extension, each music site in the browser reports exactly what plays; without it, Ahenk guesses the site from the song's details." = "Uygulamalar, neyin çaldığını macOS aracılığıyla bildirir. Ahenk tarayıcı eklentisiyle tarayıcıdaki her müzik sitesi neyin çaldığını tam olarak bildirir; eklenti yoksa Ahenk siteyi şarkının bilgilerinden tahmin eder.";
 "System Now Playing" = "Sistemin Şu An Çalıyor bilgisi";
 "Nothing else is playing." = "Başka bir şey çalmıyor.";
 "Working" = "Çalışıyor";
@@ -498,6 +498,29 @@
 "%@ BPM" = "%@ BPM";
 
 /* Step 7: browser bridge and extension */
+"Install Browser Extension…" = "Tarayıcı Eklentisini Kur…";
+"For YouTube Music, Spotify, SoundCloud and other music sites" = "YouTube Music, Spotify, SoundCloud ve diğer müzik siteleri için";
+"Install the Ahenk Browser Extension" = "Ahenk Tarayıcı Eklentisini Kurun";
+"Finder shows the extension's folders. In Chrome, Edge, Brave, Arc or another Chromium browser:" = "Finder eklentinin klasörlerini gösteriyor. Chrome, Edge, Brave, Arc ya da Chromium tabanlı başka bir tarayıcıda:";
+"1. Open the extensions page (chrome://extensions, edge://extensions, brave://extensions, arc://extensions)." = "1. Uzantılar sayfasını açın (chrome://extensions, edge://extensions, brave://extensions, arc://extensions).";
+"2. Turn on Developer mode." = "2. Geliştirici modunu açın.";
+"3. Click Load unpacked and choose the Chromium folder." = "3. Paketlenmemiş öğe yükle düğmesine tıklayın ve Chromium klasörünü seçin.";
+"In the Search browser: click the puzzle button, then Load Unpacked…, and choose the Chromium folder." = "Search tarayıcısında: yapboz düğmesine, ardından Load Unpacked… seçeneğine tıklayın ve Chromium klasörünü seçin.";
+"In Firefox: open about:debugging, choose This Firefox, click Load Temporary Add-on… and pick manifest.json in the Firefox folder. Firefox removes it when it quits." = "Firefox'ta: about:debugging sayfasını açın, Bu Firefox'u seçin, Geçici Eklenti Yükle… düğmesine tıklayın ve Firefox klasöründeki manifest.json dosyasını seçin. Firefox kapanınca eklentiyi kaldırır.";
+"Then open a music site. Ahenk sees it within a few seconds; the extension's button shows the connection." = "Sonra bir müzik sitesi açın. Ahenk onu birkaç saniye içinde görür; eklentinin düğmesi bağlantıyı gösterir.";
+"OK" = "Tamam";
+"Copy Folder Path" = "Klasör Yolunu Kopyala";
+"The browser extension is missing from this copy of Ahenk." = "Ahenk'in bu kopyasında tarayıcı eklentisi yok.";
+"Build Ahenk with Scripts/make-app.sh to include it." = "Eklentinin pakete girmesi için Ahenk'i Scripts/make-app.sh ile derleyin.";
+"Ready on port %@" = "%@ numaralı bağlantı noktasında hazır";
+"No free port between %@ and %@" = "%@ ile %@ arasında boş bağlantı noktası yok";
+"No browser is connected. Install the extension, then open a music site." = "Bağlı tarayıcı yok. Eklentiyi kurun, sonra bir müzik sitesi açın.";
+"Chrome, Edge, Brave, Arc, Firefox and other browsers" = "Chrome, Edge, Brave, Arc, Firefox ve diğer tarayıcılar";
+"The extension reports YouTube Music, YouTube, Spotify, SoundCloud, Amazon Music, Deezer and TIDAL, and plays your picks, playlists and queue there." = "Eklenti şu siteleri bildirir: YouTube Music, YouTube, Spotify, SoundCloud, Amazon Music, Deezer ve TIDAL. Seçtiğiniz şarkıları, çalma listelerini ve çalma sırasını da orada çalar.";
+"Browser" = "Tarayıcı";
+"1 music tab" = "1 müzik sekmesi";
+"%d music tabs" = "%d müzik sekmesi";
+"Extension %@" = "Eklenti %@";
 "Music Site" = "Müzik sitesi";
 "Playing on music sites needs the Ahenk browser extension." = "Müzik sitelerinde çalmak için Ahenk tarayıcı eklentisi gerekir.";
 "Open the site in your browser to see its playlists." = "Çalma listelerini görmek için siteyi tarayıcınızda açın.";
@@ -506,3 +529,5 @@
 "The site did not play this song." = "Site bu şarkıyı çalmadı.";
 "The site did not remove this song." = "Site bu şarkıyı çıkarmadı.";
 "The queue on %@" = "%@ çalma sırası";
+"First Port" = "İlk Bağlantı Noktası";
+"Ahenk listens on the first free port of the four from this one. If you change it, enter the same number in the extension's popup (Connection › First port)." = "Ahenk, bu numaradan başlayan dört bağlantı noktasından boş olan ilkini dinler. Değiştirirseniz eklentinin açılır penceresinde de (Bağlantı › İlk bağlantı noktası) aynı numarayı girin.";
