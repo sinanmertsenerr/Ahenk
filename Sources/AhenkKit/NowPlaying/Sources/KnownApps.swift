@@ -10,6 +10,8 @@ public enum KnownApps {
     /// (`/Applications/Search.app`).
     public static let search = "com.officecommun.search"
     public static let safari = "com.apple.Safari"
+    /// Ahenk itself.
+    public static let ahenk = "com.sinanmertsener.Ahenk"
 
     /// Desktop apps that are a music service of their own.
     public static let musicApps: [String: MusicSource] = [

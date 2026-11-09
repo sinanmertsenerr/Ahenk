@@ -49,6 +49,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let status = StatusMenuController(environment: environment)
         status.install()
         statusMenu = status
+        // Clear Desk follows apps shown or quit meanwhile, and shows what an
+        // earlier run left hidden.
+        environment.deskController.start()
 
         if environment.demo != nil {
             log.notice("Demo mode: invented songs, generated covers, 120 BPM")
@@ -153,9 +156,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Log.flush()
             return
         }
-        // Later steps restore the user's desktop here (hidden apps). The live
-        // wallpaper only closes its own windows: the user's wallpaper setting
-        // was never changed.
+        // The apps Clear Desk hid come back. The live wallpaper only closes
+        // its own windows: the user's wallpaper setting was never changed.
+        environment.deskController.restoreOnQuit()
         environment.wallpaper.stop()
         environment.desktopPlayer.stop()
         environment.lyricsSync.stop()

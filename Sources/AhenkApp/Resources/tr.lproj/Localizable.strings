@@ -572,3 +572,7 @@
 "The queue on %@" = "%@ çalma sırası";
 "First Port" = "İlk Bağlantı Noktası";
 "Ahenk listens on the first free port of the four from this one. If you change it, enter the same number in the extension's popup (Connection › First port)." = "Ahenk, bu numaradan başlayan dört bağlantı noktasından boş olan ilkini dinler. Değiştirirseniz eklentinin açılır penceresinde de (Bağlantı › İlk bağlantı noktası) aynı numarayı girin.";
+
+/* MARK: Clear Desk */
+"Click again to bring back the apps it hid" = "Gizlediği uygulamaları geri getirmek için yine tıklayın";
+"Bring the apps back" = "Uygulamaları geri getir";

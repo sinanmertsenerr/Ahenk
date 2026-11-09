@@ -58,7 +58,7 @@ enum QuickMenu {
 
     /// Every SF Symbol the menus use (checked by `--smoke`).
     static var symbolNames: [String] {
-        QuickToggle.allCases.map(\.symbolName) + ["moon", "gearshape", "power", BrowserExtensionInstaller.symbolName]
+        QuickToggle.allCases.map(\.symbolName) + ["moon", "moon.fill", "gearshape", "power", BrowserExtensionInstaller.symbolName]
     }
 
     static func populate(_ menu: NSMenu, environment: AppEnvironment, placement: Placement) {
@@ -126,9 +126,14 @@ enum QuickMenu {
         let clearDesk = ClosureMenuItem(title: "Clear Desk".l10n) { desk.toggle() }
         clearDesk.isEnabled = desk.isAvailable
         clearDesk.state = desk.isActive ? .on : .off
-        clearDesk.image = symbol("moon")
-        if !desk.isAvailable {
-            clearDesk.toolTip = "Hides every other app with one click and brings them back with another.".l10n
+        clearDesk.image = symbol(desk.isActive ? "moon.fill" : "moon")
+        let deskDetail = desk.isActive
+            ? "Click again to bring back the apps it hid".l10n
+            : "Hides every other app with one click and brings them back with another.".l10n
+        if #available(macOS 14.4, *), placement == .menuBar, desk.isActive {
+            clearDesk.subtitle = deskDetail
+        } else {
+            clearDesk.toolTip = deskDetail
         }
         menu.addItem(clearDesk)
 

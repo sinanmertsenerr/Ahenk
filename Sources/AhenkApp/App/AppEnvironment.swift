@@ -18,8 +18,10 @@ final class AppEnvironment {
     let power = PowerMonitor()
     /// Present in `--demo` and `--smoke`.
     let demo: DemoProvider?
-    /// Step 9 replaces the placeholder with the real Clear Desk.
-    var clearDesk: DeskClearing = UnavailableDeskClearing()
+    /// Clear Desk. Live: the apps of this Mac. Demo and smoke runs: invented
+    /// apps, so trying it never hides anything.
+    let deskController: ClearDeskController
+    var clearDesk: DeskClearing { deskController }
 
     private(set) lazy var settingsWindow = SettingsWindowController(environment: self)
     /// The edge light on every screen (started with the services).
@@ -70,6 +72,9 @@ final class AppEnvironment {
         self.settings = settings
         self.demo = demo
         self.nowPlaying = NowPlayingModel()
+        deskController = options.mode == .normal
+            ? ClearDeskController(workspace: SystemDeskWorkspace(), store: ClearDeskStore(fileURL: ClearDeskStore.standardURL))
+            : ClearDeskController(workspace: InventedDeskWorkspace.demo(), store: ClearDeskStore(fileURL: nil))
         let audio = AudioTapEngine(demo: demo)
         self.audio = audio
         if let demo {

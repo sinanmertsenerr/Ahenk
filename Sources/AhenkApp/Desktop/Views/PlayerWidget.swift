@@ -73,10 +73,7 @@ struct PlayerWidget: View {
             SearchField(model: model, showsClose: state.size == .small)
             if state.size == .large {
                 if model.canClearDesk {
-                    RoundGlassButton(
-                        symbol: model.isDeskCleared ? "moon.fill" : "moon", help: "Clear Desk".l10n, tint: theme.glass,
-                        isOn: model.isDeskCleared, accent: theme.accent
-                    ) { model.toggleClearDesk() }
+                    ClearDeskButton(isOn: model.isDeskCleared, tint: theme.glass, accent: theme.accent) { model.toggleClearDesk() }
                 }
                 RoundGlassButton(symbol: "arrow.down.right.and.arrow.up.left", help: "Small Player".l10n, tint: theme.glass) {
                     model.setSize(.small)
@@ -97,10 +94,7 @@ struct PlayerWidget: View {
                 }
             }
             if model.canClearDesk {
-                RoundGlassButton(
-                    symbol: model.isDeskCleared ? "moon.fill" : "moon", help: "Clear Desk".l10n, tint: theme.glass,
-                    isOn: model.isDeskCleared, accent: theme.accent
-                ) { model.toggleClearDesk() }
+                ClearDeskButton(isOn: model.isDeskCleared, tint: theme.glass, accent: theme.accent) { model.toggleClearDesk() }
             }
             RoundGlassButton(symbol: "arrow.up.left.and.arrow.down.right", help: "Large Player".l10n, tint: theme.glass) {
                 model.setSize(.large)
