@@ -53,6 +53,10 @@ final class PlaybackRouter {
 
     var isDemo: Bool { demo != nil }
 
+    /// How long the demo takes to start a song, when set (`--demo-scene
+    /// loading` holds the loading state on screen with it).
+    var demoStartDelay: TimeInterval?
+
     /// Why a source cannot be picked right now (`nil`: it can).
     func unavailableReason(for source: MusicSource) -> String? {
         if isDemo { return source == .demo ? nil : "Not in demo mode".l10n }
@@ -71,7 +75,7 @@ final class PlaybackRouter {
     ) async -> Outcome {
         if isDemo {
             guard source == .demo else { return .unavailable("In demo mode, songs play in the demo player.".l10n) }
-            return playDemo(song, startDelay: startDelay)
+            return playDemo(song, startDelay: demoStartDelay ?? startDelay)
         }
         log.info("Playing \u{201C}\(song.title)\u{201D} in \(source.rawValue)\(interactive ? "" : " (queue)")")
         switch source {

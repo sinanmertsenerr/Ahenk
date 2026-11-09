@@ -56,13 +56,17 @@ final class AppEnvironment {
         }
     }
 
-    /// Smoke runs work on an in-memory copy of the user's settings so they
-    /// can switch languages and toggles without touching the real ones.
+    /// Smoke runs, demo scenes and `--language` work on an in-memory copy of
+    /// the user's settings so they can switch languages, sizes and toggles
+    /// without touching the real ones.
     @discardableResult
     static func bootstrap(options: LaunchOptions, defaults: UserDefaults = .standard) -> AppEnvironment {
-        let settings = options.mode == .smoke
+        let settings = options.usesDetachedSettings
             ? AppSettings.detachedCopy(of: defaults)
             : AppSettings(defaults: defaults)
+        if let code = options.language, let language = AppLanguage(rawValue: code) {
+            settings.general.language = language
+        }
         let environment = AppEnvironment(
             options: options,
             settings: settings,

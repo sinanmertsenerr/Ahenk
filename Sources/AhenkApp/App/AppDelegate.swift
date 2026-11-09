@@ -7,6 +7,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusMenu: StatusMenuController?
     private var observers: [AnyObject] = []
     private var signalSources: [DispatchSourceSignal] = []
+    /// `--demo-backdrop`: the generated wallpaper behind the widgets.
+    private var demoBackdrop: NSWindow?
     /// This process lost the single-instance check and must not touch
     /// anything on the way out.
     private var isDuplicate = false
@@ -63,7 +65,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The edge light follows the music, the cover and the settings.
         environment.light.start()
         // Clock, Continue Playing and the player on the desktop.
+        if environment.demo != nil, environment.options.demoBackdrop, let screen = NSScreen.screens.first {
+            let backdrop = DemoStage.makeBackdrop(on: screen)
+            backdrop.orderFrontRegardless()
+            demoBackdrop = backdrop
+        }
         environment.desktopPlayer.start()
+        if environment.demo != nil, let scene = environment.options.demoScene {
+            environment.desktopPlayer.applyDemoScene(scene)
+        }
         scheduleDemoCommands()
 
         observers.append(ChangeObserver({ settings.general.language }) { [weak self] language in

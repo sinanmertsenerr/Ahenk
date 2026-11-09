@@ -12,6 +12,13 @@ import Foundation
 ///   "several sources are playing" question shows up.
 /// - `--demo-pause-after <s>` / `--demo-resume-after <s>`: in demo mode,
 ///   pause (resume) the demo song that many seconds after launch.
+/// - `--demo-scene <name>`: like `--demo`, with the desktop player opened in
+///   one state (`albums`, `search`, `album`, `artist`, `queue`, `small`,
+///   `small-search`, `status`, `loading`, or `off` for none), for
+///   screenshots, visual checks and measurements.
+/// - `--demo-backdrop`: in demo mode, a generated wallpaper behind the
+///   desktop widgets (so they can be captured without the user's desktop).
+/// - `--language <en|tr>`: the UI language for this run only.
 /// - `--settings [pane]` / `--settings=pane`: open Settings at launch.
 /// - `--allow-multiple`: skip the single-instance hand-off (development).
 ///
@@ -34,9 +41,21 @@ public struct LaunchOptions: Equatable, Sendable {
     public var demoPauseAfter: Double?
     /// Seconds after launch to resume it (`--demo-resume-after`).
     public var demoResumeAfter: Double?
+    /// The desktop player opens in this state (`--demo-scene`).
+    public var demoScene: String?
+    /// A generated wallpaper behind the widgets (`--demo-backdrop`).
+    public var demoBackdrop = false
+    /// The UI language for this run (`--language`), not saved.
+    public var language: String?
 
     /// Demo content is used in both `--demo` and `--smoke`.
     public var usesDemoContent: Bool { mode != .normal }
+
+    /// The run works on an in-memory copy of the settings, so what it
+    /// changes (a smoke check, a scene, a language) is never saved.
+    public var usesDetachedSettings: Bool {
+        mode == .smoke || demoScene != nil || language != nil
+    }
 
     public init() {}
 
@@ -64,6 +83,13 @@ public struct LaunchOptions: Equatable, Sendable {
                 demoPauseAfter = Self.seconds(inlineValue ?? Self.popValue(&remaining))
             case "--demo-resume-after":
                 demoResumeAfter = Self.seconds(inlineValue ?? Self.popValue(&remaining))
+            case "--demo-scene":
+                if mode == .normal { mode = .demo }
+                demoScene = inlineValue ?? Self.popValue(&remaining) ?? "albums"
+            case "--demo-backdrop":
+                demoBackdrop = true
+            case "--language":
+                language = (inlineValue ?? Self.popValue(&remaining)).map { $0.lowercased() }
             default:
                 continue
             }

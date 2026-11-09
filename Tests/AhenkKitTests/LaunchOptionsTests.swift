@@ -55,6 +55,19 @@ struct LaunchOptionsTests {
         #expect(parse("--demo-pause-after=-3").demoPauseAfter == nil)
     }
 
+    @Test("Demo scenes, the backdrop and a language for one run")
+    func scenes() {
+        let scene = parse("--demo-scene", "album", "--demo-backdrop", "--language", "TR")
+        #expect(scene.mode == .demo && scene.demoScene == "album" && scene.demoBackdrop && scene.language == "tr")
+        #expect(scene.usesDetachedSettings, "a scene never saves what it changes")
+        #expect(parse("--demo-scene").demoScene == "albums")
+        #expect(parse("--demo-scene=queue").demoScene == "queue")
+        #expect(!parse("--demo").usesDetachedSettings)
+        #expect(parse("--smoke").usesDetachedSettings)
+        #expect(parse("--language=tr").usesDetachedSettings)
+        #expect(parse("--smoke", "--demo-scene", "search").mode == .smoke)
+    }
+
     @Test("Unknown and system arguments are ignored")
     func ignoresUnknown() {
         let options = parse("-NSDocumentRevisionsDebugMode", "YES", "--frobnicate", "-psn_0_12345", "--demo")
