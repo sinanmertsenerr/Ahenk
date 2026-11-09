@@ -48,17 +48,25 @@ struct BridgeServerTests {
         #expect(welcome.protocolVersion == 1 && welcome.app == "Ahenk")
 
         let tab = BridgeTab(tabID: 5, site: "soundCloud", url: "https://soundcloud.com/kestrel-vale/saffron-static", title: "Saffron Static",
-                            artist: "Kestrel & Vale", sampledAt: Date().timeIntervalSince1970 * 1000, state: .playing, capabilities: [.playPause, .like])
+                            artist: "Kestrel & Vale", sampledAt: Date().timeIntervalSince1970 * 1000, state: .playing, capabilities: [.playPause, .like, .rate])
         try await client.send(.tabs([tab]))
         try await waitFor { server.currentTabs.count == 1 }
         let report = try #require(server.currentTabs.first)
         #expect(report.tabID == "prof/5" && report.site == .soundCloud && report.browserBundleIdentifier == "com.google.Chrome")
+        #expect(report.bridgeCapabilities.contains(.rate))
 
         async let sent = server.send(.setLiked(true), toTab: "prof/5")
         guard case .command(let command) = try await client.receive() else { Issue.record("no command"); return }
         #expect(command.command == .like && command.on == true && command.tabID == 5)
         try await client.send(.result(BridgeResult(id: command.id, ok: true)))
         #expect(await sent)
+
+        async let faster = server.setRate(1.25, forTab: "prof/5")
+        guard case .command(let rate) = try await client.receive() else { Issue.record("no rate command"); return }
+        #expect(rate.command == .rate && rate.rate == 1.25 && rate.tabID == 5)
+        try await client.send(.result(BridgeResult(id: rate.id, ok: true)))
+        #expect(await faster)
+        #expect(await server.setRate(1.25, forTab: "prof/404") == false, "an unknown tab")
 
         async let unanswered = server.send(.next, toTab: "prof/5")
         _ = try await client.receive()

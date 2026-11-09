@@ -57,7 +57,7 @@ private struct DiscardedValue: Decodable {
 }
 
 extension Comparable {
-    func clamped(to range: ClosedRange<Self>) -> Self {
+    public func clamped(to range: ClosedRange<Self>) -> Self {
         min(range.upperBound, max(range.lowerBound, self))
     }
 }

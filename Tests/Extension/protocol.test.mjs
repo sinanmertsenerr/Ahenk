@@ -39,14 +39,14 @@ test('what the extension sends is exactly what the app decodes', () => {
 test('a tab report drops what the app would not read', () => {
   const tab = P.tab({
     tabId: 9, site: 'youtube', title: '  Harbor walk  ', artist: 'Slow Lens', duration: Infinity, position: -4,
-    state: 'dancing', can: ['seek', 'teleport', 'playPause'], repeat: 'sometimes', volume: 7, kind: 'hologram', rate: 40,
+    state: 'dancing', can: ['seek', 'teleport', 'rate', 'playPause'], repeat: 'sometimes', volume: 7, kind: 'hologram', rate: 40,
     liked: 'yes', artwork: 'https://img.example/x.jpg',
   });
   assert.equal(tab.title, 'Harbor walk');
   assert.equal(tab.duration, undefined);
   assert.equal(tab.position, 0);
   assert.equal(tab.state, 'paused');
-  assert.deepEqual(tab.can, ['playPause', 'seek']);
+  assert.deepEqual(tab.can, ['playPause', 'rate', 'seek']);
   assert.equal(tab.repeat, undefined);
   assert.equal(tab.volume, 1);
   assert.equal(tab.kind, 'unknown');

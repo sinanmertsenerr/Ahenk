@@ -465,6 +465,17 @@ public final class BrowserBridgeServer: BrowserBridge, @unchecked Sendable {
         return result?.ok == true
     }
 
+    /// Asks a tab to play at `rate` times the song's own speed (the sound
+    /// effects' speed presets). False when the tab is gone, has no media
+    /// element to speed up, or its extension is too old to know the command.
+    public func setRate(_ rate: Double, forTab tabKey: String) async -> Bool {
+        let result = await perform(timeout: configuration.commandTimeout) { id -> (Int, BridgeOutbound)? in
+            guard let (connection, tabID) = self.registry.locate(tabKey: tabKey) else { return nil }
+            return (connection, .command(BridgeCommand(id: id, tabID: tabID, rate: rate)))
+        }
+        return result?.ok == true
+    }
+
     /// Sends a request to one connection and waits for its answer (`nil`:
     /// no answer in time, or the connection went away).
     public func request(_ make: @escaping @Sendable (String) -> BridgeRequest, on connection: Int, timeout: TimeInterval) async -> BridgeResult? {

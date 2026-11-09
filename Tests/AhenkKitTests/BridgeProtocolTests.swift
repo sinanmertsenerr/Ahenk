@@ -106,6 +106,23 @@ struct BridgeProtocolTests {
         #expect(BridgeCommand(id: "x", tabID: 1, playback: .setLiked(false)).on == false)
     }
 
+    @Test("A speed for a tab has a wire form and stays within what a tab takes")
+    func rateCommand() throws {
+        let command = BridgeCommand(id: "c7", tabID: 4, rate: 1.25)
+        let wire = try #require(try JSONSerialization.jsonObject(with: BridgeOutbound.command(command).encoded()) as? [String: Any])
+        #expect(wire["type"] as? String == "command" && wire["command"] as? String == "rate")
+        #expect(wire["rate"] as? Double == 1.25 && wire["tabId"] as? Int == 4 && wire["position"] == nil)
+        #expect(try BridgeOutbound.decode(BridgeOutbound.command(command).encoded()) == .command(command))
+        #expect(BridgeCommand(id: "x", tabID: 1, rate: 9).rate == 4)
+        #expect(BridgeCommand(id: "x", tabID: 1, rate: 0.1).rate == 0.25)
+        for odd in [Double.nan, .infinity, 0, -2] {
+            #expect(BridgeCommand(id: "x", tabID: 1, rate: odd).rate == 1, "\(odd) asks for the song's own speed")
+        }
+        #expect(BridgeCapability(rawValue: "rate") == .rate)
+        // A command of another kind carries no rate.
+        #expect(BridgeCommand(id: "x", tabID: 1, playback: .next).rate == nil)
+    }
+
     @Test("Unknown types and fields are ignored; wrong values drop only themselves")
     func lenience() throws {
         #expect(try BridgeInbound.decode(json(#"{"type":"teleport","x":1}"#)) == .unknown("teleport"))

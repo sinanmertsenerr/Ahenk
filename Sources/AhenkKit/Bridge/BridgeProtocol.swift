@@ -152,6 +152,8 @@ public enum BridgeCapability: String, Codable, CaseIterable, Sendable {
     /// Read the site's queue; `queueEdit`: remove from it.
     case queue, queueEdit
     case volume
+    /// Play faster or slower (the tab's media element takes a rate).
+    case rate
 }
 
 /// One tab that plays or paused media on a music site.
@@ -392,8 +394,11 @@ public struct BridgeQueueItem: Codable, Equatable, Sendable {
 /// A transport command for one tab.
 public struct BridgeCommand: Codable, Equatable, Sendable {
     public enum Name: String, Codable, Sendable {
-        case play, pause, toggle, next, previous, seek, shuffle, `repeat`, like, volume
+        case play, pause, toggle, next, previous, seek, shuffle, `repeat`, like, volume, rate
     }
+
+    /// The playback rates a tab is asked for.
+    public static let rateRange: ClosedRange<Double> = 0.25...4
 
     public var id: String
     public var tabID: Int
@@ -406,8 +411,10 @@ public struct BridgeCommand: Codable, Equatable, Sendable {
     public var mode: RepeatMode?
     /// `volume`: 0…1.
     public var volume: Double?
+    /// `rate`: 1 is the song's own speed.
+    public var rate: Double?
 
-    public init(id: String, tabID: Int, command: Name, position: Double? = nil, on: Bool? = nil, mode: RepeatMode? = nil, volume: Double? = nil) {
+    public init(id: String, tabID: Int, command: Name, position: Double? = nil, on: Bool? = nil, mode: RepeatMode? = nil, volume: Double? = nil, rate: Double? = nil) {
         self.id = id
         self.tabID = tabID
         self.command = command
@@ -415,6 +422,13 @@ public struct BridgeCommand: Codable, Equatable, Sendable {
         self.on = on
         self.mode = mode
         self.volume = volume
+        self.rate = rate
+    }
+
+    /// "Play at this speed": a rate that is not a number, or not positive,
+    /// asks for the song's own speed.
+    public init(id: String, tabID: Int, rate: Double) {
+        self.init(id: id, tabID: tabID, command: .rate, rate: rate.isFinite && rate > 0 ? rate.clamped(to: Self.rateRange) : 1)
     }
 
     /// The wire form of a hub command.
@@ -432,7 +446,7 @@ public struct BridgeCommand: Codable, Equatable, Sendable {
         }
     }
 
-    enum CodingKeys: String, CodingKey { case id, tabID = "tabId", command, position, on, mode, volume }
+    enum CodingKeys: String, CodingKey { case id, tabID = "tabId", command, position, on, mode, volume, rate }
 }
 
 /// A request that is more than a transport command.

@@ -315,6 +315,25 @@
     return false;
   }
 
+  /** A playback rate a tab may be given: 0.25…4; anything else is the song's own speed. */
+  function playbackRate(value) {
+    const rate = Number(value);
+    if (value === null || value === undefined || !Number.isFinite(rate) || rate <= 0) return 1;
+    return Math.min(4, Math.max(0.25, Math.round(rate * 100) / 100));
+  }
+
+  /**
+   * The rate to give a media element so it plays at the rate Ahenk asked
+   * for, or null to leave it alone (Ahenk asked for nothing, or it already
+   * plays at that rate). Sites put the rate back to 1 with every new song.
+   */
+  function rateCorrection(wanted, current) {
+    if (wanted === null || wanted === undefined) return null;
+    const target = playbackRate(wanted);
+    if (!Number.isFinite(current)) return target;
+    return Math.abs(current - target) > 0.005 ? target : null;
+  }
+
   /** Seconds to wait before reconnect attempt `n` (0-based). */
   function backoff(attempt) {
     const steps = [1, 2, 4, 8, 15, 30];
@@ -360,6 +379,8 @@
     splitByline,
     ytMusicByline,
     noticeableChange,
+    playbackRate,
+    rateCorrection,
     backoff,
     repeatFromState,
     boolAttr,

@@ -158,6 +158,16 @@ function closed(socket) {
   bridge.socket = null;
   bridge.status = 'idle';
   bridge.port = null;
+  // Ahenk went away: a tab it sped up or slowed down (its sound effects)
+  // gets the song's own speed back.
+  for (const tab of tabs.values()) {
+    if (!tab.port) continue;
+    try {
+      tab.port.postMessage({ kind: 'command', id: 'ahenk-gone', command: 'rate', rate: 1 });
+    } catch (_) {
+      // The tab is gone too.
+    }
+  }
   scheduleReconnect();
 }
 
@@ -208,7 +218,7 @@ function forwardCommand(message) {
     send(P.result(message.id, false, { error: 'no such tab' }));
     return;
   }
-  tab.port.postMessage({ kind: 'command', id: message.id, command: message.command, position: message.position, on: message.on, mode: message.mode, volume: message.volume });
+  tab.port.postMessage({ kind: 'command', id: message.id, command: message.command, position: message.position, on: message.on, mode: message.mode, volume: message.volume, rate: message.rate });
 }
 
 // MARK: Requests that may navigate (search and play, playlists)

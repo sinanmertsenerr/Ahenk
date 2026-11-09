@@ -163,6 +163,25 @@ test('what is worth telling Ahenk', () => {
   assert.equal(C.noticeableChange(Object.assign({}, base, { volume: 0.5 }), later({ volume: 0.6 }), t + 1000), true);
   const paused = Object.assign({}, base, { state: 'paused' });
   assert.equal(C.noticeableChange(paused, Object.assign({}, paused, { sampledAt: t + 5000 }), t + 5000), false, 'paused stays put');
+  assert.equal(C.noticeableChange(base, later({ rate: 1.25, position: 31.25 }), t + 1000), true, 'another speed');
+});
+
+test('the speed Ahenk asks a tab for', () => {
+  assert.equal(C.playbackRate(1.25), 1.25);
+  assert.equal(C.playbackRate('0.85'), 0.85);
+  assert.equal(C.playbackRate(1.2549), 1.25, 'two decimals');
+  assert.equal(C.playbackRate(9), 4);
+  assert.equal(C.playbackRate(0.01), 0.25);
+  for (const odd of [NaN, Infinity, 0, -1, 'fast', null, undefined, {}]) assert.equal(C.playbackRate(odd), 1, String(odd));
+
+  // Nothing asked: the tab's own speed is never touched.
+  assert.equal(C.rateCorrection(null, 1.5), null);
+  assert.equal(C.rateCorrection(undefined, 1), null);
+  // The site put a new song back at 1: Ahenk's speed returns.
+  assert.equal(C.rateCorrection(1.25, 1), 1.25);
+  assert.equal(C.rateCorrection(1.25, 1.25), null);
+  assert.equal(C.rateCorrection(1.25, 1.2501), null, 'close enough');
+  assert.equal(C.rateCorrection(0.8, NaN), 0.8);
 });
 
 test('reconnect pauses grow and stop growing', () => {

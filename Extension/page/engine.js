@@ -14,6 +14,10 @@
   const { $, until, wait } = window.__ahenkSites.helpers;
   const site = profile.id;
 
+  // The speed Ahenk asked this tab to play at (its sound effects); null
+  // when it asked for none, and the tab's own speed is left alone.
+  let wantedRate = null;
+
   // MARK: Messages to the extension
 
   function post(message) {
@@ -114,6 +118,14 @@
       duration = timing.duration;
     }
     if (duration === undefined && timing && timing.duration) duration = timing.duration;
+    if (element) {
+      // The site starts every song at its own speed again: put Ahenk's back.
+      const correction = C.rateCorrection(wantedRate, element.playbackRate);
+      if (correction !== null) call(() => { element.playbackRate = correction; }, null);
+      // Whatever told the position, the element knows how fast it moves.
+      const actual = element.playbackRate;
+      if (rate === 1 && Number.isFinite(actual) && actual > 0) rate = actual;
+    }
 
     const can = [];
     if (has('play') || has('pause') || (profile.api && profile.api.play) || control('playPause') || element) can.push('playPause');
@@ -137,6 +149,7 @@
     }
     const volume = readVolume(element);
     if (volume !== null) can.push('volume');
+    if (element) can.push('rate');
 
     return {
       site,
@@ -311,6 +324,18 @@
     return true;
   }
 
+  /** Plays at `value` times the song's speed; 1 gives the tab its own speed back. */
+  function setRate(value) {
+    const rate = C.playbackRate(value);
+    const element = activeElement();
+    if (!element) return false;
+    // Keep it over song changes, until Ahenk asks for the song's own speed.
+    wantedRate = rate === 1 ? null : rate;
+    element.playbackRate = rate;
+    schedule();
+    return true;
+  }
+
   async function runCommand(message) {
     switch (message.command) {
       case 'play':
@@ -335,6 +360,8 @@
         return profile.setLiked ? !!(await profile.setLiked(!!message.on)) : false;
       case 'volume':
         return setVolume(message.volume);
+      case 'rate':
+        return setRate(message.rate);
       default:
         return false;
     }

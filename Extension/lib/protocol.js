@@ -14,7 +14,7 @@
   const DEFAULT_PORT = 42617;
   const PORT_COUNT = 4;
 
-  const CAPABILITIES = ['playPause', 'next', 'previous', 'seek', 'shuffle', 'repeat', 'repeatOne', 'like', 'unlike', 'search', 'playlists', 'queue', 'queueEdit', 'volume'];
+  const CAPABILITIES = ['playPause', 'next', 'previous', 'seek', 'shuffle', 'repeat', 'repeatOne', 'like', 'unlike', 'search', 'playlists', 'queue', 'queueEdit', 'volume', 'rate'];
   const KINDS = ['music', 'video', 'podcast', 'advertisement', 'unknown'];
   const STATES = ['playing', 'paused', 'stopped'];
   const REPEATS = ['off', 'all', 'one'];
