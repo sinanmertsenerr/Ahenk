@@ -40,6 +40,7 @@ final class SmokeRunner {
         await report.check("metal") { try self.checkMetal() }
         await report.check("edgeLight") { try self.checkEdgeLight() }
         await report.check("lightSwitch") { try await self.checkLightSwitch() }
+        await report.check("desktopPlayer") { try await self.checkDesktopPlayer() }
         await report.check("menus") { try self.checkMenus() }
         await report.check("settingsWindow") { try await self.checkSettingsWindow() }
         report.finish()
@@ -106,7 +107,7 @@ final class SmokeRunner {
         guard MetalShaders.sourceURL(named: "EdgeLight") != nil else {
             throw SmokeFailure("Shaders/EdgeLight.metal missing from the resource bundle")
         }
-        let symbols = Set(QuickMenu.symbolNames + SettingsPane.allCases.map(\.symbolName)
+        let symbols = Set(QuickMenu.symbolNames + SettingsPane.allCases.map(\.symbolName) + DesktopSymbols.all
             + ["backward.fill", "forward.fill", "play.fill", "pause.fill", "plus", "minus", "waveform", "app.dashed"])
         let missing = symbols.filter { NSImage(systemSymbolName: $0, accessibilityDescription: nil) == nil }
         guard missing.isEmpty else { throw SmokeFailure("Missing SF Symbols: \(missing.sorted().joined(separator: ", "))") }
@@ -475,6 +476,153 @@ final class SmokeRunner {
         try await wait(for: "ready again", running)
         return "the menu's Edge Light item turns the running light off and on (\(first) → off → \(controller.status)); "
             + "every display was switched off, nothing was shown"
+    }
+
+    /// The desktop player in demo mode, without putting anything on screen:
+    /// the widget window sits just above the desktop icons on every Space and
+    /// never activates Ahenk; the playing artist's albums and a search come
+    /// from the demo catalog; a pick plays through Ahenk's queue until the
+    /// demo source confirms it; every widget and page is built and drawn
+    /// offscreen in both languages (PNGs with `--snapshots`).
+    private func checkDesktopPlayer() async throws -> String {
+        guard let demo = environment.demo else { throw SmokeFailure("No demo provider") }
+        let settings = environment.settings
+        let originalLanguage = settings.general.language
+        let originalPlayer = settings.player
+        let model = DesktopPlayerModel(settings: settings, nowPlaying: environment.nowPlaying, services: environment.services, demo: demo)
+        let clock = ClockModel(settings: settings)
+        defer {
+            model.stop()
+            settings.general.language = originalLanguage
+            settings.player = originalPlayer
+        }
+        model.start()
+        model.setPresented(true)
+
+        // The window: desktop level, every Space, never active.
+        let window = DesktopWidgetWindow(widget: .player, frame: CGRect(x: -30_000, y: -30_000, width: 100, height: 100))
+        window.allowsKeyboard = true
+        defer { window.close() }
+        let desktopIcons = Int(CGWindowLevelForKey(.desktopIconWindow))
+        guard window.level.rawValue == desktopIcons + 1, window.level < .normal else {
+            throw SmokeFailure("widget window level \(window.level.rawValue), expected \(desktopIcons + 1)")
+        }
+        guard window.collectionBehavior.contains(.canJoinAllSpaces), window.collectionBehavior.contains(.stationary),
+              window.styleMask.contains(.nonactivatingPanel), !window.canBecomeMain, window.becomesKeyOnlyIfNeeded
+        else { throw SmokeFailure("the widget window could activate Ahenk or leave its Space") }
+
+        // The catalog: the playing artist's albums, then a search.
+        func wait(_ what: String, seconds: Double = 4, _ condition: () -> Bool) async throws {
+            let deadline = Date().addingTimeInterval(seconds)
+            while !condition() {
+                guard Date() < deadline else { throw SmokeFailure("\(what) within \(Int(seconds)) s") }
+                try await Task.sleep(for: .milliseconds(25))
+            }
+        }
+        try await wait("no albums for the playing artist") { model.albums.value?.isEmpty == false }
+        guard let album = model.playingAlbum, let artist = model.artist else { throw SmokeFailure("the playing album is not known") }
+        model.query = "nova"
+        try await wait("no search results") { model.search.value?.songs.isEmpty == false }
+        let found = model.search.value?.songs.count ?? 0
+        model.query = ""
+        guard let songs = await model.loadAlbumSongs(album), songs.count > 2 else { throw SmokeFailure("the album has no songs") }
+
+        // A pick plays through Ahenk's queue and the demo source confirms it.
+        model.play(songs, at: 1, context: .album(id: album.id, title: album.title))
+        try await wait("the picked song did not start", seconds: 5) {
+            model.conductor.attempt?.isConfirmed == true && environment.nowPlaying.snapshot?.track.title == songs[1].title
+        }
+        guard model.conductor.queue.upNext.count == songs.count - 2 else { throw SmokeFailure("the queue does not hold the rest of the album") }
+
+        // Every widget and page, drawn offscreen in both languages.
+        let directory = snapshotDirectory()
+        if let directory { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
+        var drawn = 0
+        for language in AppLanguage.allCases {
+            settings.general.language = language
+            let scenes: [(String, () -> Void)] = [
+                ("albums", { model.closePages(); model.setSize(.large) }),
+                ("search", { model.query = "nova" }),
+                ("album", { model.query = ""; model.closePages(); model.open(.album(album)) }),
+                ("artist", { model.closePages(); model.open(.artist(artist)) }),
+                ("queue", { model.closePages(); model.queueAsPage = true; model.isQueueOpen = true }),
+                ("small", { model.isQueueOpen = false; model.queueAsPage = false; model.setSize(.small) }),
+                ("small-search", { model.isSearchOpen = true; model.query = "harbor" }),
+            ]
+            for (name, prepare) in scenes {
+                prepare()
+                try await wait("no results for the \(name) scene") { !model.search.isLoading }
+                let size = PlayerLayout.size(model.layoutState)
+                let bitmap = try await renderWidget(PlayerWidget(model: model), size: size, model: model, language: language)
+                try saveWidget(bitmap, name: "player-\(name)", language: language, in: directory)
+                drawn += 1
+            }
+            model.clearSearch()
+            model.setSize(.large)
+            let clockSize = NSHostingView(rootView: ClockWidget(clock: clock, model: model, settings: settings.player, measuring: true)).fittingSize
+            guard clockSize.width > 100, clockSize.height > 100 else { throw SmokeFailure("the clock measures \(clockSize)") }
+            let others: [(String, AnyView, CGSize)] = [
+                ("clock", AnyView(ClockWidget(clock: clock, model: model, settings: settings.player)), clockSize),
+                ("list", AnyView(ContinuePlayingWidget(model: model)), CGSize(width: 328, height: 528)),
+                ("queue-panel", AnyView(QueuePanel(model: model)), CGSize(width: PlayerLayout.queueWidth + 2 * PlayerLayout.margin, height: 460)),
+            ]
+            for (name, view, size) in others {
+                let bitmap = try await renderWidget(view, size: size, model: model, language: language)
+                try saveWidget(bitmap, name: name, language: language, in: directory)
+                drawn += 1
+            }
+        }
+        let saved = directory.map { ", snapshots in \($0.path)" } ?? ""
+        return "desktop-level window that never activates; \(model.albums.value?.count ?? 0) albums of \(artist.name), \(found) songs found; "
+            + "a pick played through the queue; \(drawn) widgets and pages drawn offscreen in \(AppLanguage.allCases.count) languages\(saved)"
+    }
+
+    /// Draws a widget view into a bitmap in an invisible window far off
+    /// screen, glass painted (the window server's glass is not captured).
+    private func renderWidget<V: View>(_ view: V, size: CGSize, model: DesktopPlayerModel, language: AppLanguage) async throws -> NSBitmapImageRep {
+        let root = view
+            .environment(\.widgetSnapshot, true)
+            .environment(\.coverImages, model.images)
+            .environment(\.locale, language.locale())
+            .environment(\.colorScheme, .dark)
+            .frame(width: size.width, height: size.height)
+            .background(Color(red: 0.16, green: 0.14, blue: 0.22))
+        let hosting = NSHostingView(rootView: root)
+        let window = NSWindow(
+            contentRect: NSRect(origin: NSPoint(x: -30_000, y: -30_000), size: size),
+            styleMask: [.borderless], backing: .buffered, defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.alphaValue = 0.01
+        window.contentView = hosting
+        defer {
+            window.orderOut(nil)
+            window.contentView = nil
+            window.close()
+        }
+        window.orderFrontRegardless()
+        for _ in 0..<5 {
+            try await Task.sleep(for: .milliseconds(70))
+            hosting.layoutSubtreeIfNeeded()
+        }
+        guard let bitmap = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else {
+            throw SmokeFailure("Could not allocate a bitmap for a widget")
+        }
+        hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
+        // Something besides the background was drawn.
+        var lit = 0
+        for y in stride(from: 0, to: bitmap.pixelsHigh, by: 6) {
+            for x in stride(from: 0, to: bitmap.pixelsWide, by: 6) {
+                if let color = bitmap.colorAt(x: x, y: y), color.brightnessComponent > 0.5 { lit += 1 }
+            }
+        }
+        guard lit > 20 else { throw SmokeFailure("a widget drew nothing (\(Int(size.width))×\(Int(size.height)))") }
+        return bitmap
+    }
+
+    private func saveWidget(_ bitmap: NSBitmapImageRep, name: String, language: AppLanguage, in directory: URL?) throws {
+        guard let directory, let png = bitmap.representation(using: .png, properties: [:]) else { return }
+        try png.write(to: directory.appendingPathComponent("desktop-\(name)-\(language.rawValue).png"))
     }
 
     // MARK: Helpers
