@@ -136,7 +136,7 @@ final class NowPlayingServices {
     }
 
     /// Every real source. `features` is the audio engine's store.
-    static func live(settings: AppSettings, features: any AudioFeatureSource) -> NowPlayingServices {
+    static func live(settings: AppSettings, features: any AudioFeatureSource, local: (any LocalPlaybackEngine)? = nil) -> NowPlayingServices {
         let resolver = ResolverBox()
         let mediaRemote = AdapterLocator.invocation().map { invocation in
             MediaRemoteProvider(adapter: MediaRemoteAdapter(invocation: invocation), resolver: { resolver.resolver })
@@ -149,13 +149,13 @@ final class NowPlayingServices {
             BrowserProcessLookup.identify(clientPort: clientPort, serverPort: serverPort, hello: hello)
         }
         let browser = BrowserProvider(bridge: bridgeServer)
-        let local = LocalPlaybackProvider()
+        let localFiles = LocalPlaybackProvider(engine: local)
 
         var inputs: [HubInput] = [
             .provider(appleMusic, priority: HubInput.dedicatedPriority),
             .provider(spotify, priority: HubInput.dedicatedPriority),
             browser.hubInput,
-            .provider(local, priority: HubInput.dedicatedPriority),
+            .provider(localFiles, priority: HubInput.dedicatedPriority),
         ]
         if let mediaRemote { inputs.append(.provider(mediaRemote, priority: HubInput.systemPriority)) }
 
@@ -201,13 +201,16 @@ final class NowPlayingServices {
     /// The invented demo songs (`--demo`, `--smoke`). `second` adds another
     /// demo player so the "several sources play" question can be seen.
     /// `features` is the audio engine's store, fed by the demo beat.
-    static func demo(_ demo: DemoProvider, second: DemoProvider?, settings: AppSettings, features: any AudioFeatureSource) -> NowPlayingServices {
+    static func demo(
+        _ demo: DemoProvider, second: DemoProvider?, settings: AppSettings, features: any AudioFeatureSource, local: (any LocalPlaybackEngine)? = nil
+    ) -> NowPlayingServices {
         var inputs: [HubInput] = [.provider(demo, priority: HubInput.dedicatedPriority)]
+        if let local { inputs.append(.provider(LocalPlaybackProvider(engine: local), priority: HubInput.dedicatedPriority)) }
         if let second { inputs.append(.provider(second, id: "demo-b", priority: HubInput.dedicatedPriority)) }
         let makeChain: @Sendable (Set<String>) -> LyricsChain = { _ in LyricsChain(providers: [demo]) }
         let services = NowPlayingServices(
             hub: NowPlayingHub(inputs: inputs, configuration: configuration(settings)),
-            artwork: RoutingArtworkProvider(routes: [.demo: demo], fallback: nil),
+            artwork: RoutingArtworkProvider(routes: [.demo: demo], fallback: ArtworkPipeline(disk: nil, fetcher: OfflineFetcher(), catalog: nil)),
             lyricsFinder: LyricsFinder(chain: makeChain([]), cache: nil, songs: LyricsSongStore(fileURL: nil)),
             makeLyricsChain: makeChain, features: features,
             recentlyPlayed: demoRecentlyPlayed(demo.library),

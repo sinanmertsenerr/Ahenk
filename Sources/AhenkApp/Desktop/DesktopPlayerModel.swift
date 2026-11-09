@@ -42,6 +42,8 @@ struct PlayerTheme: Equatable {
 enum ListSelection: Equatable {
     case continuePlaying
     case playlist(CatalogPlaylist)
+    /// A folder of song files Ahenk plays itself.
+    case folder(LocalFolder)
 }
 
 /// A page shown above the search field, over the cover flow.
@@ -143,6 +145,12 @@ final class DesktopPlayerModel {
     @ObservationIgnored var onDropFiles: (([URL], DesktopWidget, CGPoint?) -> Bool)?
     /// "Add Sticker…" in the player's menu.
     @ObservationIgnored var onAddSticker: (() -> Void)?
+    /// Ahenk's own player for song files.
+    @ObservationIgnored var local: LocalPlayer?
+    /// The folders of song files the user gave Ahenk.
+    @ObservationIgnored var library: LocalLibraryStore?
+    /// The remembered folders, newest first.
+    private(set) var localFolders: [LocalFolder] = []
 
     @ObservationIgnored private var observers: [AnyObject] = []
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
@@ -190,6 +198,18 @@ final class DesktopPlayerModel {
         observers.append(ChangeObserver({ settings.player.listeningSource }) { [weak self] _ in
             self?.sourceChanged()
         })
+        if let library {
+            tasks.append(Task { [weak self] in
+                for await folders in library.changes() {
+                    guard let self else { return }
+                    self.localFolders = folders
+                    if case .folder(let shown) = self.listSelection, !folders.contains(where: { $0.path == shown.path }) {
+                        self.listSelection = .continuePlaying
+                    }
+                }
+            })
+        }
+        local?.onProblem = { [weak self] message in self?.show(PlayerStatus(text: message, kind: .problem)) }
         let store = services.recentlyPlayed
         tasks.append(Task { [weak self] in
             for await items in store.changes() {
@@ -358,6 +378,12 @@ final class DesktopPlayerModel {
     func play(_ songs: [CatalogSong], at index: Int, context: QueueContext?) {
         guard songs.indices.contains(index) else { return }
         clearStatus()
+        // A song file plays in Ahenk itself, with the list's other files.
+        if LocalSong(songs[index]) != nil, let local {
+            playLocally(songs, at: index, context: context, in: local)
+            return
+        }
+        if settings.sources.pauseOthersOnSwitch { local?.pause() }
         // A music site's playlist plays in the site, in its own order.
         if case .playlist(let id, let name) = context, PlaybackRouter.isSitePlaylist(CatalogPlaylist(id: id, name: name)) {
             let source = listeningSource
@@ -433,13 +459,110 @@ final class DesktopPlayerModel {
     }
 
     func playNext(_ songs: [CatalogSong]) {
-        conductor.playNext(songs)
+        let (files, others) = split(songs)
+        if let local, !files.isEmpty { local.playNext(files) }
+        if !others.isEmpty { conductor.playNext(others) }
         show(PlayerStatus(text: songs.count == 1 ? "Plays next.".l10n : "These songs play next.".l10n, kind: .info))
     }
 
     func addToQueue(_ songs: [CatalogSong]) {
-        conductor.addToQueue(songs)
+        let (files, others) = split(songs)
+        if let local, !files.isEmpty { local.addToQueue(files) }
+        if !others.isEmpty { conductor.addToQueue(others) }
         show(PlayerStatus(text: songs.count == 1 ? "Added to the queue.".l10n : "These songs were added to the queue.".l10n, kind: .info))
+    }
+
+    /// Song files go to Ahenk's own player's queue, the rest to Ahenk's
+    /// queue for the other sources.
+    private func split(_ songs: [CatalogSong]) -> (files: [CatalogSong], others: [CatalogSong]) {
+        guard local != nil else { return ([], songs) }
+        return (songs.filter { LocalSong($0) != nil }, songs.filter { LocalSong($0) == nil })
+    }
+
+    // MARK: Song files
+
+    /// Plays song files in Ahenk itself: the other sources' queue steps
+    /// back and (with "pause the previous source") the others pause.
+    private func playLocally(_ songs: [CatalogSong], at index: Int, context: QueueContext?, in local: LocalPlayer) {
+        conductor.release()
+        local.play(songs, at: index, context: context)
+        if settings.sources.pauseOthersOnSwitch, !router.isDemo || services.state.players.contains(where: { $0.id.source == .demo }) {
+            services.pausePlayers(otherThan: .local)
+        }
+    }
+
+    /// Ahenk's own player is the one that plays (or was last).
+    var isLocalCurrent: Bool {
+        snapshot?.track.source == .local && local?.hasSongs == true
+    }
+
+    /// Folders and song files dropped on the list or the player: folders
+    /// are remembered, shown in the list and played; loose files play.
+    func playDropped(_ urls: [URL]) {
+        let folders = urls.filter(FileKinds.isFolder)
+        let files = urls.filter { !FileKinds.isFolder($0) && FileKinds.isSong($0) }
+        if let first = folders.first, let library {
+            for folder in folders.reversed() { library.add(folder) }
+            let folder = library.folders.first { $0.path == first.standardizedFileURL.path } ?? LocalFolder(path: first.standardizedFileURL.path)
+            playFolder(folder)
+        } else if !files.isEmpty {
+            Task { [weak self] in
+                let songs = await LocalLibraryScanner.songs(of: files, root: nil)
+                guard let self, let local = self.local else { return }
+                guard !songs.isEmpty else {
+                    self.show(PlayerStatus(text: "Ahenk cannot play these files.".l10n, kind: .problem))
+                    return
+                }
+                self.playLocally(songs.map(\.catalogSong), at: 0, context: .droppedSongs, in: local)
+            }
+        }
+    }
+
+    /// "Add Folder…": folders of song files picked in an open panel.
+    func addFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = true
+        panel.message = "Choose folders of songs; Ahenk plays them itself.".l10n
+        panel.prompt = "Add".l10n
+        NSApp.activate()
+        panel.begin { [weak self] response in
+            guard response == .OK else { return }
+            let urls = panel.urls
+            Task { @MainActor [weak self] in self?.playDropped(urls) }
+        }
+    }
+
+    /// Shows a folder's songs in the list and plays them.
+    func playFolder(_ folder: LocalFolder) {
+        listSelection = .folder(folder)
+        Task { [weak self] in
+            guard let self else { return }
+            let songs = await self.folderSongs(folder)
+            guard self.listSelection == .folder(folder) else { return }
+            self.playlistSongs = .loaded(songs)
+            guard let local = self.local else { return }
+            guard !songs.isEmpty else {
+                self.show(PlayerStatus(text: "This folder has no songs Ahenk can play.".l10n, kind: .problem))
+                return
+            }
+            self.playLocally(songs, at: 0, context: .folder(path: folder.path, name: folder.name), in: local)
+        }
+    }
+
+    func forgetFolder(_ folder: LocalFolder) {
+        library?.remove(path: folder.path)
+    }
+
+    /// A folder's songs, read from the files (where it is now).
+    private func folderSongs(_ folder: LocalFolder) async -> [CatalogSong] {
+        guard let url = library?.resolve(folder) ?? (FileManager.default.fileExists(atPath: folder.path) ? folder.url : nil) else {
+            show(PlayerStatus(text: "This folder is no longer there.".l10n, kind: .problem))
+            return []
+        }
+        let songs = await Task.detached(priority: .userInitiated) { await LocalLibraryScanner.songs(in: url) }.value
+        return songs.map(\.catalogSong)
     }
 
     /// Loads the album's songs, then plays, queues or shuffles them.
@@ -472,6 +595,10 @@ final class DesktopPlayerModel {
             services.perform(.pause)
             return
         }
+        if case .folder(let folder) = listSelection, !isListCurrent {
+            playFolder(folder)
+            return
+        }
         if isListCurrent, snapshot != nil {
             services.perform(.play)
             return
@@ -484,7 +611,7 @@ final class DesktopPlayerModel {
     var listSongs: [CatalogSong] {
         switch listSelection {
         case .continuePlaying: recent
-        case .playlist: playlistSongs.value ?? []
+        case .playlist, .folder: playlistSongs.value ?? []
         }
     }
 
@@ -492,12 +619,14 @@ final class DesktopPlayerModel {
         switch listSelection {
         case .continuePlaying: .continuePlaying
         case .playlist(let playlist): .playlist(id: playlist.id, name: playlist.name)
+        case .folder(let folder): .folder(path: folder.path, name: folder.name)
         }
     }
 
-    /// Ahenk's queue was started from the list shown.
+    /// Ahenk's queue (or its own player's) was started from the list shown.
     private var isListCurrent: Bool {
-        drivesQueue && conductor.queue.context == listContext
+        if isLocalCurrent, local?.queue.context == listContext { return true }
+        return drivesQueue && conductor.queue.context == listContext
     }
 
     /// The list is what plays right now.
@@ -524,6 +653,16 @@ final class DesktopPlayerModel {
     }
 
     private func loadListSongs() {
+        if case .folder(let folder) = listSelection {
+            playlistSongs = .loading
+            Task { [weak self] in
+                guard let self else { return }
+                let songs = await self.folderSongs(folder)
+                guard self.listSelection == .folder(folder) else { return }
+                self.playlistSongs = .loaded(songs)
+            }
+            return
+        }
         guard case .playlist(let playlist) = listSelection else {
             playlistSongs = .idle
             return

@@ -174,6 +174,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment.lyrics.stop()
         environment.light.stop()
         environment.power.stop()
+        // Ahenk's own player lets go of its files and the system's Now Playing.
+        environment.localPlayer.shutdown()
+        environment.localLibrary.flush()
         // Removes the process tap and its private aggregate device.
         environment.audio.stop()
         environment.nowPlaying.detach()

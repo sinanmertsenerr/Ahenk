@@ -57,6 +57,9 @@ final class SmokeRunner {
         if selected("stickers") {
             await report.check("stickers") { try await StickerCheck.run(snapshots: self.snapshotDirectory()) }
         }
+        if selected("localPlayback") {
+            await report.check("localPlayback") { try await LocalCheck.run() }
+        }
         if selected("settingsWindow") { await report.check("settingsWindow") { try await self.checkSettingsWindow() } }
         if selected("bridge") {
             await report.check("bridge") { try await BridgeCheck.run(settings: self.environment.settings, snapshots: self.snapshotDirectory()) }

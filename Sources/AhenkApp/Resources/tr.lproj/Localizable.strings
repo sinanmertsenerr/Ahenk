@@ -216,7 +216,6 @@
 "Play the whole list" = "Listenin tamamını çal";
 "Pause the list" = "Listeyi duraklat";
 "Play from “%@”" = "“%@” şarkısından itibaren çal";
-"Songs you play appear here." = "Çaldığınız şarkılar burada görünür.";
 "This playlist is empty." = "Bu çalma listesi boş.";
 "Loading the playlist…" = "Çalma listesi yükleniyor…";
 "1 song" = "1 şarkı";
@@ -614,3 +613,22 @@
 "Drop to make stickers" = "Çıkartma yapmak için bırakın";
 "Drop photos here, or on the clock, the list or the player." = "Fotoğrafları buraya ya da saatin, listenin veya oynatıcının üstüne bırakın.";
 "Drag a sticker to move it, its corner to resize it and the handle above it to turn it; right-click it to stick it to the clock, the list or the player, or to remove it." = "Çıkartmayı taşımak için kendisini, boyutunu değiştirmek için köşesini, döndürmek için üstündeki tutamacı sürükleyin. Saate, listeye ya da oynatıcıya yapıştırmak veya silmek için sağ tıklayın.";
+
+/* MARK: Song files */
+"Your Music Folders" = "Müzik Klasörleriniz";
+"Add Folder…" = "Klasör Ekle…";
+"Forget This Folder" = "Bu Klasörü Unut";
+"No folders yet." = "Henüz klasör yok.";
+"Folder: %@" = "Klasör: %@";
+"Songs you dropped" = "Bıraktığınız şarkılar";
+"Reading the folder…" = "Klasör okunuyor…";
+"Songs you play appear here. Drop a folder of songs here to play it." = "Çaldığınız şarkılar burada görünür. Bir şarkı klasörünü çalmak için buraya bırakın.";
+"Drop to play these songs here" = "Bu şarkıları burada çalmak için bırakın";
+"This folder has no songs Ahenk can play." = "Bu klasörde Ahenk'in çalabileceği şarkı yok.";
+"This folder is no longer there." = "Bu klasör artık yerinde değil.";
+"Ahenk cannot play these files." = "Ahenk bu dosyaları çalamıyor.";
+"A song file could not be played." = "Bir şarkı dosyası çalınamadı.";
+"“%@” could not be played." = "“%@” çalınamadı.";
+"Choose folders of songs; Ahenk plays them itself." = "Şarkı klasörlerini seçin; Ahenk onları kendisi çalar.";
+"Drop a folder of songs on Continue Playing, or add one here." = "Bir şarkı klasörünü Çalmaya Devam Et listesine bırakın ya da buradan ekleyin.";
+"Ahenk plays these songs itself, with the light, lyrics and covers. It reads their tags and covers from the files; nothing is copied or uploaded." = "Ahenk bu şarkıları kendisi çalar; ışık, sözler ve kapaklar da onlarla çalışır. Etiketleri ve kapakları dosyalardan okur; hiçbir şey kopyalanmaz ya da yüklenmez.";

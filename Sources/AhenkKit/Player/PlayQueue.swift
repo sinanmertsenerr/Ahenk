@@ -23,6 +23,10 @@ public enum QueueContext: Hashable, Sendable, Codable {
     case artist(id: String, name: String)
     case continuePlaying
     case search
+    /// A folder of song files (the local player).
+    case folder(path: String, name: String)
+    /// Song files dropped on the player.
+    case droppedSongs
 }
 
 /// Ahenk's own play queue: what plays, what played before it and what is

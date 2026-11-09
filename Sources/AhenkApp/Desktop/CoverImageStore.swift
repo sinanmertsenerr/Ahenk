@@ -92,6 +92,15 @@ final class CoverImageStore {
             if let pipeline, let stored = await pipeline.storedCover(for: origin, pixelSize: size) {
                 return NSImage(cgImage: stored.image, size: .zero)
             }
+            if origin.source == .local, origin.id.hasPrefix("/") {
+                // A song file: the cover inside it, or its folder's picture.
+                let url = URL(fileURLWithPath: origin.id)
+                let decoded = await Task.detached(priority: .utility) { () -> SendableImage? in
+                    guard let data = await LocalMetadata.artwork(of: url) else { return nil }
+                    return ArtworkImageDecoder.decodeSquare(data, maxPixelSize: size).map { SendableImage(image: $0.image) }
+                }.value
+                return decoded.map { NSImage(cgImage: $0.image, size: .zero) }
+            }
             if let url = origin.artworkURL { return await remote(url: url, pixelSize: size) }
             return nil
         }

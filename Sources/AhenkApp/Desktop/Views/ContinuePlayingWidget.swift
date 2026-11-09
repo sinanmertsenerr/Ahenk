@@ -7,6 +7,7 @@ import SwiftUI
 /// pauses it.
 struct ContinuePlayingWidget: View {
     let model: DesktopPlayerModel
+    @State private var isDropTargeted = false
 
     var body: some View {
         let theme = model.theme
@@ -20,6 +21,14 @@ struct ContinuePlayingWidget: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .widgetGlass(RoundedRectangle(cornerRadius: 26, style: .continuous), tint: theme.glass)
+        .overlay {
+            if isDropTargeted {
+                DropHint(accent: theme.accent)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.smooth(duration: 0.18), value: isDropTargeted)
+        .acceptsFileDrops(model: model, widget: .continuePlaying, isTargeted: $isDropTargeted)
         .movesWidget()
         .environment(\.colorScheme, .dark)
         .environment(\.coverImages, model.images)
@@ -88,6 +97,7 @@ struct ContinuePlayingWidget: View {
         switch model.listSelection {
         case .continuePlaying: "Continue Playing".l10n
         case .playlist(let playlist): playlist.name
+        case .folder(let folder): folder.name
         }
     }
 
@@ -97,6 +107,9 @@ struct ContinuePlayingWidget: View {
             return "Recently played".l10n
         case .playlist(let playlist):
             let count = model.playlistSongs.value?.count ?? playlist.songCount ?? 0
+            return SongCount.text(count)
+        case .folder:
+            guard let count = model.playlistSongs.value?.count else { return "Files on This Mac".l10n }
             return SongCount.text(count)
         }
     }
@@ -139,6 +152,30 @@ struct ContinuePlayingWidget: View {
         Button("Refresh Playlists".l10n) {
             model.refreshPlaylists()
         }
+        if model.local != nil {
+            Divider()
+            Section("Your Music Folders".l10n) {
+                ForEach(model.localFolders) { folder in
+                    Button {
+                        model.listSelection = .folder(folder)
+                    } label: {
+                        if model.listSelection == .folder(folder) {
+                            Label(folder.name, systemImage: "checkmark")
+                        } else {
+                            Text(folder.name)
+                        }
+                    }
+                }
+                Button("Add Folder…".l10n) {
+                    model.addFolder()
+                }
+                if case .folder(let folder) = model.listSelection {
+                    Button("Forget This Folder".l10n) {
+                        model.forgetFolder(folder)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: Rows
@@ -148,6 +185,8 @@ struct ContinuePlayingWidget: View {
         let songs = model.listSongs
         if case .playlist = model.listSelection, model.playlistSongs.isLoading {
             WidgetMessage(text: "Loading the playlist…".l10n, isLoading: true)
+        } else if case .folder = model.listSelection, model.playlistSongs.isLoading {
+            WidgetMessage(text: "Reading the folder…".l10n, isLoading: true)
         } else if songs.isEmpty {
             WidgetMessage(symbol: "music.note.list", text: emptyText)
         } else {
@@ -174,9 +213,33 @@ struct ContinuePlayingWidget: View {
 
     private var emptyText: String {
         switch model.listSelection {
-        case .continuePlaying: "Songs you play appear here.".l10n
+        case .continuePlaying: "Songs you play appear here. Drop a folder of songs here to play it.".l10n
         case .playlist: "This playlist is empty.".l10n
+        case .folder: "This folder has no songs Ahenk can play.".l10n
         }
+    }
+}
+
+/// Shown over the list while files are dragged onto it.
+private struct DropHint: View {
+    let accent: Color
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 26, style: .continuous)
+            .strokeBorder(accent, style: StrokeStyle(lineWidth: 2, dash: [7, 5]))
+            .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(.black.opacity(0.35)))
+            .overlay {
+                VStack(spacing: 8) {
+                    Image(systemName: "folder.badge.plus")
+                        .font(.system(size: 30, weight: .light))
+                    Text("Drop to play these songs here".l10n)
+                        .font(.system(size: 13, weight: .semibold))
+                        .multilineTextAlignment(.center)
+                }
+                .foregroundStyle(.white)
+                .padding(20)
+            }
+            .allowsHitTesting(false)
     }
 }
 

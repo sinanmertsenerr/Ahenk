@@ -18,6 +18,10 @@ final class AppEnvironment {
     let power = PowerMonitor()
     /// Present in `--demo` and `--smoke`.
     let demo: DemoProvider?
+    /// Ahenk plays song files itself (the Local source).
+    let localPlayer: LocalPlayer
+    /// The folders of song files the user gave Ahenk.
+    let localLibrary: LocalLibraryStore
     /// Clear Desk. Live: the apps of this Mac. Demo and smoke runs: invented
     /// apps, so trying it never hides anything.
     let deskController: ClearDeskController
@@ -77,6 +81,8 @@ final class AppEnvironment {
             self?.dropped(urls, onto: widget, at: point) ?? false
         }
         controller.model.onAddSticker = { [weak self] in self?.stickers.pickPhotos() }
+        controller.model.local = localPlayer
+        controller.model.library = localLibrary
         return controller
     }()
 
@@ -88,7 +94,10 @@ final class AppEnvironment {
         deskController = options.mode == .normal
             ? ClearDeskController(workspace: SystemDeskWorkspace(), store: ClearDeskStore(fileURL: ClearDeskStore.standardURL))
             : ClearDeskController(workspace: InventedDeskWorkspace.demo(), store: ClearDeskStore(fileURL: nil))
-        let audio = AudioTapEngine(demo: demo)
+        let ownAudio = OwnAudioTap()
+        localPlayer = LocalPlayer(tap: ownAudio, publishesNowPlaying: options.mode == .normal, muted: options.mode == .smoke)
+        localLibrary = LocalLibraryStore(fileURL: options.mode == .normal ? LocalLibraryStore.standardURL : nil)
+        let audio = AudioTapEngine(demo: demo, ownAudio: ownAudio)
         self.audio = audio
         if let demo {
             // The second demo player starts two songs later.
@@ -98,9 +107,9 @@ final class AppEnvironment {
                     id: "demo-b", bundleIdentifier: "com.sinanmertsener.Ahenk.demo-b"
                 )
                 : nil
-            services = .demo(demo, second: second, settings: settings, features: audio.store)
+            services = .demo(demo, second: second, settings: settings, features: audio.store, local: localPlayer.engine)
         } else {
-            services = .live(settings: settings, features: audio.store)
+            services = .live(settings: settings, features: audio.store, local: localPlayer.engine)
         }
     }
 
@@ -142,13 +151,18 @@ final class AppEnvironment {
         settingsWindow.show(pane: pane)
     }
 
-    /// Files dropped on a desktop widget: pictures become stickers there.
+    /// Files dropped on a desktop widget: pictures become stickers there;
+    /// folders and song files play (on the list and the player).
     @discardableResult
     func dropped(_ urls: [URL], onto widget: DesktopWidget, at point: CGPoint?) -> Bool {
         let pictures = urls.filter(FileKinds.isPicture)
         for url in pictures {
             Task { await stickers.add(photoAt: url, at: point, onto: widget) }
         }
-        return !pictures.isEmpty
+        let music = urls.filter { FileKinds.isFolder($0) || FileKinds.isSong($0) }
+        if !music.isEmpty, widget == .continuePlaying || widget == .player {
+            desktopPlayer.model.playDropped(music)
+        }
+        return !pictures.isEmpty || !music.isEmpty
     }
 }

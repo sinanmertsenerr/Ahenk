@@ -4,6 +4,8 @@ import SwiftUI
 struct SourcesPane: View {
     let services: NowPlayingServices
     @Bindable var settings: AppSettings
+    /// The desktop player (song folders).
+    let player: DesktopPlayerModel
 
     var body: some View {
         PaneForm(
@@ -59,6 +61,25 @@ struct SourcesPane: View {
                 } footer: {
                     Text("Apps report what plays through macOS. With the Ahenk browser extension, each music site in the browser reports exactly what plays; without it, Ahenk guesses the site from the song's details.".l10n)
                 }
+            }
+
+            Section {
+                if player.localFolders.isEmpty {
+                    EmptyRow(text: "No folders yet.".l10n)
+                } else {
+                    ForEach(player.localFolders) { folder in
+                        LocalFolderRow(folder: folder, player: player)
+                    }
+                }
+                LabeledContent {
+                    Button("Add Folder…".l10n) { player.addFolder() }
+                } label: {
+                    Text("Drop a folder of songs on Continue Playing, or add one here.".l10n)
+                }
+            } header: {
+                Text("Your Music Folders".l10n)
+            } footer: {
+                Text("Ahenk plays these songs itself, with the light, lyrics and covers. It reads their tags and covers from the files; nothing is copied or uploaded.".l10n)
             }
 
             Section("Listen To".l10n) {
@@ -305,6 +326,39 @@ extension AdapterHealth {
         case .unavailable: "Not available".l10n
         case .missing: "Not part of this build".l10n
         case .stopped: "Stopped".l10n
+        }
+    }
+}
+
+/// A remembered folder of songs: play it or forget it.
+private struct LocalFolderRow: View {
+    let folder: LocalFolder
+    let player: DesktopPlayerModel
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "folder")
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(folder.name)
+                    .lineLimit(1)
+                Text((folder.path as NSString).abbreviatingWithTildeInPath)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer()
+            Button("Play".l10n) { player.playFolder(folder) }
+                .controlSize(.small)
+            Button {
+                player.forgetFolder(folder)
+            } label: {
+                Image(systemName: "minus.circle")
+            }
+            .buttonStyle(.borderless)
+            .help("Forget This Folder".l10n)
+            .accessibilityLabel("Forget This Folder".l10n)
         }
     }
 }

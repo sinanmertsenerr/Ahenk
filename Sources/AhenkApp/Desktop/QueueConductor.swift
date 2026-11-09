@@ -83,6 +83,12 @@ final class QueueConductor {
         loadingStart?.cancel()
     }
 
+    /// Ahenk's own player takes over (song files): the queue steps back.
+    func release() {
+        guard isActive || attempt != nil else { return }
+        standDown()
+    }
+
     /// The song the bar shows while it starts.
     var startingSong: CatalogSong? {
         isStarting ? attempt?.song : nil

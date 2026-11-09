@@ -52,10 +52,10 @@ struct QueueList: View {
 
     var body: some View {
         let theme = model.theme
-        let conductor = model.conductor
-        let queue = conductor.queue
+        let own = Self.ownQueue(model)
         VStack(spacing: 0) {
-            if conductor.isActive, let current = queue.current {
+            if let own, let current = own.current {
+                let actions = own.actions
                 ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: 8) {
                         if showsContext {
@@ -65,11 +65,11 @@ struct QueueList: View {
                                 .lineLimit(1)
                         }
                         WidgetSectionTitle(title: "Now Playing".l10n)
-                        QueueRow(model: model, entry: current, isCurrent: true)
+                        QueueRow(model: model, entry: current, isCurrent: true, actions: actions)
                         HStack {
                             WidgetSectionTitle(title: "Up Next".l10n)
-                            if !queue.upNext.isEmpty {
-                                Button("Clear".l10n) { conductor.clearUpNext() }
+                            if !own.upNext.isEmpty {
+                                Button("Clear".l10n) { actions.clearUpNext() }
                                     .buttonStyle(.plain)
                                     .font(.system(size: 11.5, weight: .semibold))
                                     .foregroundStyle(theme.accent)
@@ -77,15 +77,15 @@ struct QueueList: View {
                             }
                         }
                         .padding(.top, 6)
-                        if queue.upNext.isEmpty {
-                            Text(queue.repeatMode == .all ? "The queue starts over after this song.".l10n : "Nothing is up next.".l10n)
+                        if own.upNext.isEmpty {
+                            Text(own.repeatMode == .all ? "The queue starts over after this song.".l10n : "Nothing is up next.".l10n)
                                 .font(.system(size: 12))
                                 .foregroundStyle(.white.opacity(0.55))
                                 .padding(.vertical, 6)
                         } else {
                             LazyVStack(spacing: 1) {
-                                ForEach(queue.upNext) { entry in
-                                    QueueRow(model: model, entry: entry, isCurrent: false)
+                                ForEach(own.upNext) { entry in
+                                    QueueRow(model: model, entry: entry, isCurrent: false, actions: actions)
                                 }
                             }
                         }
@@ -114,15 +114,55 @@ struct QueueList: View {
             .padding(.bottom, 14)
             .padding(.top, 6)
         }
-        .animation(.smooth(duration: 0.22), value: queue.entries.map(\.id))
+        .animation(.smooth(duration: 0.22), value: own?.ids ?? [])
+    }
+
+    /// The queue Ahenk plays from: its queue for the other sources, or its
+    /// own player's (song files) while that one is followed.
+    struct OwnQueue {
+        var current: QueueEntry?
+        var upNext: [QueueEntry]
+        var repeatMode: RepeatMode
+        var context: QueueContext?
+        var actions: QueueActions
+        var ids: [UUID]
+    }
+
+    @MainActor
+    static func ownQueue(_ model: DesktopPlayerModel) -> OwnQueue? {
+        let conductor = model.conductor
+        if conductor.isActive {
+            let queue = conductor.queue
+            return OwnQueue(
+                current: queue.current, upNext: queue.upNext, repeatMode: queue.repeatMode, context: queue.context,
+                actions: QueueActions(
+                    play: { conductor.jump(to: $0, in: model.listeningSource) }, remove: { conductor.remove($0) },
+                    moveToFront: { conductor.moveToFront($0) }, clearUpNext: { conductor.clearUpNext() }
+                ),
+                ids: queue.entries.map(\.id)
+            )
+        }
+        if model.isLocalCurrent, let local = model.local {
+            let queue = local.queue
+            return OwnQueue(
+                current: queue.current, upNext: queue.upNext, repeatMode: queue.repeatMode, context: queue.context,
+                actions: QueueActions(
+                    play: { local.jump(to: $0) }, remove: { local.remove($0) },
+                    moveToFront: { local.moveToFront($0) }, clearUpNext: { local.clearUpNext() }
+                ),
+                ids: queue.entries.map(\.id)
+            )
+        }
+        return nil
     }
 
     @MainActor
     static func contextText(_ model: DesktopPlayerModel) -> String {
-        if !model.conductor.isActive, let siteQueue = model.siteQueue, !siteQueue.items.isEmpty {
+        let own = ownQueue(model)
+        if own == nil, let siteQueue = model.siteQueue, !siteQueue.items.isEmpty {
             return L10n.format("The queue on %@", siteQueue.site.title)
         }
-        guard model.conductor.isActive, let context = model.conductor.queue.context else {
+        guard let own, let context = own.context else {
             return "Songs started from the player".l10n
         }
         switch context {
@@ -131,8 +171,18 @@ struct QueueList: View {
         case .artist(_, let name): return L10n.format("Artist: %@", name)
         case .continuePlaying: return "From Continue Playing".l10n
         case .search: return "From search".l10n
+        case .folder(_, let name): return L10n.format("Folder: %@", name)
+        case .droppedSongs: return "Songs you dropped".l10n
         }
     }
+}
+
+/// What a queue's rows do (Ahenk's queue or its own player's).
+struct QueueActions {
+    let play: (UUID) -> Void
+    let remove: (UUID) -> Void
+    let moveToFront: (UUID) -> Void
+    let clearUpNext: () -> Void
 }
 
 /// One queued song: plays when clicked; the minus removes it.
@@ -140,13 +190,14 @@ private struct QueueRow: View {
     let model: DesktopPlayerModel
     let entry: QueueEntry
     let isCurrent: Bool
+    let actions: QueueActions
     @State private var isHovering = false
 
     var body: some View {
         let theme = model.theme
         HStack(spacing: 4) {
             Button {
-                model.conductor.jump(to: entry.id, in: model.listeningSource)
+                actions.play(entry.id)
             } label: {
                 HStack(spacing: 10) {
                     CoverArt(song: entry.song, side: 34, cornerRadius: 7)
@@ -183,7 +234,7 @@ private struct QueueRow: View {
 
             if !isCurrent {
                 Button {
-                    model.conductor.remove(entry.id)
+                    actions.remove(entry.id)
                 } label: {
                     Image(systemName: "minus.circle.fill")
                         .font(.system(size: 14))
@@ -201,9 +252,9 @@ private struct QueueRow: View {
         .onHover { isHovering = $0 }
         .contextMenu {
             if !isCurrent {
-                Button("Play Now".l10n, systemImage: "play.fill") { model.conductor.jump(to: entry.id, in: model.listeningSource) }
-                Button("Play Next".l10n, systemImage: "text.line.first.and.arrowtriangle.forward") { model.conductor.moveToFront(entry.id) }
-                Button("Remove from the Queue".l10n, systemImage: "minus.circle") { model.conductor.remove(entry.id) }
+                Button("Play Now".l10n, systemImage: "play.fill") { actions.play(entry.id) }
+                Button("Play Next".l10n, systemImage: "text.line.first.and.arrowtriangle.forward") { actions.moveToFront(entry.id) }
+                Button("Remove from the Queue".l10n, systemImage: "minus.circle") { actions.remove(entry.id) }
             }
         }
     }

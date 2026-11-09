@@ -43,7 +43,7 @@ struct SettingsDetail: View {
         let settings = environment.settings
         switch pane {
         case .general: GeneralPane(environment: environment, settings: settings)
-        case .sources: SourcesPane(services: environment.services, settings: settings)
+        case .sources: SourcesPane(services: environment.services, settings: settings, player: environment.desktopPlayer.model)
         case .light: LightPane(settings: settings, light: environment.light)
         case .player: PlayerPane(settings: settings) { environment.desktopPlayer.resetLayout() }
         case .lyrics: LyricsPane(settings: settings, lyrics: environment.lyrics, nowPlaying: environment.nowPlaying)
