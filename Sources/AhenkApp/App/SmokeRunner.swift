@@ -49,6 +49,9 @@ final class SmokeRunner {
         if selected("wallpaperSwitch") {
             await report.check("wallpaperSwitch") { try await WallpaperCheck.runSwitch(environment: self.environment, snapshots: self.snapshotDirectory()) }
         }
+        if selected("clearDesk") {
+            await report.check("clearDesk") { try await ClearDeskCheck.run(environment: self.environment) }
+        }
         if selected("dockArt") {
             await report.check("dockArt") {
                 try DockArtCheck.run(palette: self.environment.demo?.songs.first?.palette ?? .neutral, snapshots: self.snapshotDirectory())
