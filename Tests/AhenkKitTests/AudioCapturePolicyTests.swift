@@ -23,6 +23,34 @@ struct AudioCapturePolicyTests {
 
     private var spotify: AudioTapTarget { AudioTapTarget(source: .spotify, bundleIdentifier: KnownApps.spotify, processIdentifier: 501) }
 
+    @Test("Ahenk's own player is heard from inside, with or without the permission")
+    func ownPlayback() {
+        let local = AudioTapTarget(source: .local, bundleIdentifier: KnownApps.ahenk, processIdentifier: 77)
+        for permission in [AudioCapturePermission.notDetermined, .denied, .unknown, .authorized] {
+            var policy = AudioCapturePolicy()
+            policy.update(permission: permission, now: 0)
+            policy.update(snapshot: song(KnownApps.ahenk, source: .local, pid: 77), now: 1)
+            #expect(policy.request == .own(local), "permission \(permission)")
+            #expect(policy.isGateOpen && policy.state == .listening(.own(local)))
+            // A pause closes the gate; the grace period works as for a tap.
+            policy.update(snapshot: song(KnownApps.ahenk, source: .local, playing: false, pid: 77), now: 2)
+            #expect(!policy.isGateOpen && policy.request == .own(local))
+            policy.tick(now: 2 + policy.configuration.idleGrace)
+            #expect(policy.request == nil)
+        }
+        // Spotify starts while the permission is missing: nothing to hear.
+        var policy = AudioCapturePolicy()
+        policy.update(permission: .notDetermined, now: 0)
+        policy.update(snapshot: song(KnownApps.ahenk, source: .local, pid: 77), now: 1)
+        policy.update(snapshot: song(), now: 2)
+        #expect(policy.request == nil && policy.state == .needsPermission)
+        // Digital silence never sends Ahenk's own audio elsewhere.
+        var own = authorized()
+        own.update(snapshot: song(KnownApps.ahenk, source: .local, pid: 77), now: 1)
+        own.noteDigitalSilence(10, now: 5)
+        #expect(own.request == .own(local))
+    }
+
     @Test("Playing music opens the gate and asks for the player's app")
     func playing() {
         var policy = authorized()

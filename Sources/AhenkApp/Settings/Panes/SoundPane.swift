@@ -122,6 +122,7 @@ extension AudioTapEngine {
         case .denied: return "Not allowed in System Settings".l10n
         case .retrying: return "Could not start listening; trying again".l10n
         case .listening(.demo): return "Listening to the demo beat".l10n
+        case .listening(.own): return "Listening to Ahenk's own player".l10n
         case .listening(.everything): return "Listening to every app (the music app's sound was not found)".l10n
         case .listening(.app(let target)):
             let name = target.bundleIdentifier.map(appName) ?? target.source.title

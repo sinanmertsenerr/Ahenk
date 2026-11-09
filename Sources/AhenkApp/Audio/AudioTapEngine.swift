@@ -32,9 +32,10 @@ final class AudioTapEngine {
     @ObservationIgnored private var isRequesting = false
     private static let log = AhenkLogger(category: "audio")
 
-    init(demo: DemoProvider?) {
+    /// `ownAudio`: the local player's audio, heard from inside Ahenk.
+    init(demo: DemoProvider?, ownAudio: OwnAudioTap? = nil) {
         isDemo = demo != nil
-        controller = AudioCaptureController(store: store, demo: demo)
+        controller = AudioCaptureController(store: store, demo: demo, ownAudio: ownAudio)
     }
 
     // MARK: Lifecycle
@@ -136,7 +137,7 @@ final class AudioTapEngine {
     /// The analysis hears the followed player itself (a tap on its
     /// processes, or the demo), not every app at once.
     var hearsFollowedPlayer: Bool {
-        status.isRunning && (isDemo || status.processCount > 0)
+        status.isRunning && (isDemo || status.processCount > 0 || status.isOwnPlayback)
     }
 
     /// True when the menu should offer "Allow Listening…".

@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// What the Ahenk browser extension reports for one tab.
 public struct BrowserTabReport: Sendable, Equatable, Identifiable {
@@ -156,15 +157,28 @@ public final class BrowserProvider: Sendable {
     }
 }
 
-/// Songs Ahenk plays itself from a folder (Step 9 fills it in with
-/// AVQueuePlayer). Reports nothing until then.
+/// Ahenk's own player for song files (the app's AVQueuePlayer): what it
+/// plays and the commands it takes.
+public protocol LocalPlaybackEngine: AnyObject, Sendable {
+    /// The current snapshot at once, then every noticeable change; `nil`
+    /// while nothing is loaded.
+    func snapshots() -> AsyncStream<NowPlayingSnapshot?>
+    func perform(_ command: PlaybackCommand) async -> Bool
+}
+
+/// Songs Ahenk plays itself from the user's folders, as the hub's "Local"
+/// source. Without an engine (the demo) it reports nothing.
 public final class LocalPlaybackProvider: NowPlayingProvider, Sendable {
     public static let providerID = "local"
     public let id = LocalPlaybackProvider.providerID
+    public let engine: (any LocalPlaybackEngine)?
 
-    public init() {}
+    public init(engine: (any LocalPlaybackEngine)? = nil) {
+        self.engine = engine
+    }
 
     public func snapshots() -> AsyncStream<NowPlayingSnapshot?> {
+        if let engine { return engine.snapshots() }
         let (stream, continuation) = AsyncStream<NowPlayingSnapshot?>.makeStream()
         continuation.yield(nil)
         return stream
@@ -172,7 +186,46 @@ public final class LocalPlaybackProvider: NowPlayingProvider, Sendable {
 
     @discardableResult
     public func perform(_ command: PlaybackCommand) async -> Bool {
-        false
+        await engine?.perform(command) ?? false
+    }
+}
+
+/// Hands one value to any number of streams: the newest at once to a new
+/// stream, then every change. Thread-safe.
+public final class SnapshotBroadcaster<Value: Sendable>: Sendable {
+    private let state: OSAllocatedUnfairLock<State>
+
+    private struct State: Sendable {
+        var value: Value
+        var continuations: [UUID: AsyncStream<Value>.Continuation] = [:]
+    }
+
+    public init(_ initial: Value) {
+        state = OSAllocatedUnfairLock(initialState: State(value: initial))
+    }
+
+    public var value: Value { state.withLock { $0.value } }
+
+    public func stream() -> AsyncStream<Value> {
+        let key = UUID()
+        let (stream, continuation) = AsyncStream<Value>.makeStream(bufferingPolicy: .bufferingNewest(16))
+        let current = state.withLock { state -> Value in
+            state.continuations[key] = continuation
+            return state.value
+        }
+        continuation.onTermination = { [weak self] _ in
+            self?.state.withLock { _ = $0.continuations.removeValue(forKey: key) }
+        }
+        continuation.yield(current)
+        return stream
+    }
+
+    public func publish(_ value: Value) {
+        let targets = state.withLock { state -> [AsyncStream<Value>.Continuation] in
+            state.value = value
+            return Array(state.continuations.values)
+        }
+        targets.forEach { $0.yield(value) }
     }
 }
 

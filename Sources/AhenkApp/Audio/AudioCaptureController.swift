@@ -13,6 +13,8 @@ struct AudioEngineStatus: Equatable, Sendable {
     /// Seconds the features wait for the output (Bluetooth headphones).
     var presentationDelay: Double = 0
     var lastFailure: String?
+    /// The analysis hears Ahenk's own player (song files), from inside.
+    var isOwnPlayback = false
 }
 
 /// Carries out ``AudioCapturePolicy``: builds, retargets and tears down the
@@ -31,6 +33,8 @@ final class AudioCaptureController: @unchecked Sendable {
     var onStatus: ((AudioEngineStatus) -> Void)?
 
     private let demo: DemoProvider?
+    /// Ahenk's own player's audio (the Local source), when there is one.
+    private let ownAudio: OwnAudioTap?
     private let control = DispatchQueue(label: "com.sinanmertsener.Ahenk.audio.control", qos: .userInitiated)
     private let analysis = DispatchQueue(label: "com.sinanmertsener.Ahenk.audio.analysis", qos: .userInteractive)
     private let ownPID = getpid()
@@ -54,12 +58,14 @@ final class AudioCaptureController: @unchecked Sendable {
     // Analysis queue.
     private var pump: DispatchSourceTimer?
     private var demoFeed: DemoAudioFeed?
+    private var ownPacer: OwnAudioPacer?
     private var ticks = 0
     private var lastSamplesAt = 0.0
     private var stallReported = false
 
-    init(store: AudioFeatureStore, demo: DemoProvider?) {
+    init(store: AudioFeatureStore, demo: DemoProvider?, ownAudio: OwnAudioTap? = nil) {
         self.demo = demo
+        self.ownAudio = ownAudio
         pipeline = AudioAnalysisPipeline(store: store)
         policy = AudioCapturePolicy(requiresPermission: demo == nil)
     }
@@ -138,7 +144,7 @@ final class AudioCaptureController: @unchecked Sendable {
         if forceRebuild {
             forceRebuild = false
             // A new output: a new aggregate device, the same analysis.
-            if built?.request != .demo { stopTap() }
+            if session != nil { stopTap() }
         }
         switch request {
         case nil:
@@ -150,6 +156,10 @@ final class AudioCaptureController: @unchecked Sendable {
             guard built?.request != .demo else { return }
             teardownSession()
             startDemo(now: now)
+        case .own(let target):
+            guard built?.request != request else { return }
+            teardownSession()
+            startOwn(target, now: now)
         case .app(let target):
             guard let scope = resolve(target) else {
                 // The app's audio process may still be starting: watch the
@@ -226,6 +236,29 @@ final class AudioCaptureController: @unchecked Sendable {
         log.info("Listening to the demo beat")
     }
 
+    /// Ahenk's own player: no tap, its audio comes from inside Ahenk and is
+    /// paced into the analysis like a tap's.
+    private func startOwn(_ target: AudioTapTarget, now: Double) {
+        guard let ownAudio else {
+            status.lastFailure = "no player of Ahenk's own to listen to"
+            policy.noteTapFailed(now: now)
+            return
+        }
+        built = (.own(target), nil)
+        policy.noteTapStarted(now: now)
+        let rate = ownAudio.sampleRate > 0 ? ownAudio.sampleRate : 44_100
+        let pacer = OwnAudioPacer(source: ownAudio.ring)
+        pacer.reset()
+        startAnalysis(sampleRate: rate, delay: Self.ownDelay(ownAudio), feed: nil, target: target, own: pacer)
+        log.notice("Listening to Ahenk's own player (\(Int(rate)) Hz, \(Int(Self.ownDelay(ownAudio) * 1000)) ms ahead of the sound)")
+    }
+
+    /// How long the analysed audio waits for the sound: the player's lead
+    /// over what is heard, less what the pacer keeps waiting.
+    private static func ownDelay(_ ownAudio: OwnAudioTap) -> Double {
+        max(0, ownAudio.measuredLead - OwnAudioPacer.targetBacklog)
+    }
+
     /// Stops the tap (or the demo feed's slot) but leaves the analysis.
     private func stopTap() {
         if #available(macOS 14.2, *), let tap = session as? ProcessTapSession {
@@ -242,6 +275,7 @@ final class AudioCaptureController: @unchecked Sendable {
             pump?.cancel()
             pump = nil
             demoFeed = nil
+            ownPacer = nil
             pipeline.stop(at: AudioClock.now())
         }
     }
@@ -258,7 +292,7 @@ final class AudioCaptureController: @unchecked Sendable {
 
     // MARK: Analysis (analysis queue)
 
-    private func startAnalysis(sampleRate: Double, delay: Double, feed: DemoAudioFeed?, target: AudioTapTarget?) {
+    private func startAnalysis(sampleRate: Double, delay: Double, feed: DemoAudioFeed?, target: AudioTapTarget?, own: OwnAudioPacer? = nil) {
         let gate = policy.isGateOpen
         analysisTarget = target
         analysis.async { [self] in
@@ -266,6 +300,7 @@ final class AudioCaptureController: @unchecked Sendable {
             pipeline.presentationDelay = delay
             pipeline.setGate(open: gate, at: AudioClock.now())
             demoFeed = feed
+            ownPacer = own
             lastSamplesAt = AudioClock.now()
             stallReported = false
             guard pump == nil else { return }
@@ -280,6 +315,16 @@ final class AudioCaptureController: @unchecked Sendable {
     private func tick() {
         let now = AudioClock.now()
         demoFeed?.render(until: now, into: pipeline.ring.writer)
+        if let ownPacer, let ownAudio {
+            // A song file with another rate: the analysis follows it.
+            let rate = ownAudio.sampleRate
+            if rate > 0, rate != pipeline.analyzer?.sampleRate {
+                pipeline.configure(sampleRate: rate)
+                ownPacer.reset()
+            }
+            ownPacer.pump(until: now, sampleRate: rate, into: pipeline.ring.writer)
+            pipeline.presentationDelay = Self.ownDelay(ownAudio)
+        }
         if pipeline.ring.availableSamples > 0 { lastSamplesAt = now }
         pipeline.pump(now: now)
         ticks += 1
@@ -369,10 +414,17 @@ final class AudioCaptureController: @unchecked Sendable {
         case .processes(let objects): next.processCount = objects.count
         default: next.processCount = 0
         }
+        if case .own = built?.request {
+            next.isOwnPlayback = true
+            next.sampleRate = ownAudio?.sampleRate ?? 0
+            next.presentationDelay = ownAudio.map(Self.ownDelay) ?? 0
+        } else {
+            next.isOwnPlayback = false
+        }
         if #available(macOS 14.2, *), let tap = session as? ProcessTapSession {
             next.sampleRate = tap.sampleRate
             next.presentationDelay = tap.outputLatency
-        } else {
+        } else if !next.isOwnPlayback {
             next.sampleRate = built?.request == .demo ? DemoAudioFeed.sampleRate : 0
             next.presentationDelay = 0
         }

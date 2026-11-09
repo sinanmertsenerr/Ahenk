@@ -576,3 +576,6 @@
 /* MARK: Clear Desk */
 "Click again to bring back the apps it hid" = "Gizlediği uygulamaları geri getirmek için yine tıklayın";
 "Bring the apps back" = "Uygulamaları geri getir";
+
+/* MARK: Ahenk's own player */
+"Listening to Ahenk's own player" = "Ahenk'in kendi oynatıcısı dinleniyor";

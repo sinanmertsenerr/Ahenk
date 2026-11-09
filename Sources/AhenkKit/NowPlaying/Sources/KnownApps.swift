@@ -10,13 +10,15 @@ public enum KnownApps {
     /// (`/Applications/Search.app`).
     public static let search = "com.officecommun.search"
     public static let safari = "com.apple.Safari"
-    /// Ahenk itself.
+    /// Ahenk itself: its own player (song files) shows in the system's Now
+    /// Playing too, and that report is the same player as the Local source.
     public static let ahenk = "com.sinanmertsener.Ahenk"
 
     /// Desktop apps that are a music service of their own.
     public static let musicApps: [String: MusicSource] = [
         appleMusic: .appleMusic,
         spotify: .spotify,
+        ahenk: .local,
         "com.tidal.desktop": .tidal,
         "com.deezer.deezer-desktop": .deezer,
         "com.deezer.Deezer": .deezer,

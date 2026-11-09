@@ -55,10 +55,13 @@ public enum AudioTapRequest: Sendable, Equatable {
     case everything(AudioTapTarget)
     /// The demo synthesizer (`--demo`); no tap.
     case demo
+    /// Ahenk's own player (song files): its audio comes from inside Ahenk
+    /// (`OwnAudioTap`); no process tap and no permission.
+    case own(AudioTapTarget)
 
     public var target: AudioTapTarget? {
         switch self {
-        case .app(let target), .everything(let target): target
+        case .app(let target), .everything(let target), .own(let target): target
         case .demo: nil
         }
     }
@@ -91,6 +94,8 @@ public enum AudioCaptureState: Sendable, Equatable {
 ///   digitally silent while the player says it plays → look again once,
 ///   then listen to everything except Ahenk until the player changes.
 /// - Building the tap fails → back off (2 s, 5 s, 15 s, 30 s) and retry.
+/// - Ahenk's own player (the Local source) → its own audio (`.own`), with
+///   or without the system audio permission.
 public struct AudioCapturePolicy: Sendable {
     public struct Configuration: Sendable, Equatable {
         public var idleGrace: Double = 8
@@ -248,7 +253,9 @@ public struct AudioCapturePolicy: Sendable {
             fallback = active
         }
 
-        guard mayListen else {
+        // Ahenk's own playback is heard from inside: no permission needed.
+        let ownPlayback = (active ?? current)?.source == .local
+        guard mayListen || ownPlayback else {
             request = nil
             isGateOpen = false
             state = permission == .denied ? .denied : .needsPermission
@@ -271,6 +278,8 @@ public struct AudioCapturePolicy: Sendable {
         let next: AudioTapRequest
         if active.source == .demo {
             next = .demo
+        } else if active.source == .local {
+            next = .own(active)
         } else if !active.isResolvable || fallback == active {
             next = .everything(active)
         } else {
