@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SoundPane: View {
     let audio: AudioTapEngine
+    let effects: SoundEffectsController
     let apps: AppDirectory
     @Bindable var settings: AppSettings
 
@@ -53,20 +54,43 @@ struct SoundPane: View {
                     .accessibilityLabel("Live spectrum".l10n)
             }
 
-            Section("Sound Effects".l10n) {
+            Section {
                 ToggleRow(
                     title: "Use sound effects".l10n,
                     detail: "Changes the sound of the song as it plays.".l10n,
                     isOn: $settings.effects.enabled
                 )
-                Picker("Preset".l10n, selection: $settings.effects.preset) {
+                LabeledContent("Now".l10n) {
+                    Text(effects.statusText)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
+                }
+                // A preset fills the sliders below with its own values.
+                Picker("Preset".l10n, selection: Binding {
+                    settings.effects.preset
+                } set: { preset in
+                    settings.effects.select(preset)
+                }) {
                     ForEach(SoundPreset.allCases) { preset in
                         Text(preset.title).tag(preset)
                     }
                 }
                 SliderRow(title: "Speed".l10n, value: $settings.effects.speed, range: SoundEffectSettings.speedRange, step: 0.05, format: ValueFormat.multiplier)
+                if effects.speedIsIgnored {
+                    Text("This player cannot change its speed, so only the pitch moves.".l10n)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
                 SliderRow(title: "Pitch (semitones)".l10n, value: $settings.effects.pitch, range: SoundEffectSettings.pitchRange, step: 1, format: ValueFormat.semitones)
                 SliderRow(title: "Reverb".l10n, value: $settings.effects.reverb, range: SoundEffectSettings.reverbRange, format: ValueFormat.percent)
+                LabeledContent("") {
+                    Button("Reset".l10n) { settings.effects.reset() }
+                        .disabled(SoundEffectChain(resetting: settings.effects).isNeutral && settings.effects.preset == .custom)
+                }
+            } header: {
+                Text("Sound Effects".l10n)
+            } footer: {
+                Text("Song files that Ahenk plays are changed inside Ahenk. For another app, Ahenk mutes that app's own sound and plays it again with the effects, which needs system audio access. Speed works for song files and for browser tabs with the Ahenk extension; Apple Music and Spotify have no speed to change, so there only the pitch moves. The effects are switched off when another player takes over and when Ahenk quits.".l10n)
             }
 
             Section {

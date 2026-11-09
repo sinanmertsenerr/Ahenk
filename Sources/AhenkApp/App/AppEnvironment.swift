@@ -87,6 +87,17 @@ final class AppEnvironment {
         controller.model.onAddSticker = { [weak self] in self?.stickers.pickPhotos() }
         controller.model.local = localPlayer
         controller.model.library = localLibrary
+        controller.effects = effects
+        controller.audio = audio
+        // Beside the lyrics when they show; in Settings otherwise.
+        controller.model.onOpenSoundEffects = { [weak self] in
+            guard let self else { return }
+            if self.settings.lyrics.enabled, self.lyrics.hasSong {
+                self.lyrics.panel = .effects
+            } else {
+                self.showSettings(.sound)
+            }
+        }
         return controller
     }()
 

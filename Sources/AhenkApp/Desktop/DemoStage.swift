@@ -105,6 +105,10 @@ extension DesktopPlayerController {
             case "lyrics-search":
                 self.lyrics.panel = .search
                 self.lyrics.search()
+            case "effects":
+                model.settings.effects.select(.slowedReverb)
+                model.settings.effects.enabled = true
+                self.lyrics.panel = .effects
             case "status":
                 model.show(PlayerStatus(text: "Playing in the browser needs the Ahenk browser extension.".l10n, kind: .problem))
             case "loading":

@@ -137,6 +137,11 @@ enum ValueFormat {
         return sign + number(abs(rounded), digits: 0)
     }
 
+    /// "32", "500", "1k", "16k": under an equalizer band.
+    static func shortFrequency(_ hertz: Double) -> String {
+        hertz >= 1000 ? number(hertz / 1000, digits: 0) + "k" : number(hertz, digits: 0)
+    }
+
     static func frequency(_ hertz: Double) -> String {
         hertz >= 1000
             ? L10n.format("%@ kHz", number(hertz / 1000, digits: 0))

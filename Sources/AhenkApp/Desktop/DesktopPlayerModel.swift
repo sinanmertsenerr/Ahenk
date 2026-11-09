@@ -145,6 +145,8 @@ final class DesktopPlayerModel {
     @ObservationIgnored var onDropFiles: (([URL], DesktopWidget, CGPoint?) -> Bool)?
     /// "Add Sticker…" in the player's menu.
     @ObservationIgnored var onAddSticker: (() -> Void)?
+    /// "Sound Effects…" in the player's menu.
+    @ObservationIgnored var onOpenSoundEffects: (() -> Void)?
     /// Ahenk's own player for song files.
     @ObservationIgnored var local: LocalPlayer?
     /// The folders of song files the user gave Ahenk.
@@ -976,6 +978,10 @@ final class DesktopPlayerModel {
 
     func addSticker() {
         onAddSticker?()
+    }
+
+    func openSoundEffects() {
+        onOpenSoundEffects?()
     }
 
     func resetLayout() {

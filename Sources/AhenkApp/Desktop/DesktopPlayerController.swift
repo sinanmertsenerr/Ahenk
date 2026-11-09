@@ -24,6 +24,10 @@ final class DesktopPlayerController {
     let model: DesktopPlayerModel
     let clock: ClockModel
     let lyrics: LyricsController
+    /// The sound effects behind the button beside the lyrics (set before
+    /// the widgets are made).
+    var effects: SoundEffectsController?
+    var audio: AudioTapEngine?
 
     private let settings: AppSettings
     private let power: PowerMonitor
@@ -230,7 +234,7 @@ final class DesktopPlayerController {
         case .clock: ClockRoot(clock: clock, model: model, settings: settings)
         case .continuePlaying: ContinuePlayingWidget(model: model)
         case .player: PlayerWidget(model: model)
-        case .lyrics: LyricsWidget(lyrics: lyrics, player: model, power: power, settings: settings)
+        case .lyrics: LyricsWidget(lyrics: lyrics, player: model, power: power, settings: settings, effects: effects, audio: audio)
         }
     }
 

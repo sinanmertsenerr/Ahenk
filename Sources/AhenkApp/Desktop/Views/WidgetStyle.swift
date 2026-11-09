@@ -396,6 +396,8 @@ enum DesktopSymbols {
         "text.line.first.and.arrowtriangle.forward", "wifi.exclamationmark", "xmark", "xmark.circle.fill",
         // The lyrics widget and its states.
         "arrow.counterclockwise", "minus", "photo", "text.alignleft", "text.badge.xmark", "text.magnifyingglass",
+        // The sound effects.
+        "ear", "power", "slider.vertical.3", "circle",
         // Stickers and song files.
         "face.smiling", "folder", "folder.badge.plus", "music.note.house", "externaldrive",
     ]

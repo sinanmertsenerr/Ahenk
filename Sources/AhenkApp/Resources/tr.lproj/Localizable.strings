@@ -513,6 +513,26 @@
 "Bass Boost" = "Bas Güçlendirme";
 "Concert Hall" = "Konser Salonu";
 "Underwater" = "Su Altı";
+"Sound Effects…" = "Ses Efektleri…";
+"Now" = "Şu an";
+"Pitch" = "Perde";
+"This player cannot change its speed, so only the pitch moves." = "Bu oynatıcının hızı değiştirilemiyor; yalnızca perde kayıyor.";
+"Put every slider back" = "Bütün ayarları başa döndür";
+"Turn the Sound Effects Off" = "Ses Efektlerini Kapat";
+"Turn the Sound Effects On" = "Ses Efektlerini Aç";
+"The effects could not be started for this song." = "Efektler bu şarkı için başlatılamadı.";
+"On for the song files Ahenk plays" = "Açık: Ahenk'in çaldığı şarkı dosyalarına uygulanıyor";
+"On; this preset changes nothing yet" = "Açık; bu ayar henüz bir şey değiştirmiyor";
+"On: Ahenk plays this app's sound with the effects" = "Açık: Ahenk bu uygulamanın sesini efektlerle çalıyor";
+"Starts as soon as the music plays" = "Müzik çalmaya başlayınca devreye girer";
+"Demo: the effects are shown, the demo's songs make no sound" = "Demo: efektler yalnızca gösteriliyor, demo şarkılarının sesi yok";
+"Ahenk has to hear this app to change its sound. Allow listening first." = "Ahenk'in bu uygulamanın sesini değiştirebilmesi için onu duyması gerekir. Önce dinlemeye izin verin.";
+"System audio access is denied, so this app's sound cannot be changed." = "Sistem sesine erişim reddedildiği için bu uygulamanın sesi değiştirilemiyor.";
+"Changing another app's sound needs macOS 14.2 or later." = "Başka bir uygulamanın sesini değiştirmek için macOS 14.2 veya sonrası gerekir.";
+"This app's sound cannot be told apart from other apps, so it is left as it is." = "Bu uygulamanın sesi öteki uygulamalardan ayırt edilemediği için olduğu gibi bırakıldı.";
+"What plays is not music, so its sound is left as it is." = "Çalan şey müzik olmadığı için sesi olduğu gibi bırakıldı.";
+"Ahenk cannot tell which app plays, so its sound is left as it is." = "Ahenk hangi uygulamanın çaldığını bilemediği için ses olduğu gibi bırakıldı.";
+"Song files that Ahenk plays are changed inside Ahenk. For another app, Ahenk mutes that app's own sound and plays it again with the effects, which needs system audio access. Speed works for song files and for browser tabs with the Ahenk extension; Apple Music and Spotify have no speed to change, so there only the pitch moves. The effects are switched off when another player takes over and when Ahenk quits." = "Ahenk'in çaldığı şarkı dosyalarının sesi Ahenk'in içinde değiştirilir. Başka bir uygulamada Ahenk o uygulamanın kendi sesini susturur ve sesi efektlerle yeniden çalar; bunun için sistem sesine erişim gerekir. Hız, şarkı dosyalarında ve Ahenk eklentisi kurulu tarayıcı sekmelerinde değişir; Apple Music ve Spotify'da hız değiştirilemediği için orada yalnızca perde kayar. Başka bir oynatıcı devreye girdiğinde ve Ahenk kapandığında efektler kapanır.";
 
 /* MARK: Stickers */
 "Pick any photo and Ahenk cuts out the subject, ready to stick on the desktop, the clock or the player." = "Herhangi bir fotoğraf seçin; Ahenk özneyi arka plandan ayırsın, siz de masaüstüne, saate ya da oynatıcıya yapıştırın.";

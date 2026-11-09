@@ -184,6 +184,14 @@ public struct SoundEffectChain: Sendable, Equatable {
         orbit = recipe.orbit
     }
 
+    /// What the sliders would do if the switch were on (to tell whether
+    /// there is anything to reset).
+    public init(resetting settings: SoundEffectSettings) {
+        var settings = settings
+        settings.enabled = true
+        self.init(settings)
+    }
+
     public static let neutral = SoundEffectChain()
 
     public var shiftsPitch: Bool { abs(pitchCents) >= 1 }

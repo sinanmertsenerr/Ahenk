@@ -309,6 +309,7 @@ private struct MoreMenu: View {
             }
             Button("Reset Layout".l10n, systemImage: "rectangle.3.group") { model.resetLayout() }
             Button("Add Sticker…".l10n, systemImage: "face.smiling") { model.addSticker() }
+            Button("Sound Effects…".l10n, systemImage: "slider.vertical.3") { model.openSoundEffects() }
             Divider()
             Button("Desktop Player Settings…".l10n, systemImage: "gearshape") { model.openSettings() }
             Button("Hide the Desktop Player".l10n, systemImage: "eye.slash") { model.hidePlayer() }

@@ -5,13 +5,18 @@ import SwiftUI
 /// The lyrics on the desktop: the lines beside the album cover (drawn by
 /// `LyricsStageView`, never by SwiftUI), and, under the pointer, a small
 /// bar to nudge the timing, pick another version, search for the lyrics,
-/// show or hide the cover and change the style. "Other Lyrics" and
-/// "Search Lyrics" open as a glass panel over the lines.
+/// open the sound effects, show or hide the cover and change the style.
+/// "Other Lyrics", "Search Lyrics" and "Sound Effects" open as a glass
+/// panel over the lines.
 struct LyricsWidget: View {
     let lyrics: LyricsController
     let player: DesktopPlayerModel
     let power: PowerMonitor
     @Bindable var settings: AppSettings
+    /// The sound effects and what they need to explain themselves; without
+    /// them the bar has no effects button.
+    var effects: SoundEffectsController?
+    var audio: AudioTapEngine?
     /// Shows the bar without the pointer (offscreen checks).
     var showsBar = false
     @State private var isHovering = false
@@ -23,13 +28,13 @@ struct LyricsWidget: View {
                 .opacity(lyrics.panel == nil ? 1 : 0)
                 .accessibilityLabel("Lyrics".l10n)
             if let panel = lyrics.panel {
-                LyricsPanel(lyrics: lyrics, panel: panel, theme: theme)
+                LyricsPanel(lyrics: lyrics, panel: panel, theme: theme, effects: effects, audio: audio, settings: settings)
                     .padding(10)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
             if lyrics.panel == nil {
                 // Bottom right: clear of the cover and of the line being sung.
-                LyricsBar(lyrics: lyrics, settings: settings, theme: theme)
+                LyricsBar(lyrics: lyrics, settings: settings, theme: theme, effects: effects)
                     .padding([.bottom, .trailing], 10)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .opacity(isHovering || showsBar ? 1 : 0)
@@ -114,6 +119,7 @@ private struct LyricsBar: View {
     let lyrics: LyricsController
     @Bindable var settings: AppSettings
     let theme: PlayerTheme
+    var effects: SoundEffectsController?
 
     var body: some View {
         HStack(spacing: 2) {
@@ -138,6 +144,15 @@ private struct LyricsBar: View {
             }
             WidgetIconButton(symbol: "magnifyingglass", pointSize: 13, side: 30, help: "Search Lyrics".l10n) {
                 lyrics.panel = .search
+            }
+            if effects != nil {
+                // Lit while the effects are switched on.
+                WidgetIconButton(
+                    symbol: "slider.vertical.3", pointSize: 13, side: 30, isOn: settings.effects.enabled, accent: theme.accent,
+                    help: "Sound Effects".l10n
+                ) {
+                    lyrics.panel = .effects
+                }
             }
             WidgetIconButton(
                 symbol: "photo", pointSize: 13, side: 30, isOn: settings.lyrics.showAlbumArt, accent: theme.accent,
@@ -196,11 +211,22 @@ private struct LyricsMoreMenu: View {
 
 // MARK: - Panels
 
-/// "Other Lyrics" or "Search Lyrics" over the lines.
+/// "Other Lyrics", "Search Lyrics" or "Sound Effects" over the lines.
 private struct LyricsPanel: View {
     let lyrics: LyricsController
     let panel: LyricsController.Panel
     let theme: PlayerTheme
+    var effects: SoundEffectsController?
+    var audio: AudioTapEngine?
+    @Bindable var settings: AppSettings
+
+    private var title: String {
+        switch panel {
+        case .versions: "Other Lyrics".l10n
+        case .search: "Search Lyrics".l10n
+        case .effects: "Sound Effects".l10n
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -210,7 +236,7 @@ private struct LyricsPanel: View {
                         lyrics.panel = .versions
                     }
                 }
-                Text(panel == .versions ? "Other Lyrics".l10n : "Search Lyrics".l10n)
+                Text(title)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.6))
                     .textCase(.uppercase)
@@ -226,6 +252,9 @@ private struct LyricsPanel: View {
                     }
                     .buttonStyle(.plain)
                 }
+                if panel == .effects, let effects {
+                    SoundEffectsSwitch(effects: effects, settings: settings, accent: theme.accent)
+                }
                 WidgetIconButton(symbol: "xmark", pointSize: 11.5, side: 28, help: "Close".l10n) {
                     lyrics.panel = nil
                 }
@@ -235,6 +264,10 @@ private struct LyricsPanel: View {
             switch panel {
             case .versions: LyricsVersionList(lyrics: lyrics, theme: theme)
             case .search: LyricsSearchView(lyrics: lyrics, theme: theme)
+            case .effects:
+                if let effects, let audio {
+                    SoundEffectsPanel(effects: effects, audio: audio, settings: settings, theme: theme)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

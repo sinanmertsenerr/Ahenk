@@ -30,6 +30,8 @@ final class LyricsController {
     enum Panel: Equatable {
         case versions
         case search
+        /// The sound effects (the button beside the lyrics).
+        case effects
     }
 
     private(set) var phase: Phase = .idle

@@ -505,19 +505,33 @@ final class SmokeRunner {
             states += try LyricsCheck.renderStates(song: song, cover: cover, language: language, directory: directory)
             let size = LyricsLayout.widgetSize(textScale: 1, showsCover: true)
             let model = environment.desktopPlayer.model
-            for (name, panel) in [("bar", nil), ("versions", LyricsController.Panel.versions), ("search", .search)] as [(String, LyricsController.Panel?)] {
+            let panels: [(String, LyricsController.Panel?)] = [("bar", nil), ("versions", .versions), ("search", .search), ("effects", .effects)]
+            for (name, panel) in panels {
                 controller.panel = panel
                 if panel == .versions { try await wait("no versions to show") { controller.versions.value != nil } }
                 if panel == .search {
                     controller.search()
                     try await wait("no search results to show") { controller.results.value != nil }
                 }
-                let widget = LyricsWidget(lyrics: controller, player: model, power: environment.power, settings: settings, showsBar: true)
+                if panel == .effects {
+                    // As a listener would have it: a preset chosen, switched
+                    // on, and the controller following the (demo) player.
+                    settings.effects.select(.slowedReverb)
+                    settings.effects.enabled = true
+                    environment.effects.start()
+                    try await wait("the effects did not follow the demo player") { environment.effects.route == .demo }
+                }
+                let widget = LyricsWidget(
+                    lyrics: controller, player: model, power: environment.power, settings: settings,
+                    effects: environment.effects, audio: environment.audio, showsBar: true
+                )
                 let bitmap = try await renderWidget(widget, size: size, model: model, language: language)
                 try saveWidget(bitmap, name: "lyrics-\(name)", language: language, in: directory)
                 widgets += 1
             }
             controller.panel = nil
+            environment.effects.stop()
+            settings.effects = SoundEffectSettings()
         }
 
         // Automatic sync: one window of the bare demo beat is measured and
