@@ -145,6 +145,9 @@ public struct LightSettings: Codable, Equatable, Sendable {
 // MARK: - Desktop player
 
 public struct PlayerSettings: Codable, Equatable, Sendable {
+    /// Size of the clock's digits relative to the default.
+    public static let clockScaleRange: ClosedRange<Double> = 0.6...1.4
+
     public var enabled = true
     public var size: PlayerSize = .large
     /// Display (CGDisplay UUID) that shows the player, clock and lyrics.
@@ -153,10 +156,15 @@ public struct PlayerSettings: Codable, Equatable, Sendable {
     public var showClock = true
     public var showDate = true
     public var clockFormat: ClockFormat = .system
+    public var clockScale = 1.0
     public var showContinuePlaying = true
     /// The artist's albums as a cover flow.
     public var showAlbums = true
     public var showSearch = true
+    public var showPlayerBar = true
+    /// Where picks from search, albums and lists play (the source picker at
+    /// the left of the player). `nil` follows the source that plays.
+    public var listeningSource: MusicSource?
     /// Start every song at 0:15.
     public var startAtFifteenSeconds = false
 
@@ -171,9 +179,12 @@ public struct PlayerSettings: Codable, Equatable, Sendable {
         showClock = c.lenient(.showClock, d.showClock)
         showDate = c.lenient(.showDate, d.showDate)
         clockFormat = c.lenient(.clockFormat, d.clockFormat)
+        clockScale = c.lenient(.clockScale, d.clockScale, in: Self.clockScaleRange)
         showContinuePlaying = c.lenient(.showContinuePlaying, d.showContinuePlaying)
         showAlbums = c.lenient(.showAlbums, d.showAlbums)
         showSearch = c.lenient(.showSearch, d.showSearch)
+        showPlayerBar = c.lenient(.showPlayerBar, d.showPlayerBar)
+        listeningSource = c.lenientOptional(.listeningSource)
         startAtFifteenSeconds = c.lenient(.startAtFifteenSeconds, d.startAtFifteenSeconds)
     }
 }

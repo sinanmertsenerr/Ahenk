@@ -54,9 +54,12 @@ struct AppSettingsTests {
             p.showClock = false
             p.showDate = false
             p.clockFormat = .twentyFourHour
+            p.clockScale = 0.8
             p.showContinuePlaying = false
             p.showAlbums = false
             p.showSearch = false
+            p.showPlayerBar = false
+            p.listeningSource = .spotify
             p.startAtFifteenSeconds = true
             return p
         }()
