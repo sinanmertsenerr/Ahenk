@@ -43,6 +43,15 @@ import Foundation
 ///   `artistVideo`, `artwork`), or `off` for none (measurements).
 /// - `--optimized`: Optimized Mode for this run only (measurements of the
 ///   lighter mode).
+/// - `--full-rate`: this run does not run lighter on battery (measurements
+///   of the full frame rates on an unplugged MacBook).
+/// - `--dock-art <on|still|off>`: Dock Art for this run only: the cover with
+///   the beating ring, the cover with a still ring, or Ahenk's own icon.
+/// - `--demo-local`: in demo mode, Ahenk's own player plays a folder of
+///   generated tones, silently: the Local source on the desktop for visual
+///   checks and measurements (the folder is temporary and deleted on quit).
+/// - `--demo-desk-cleared`: in demo mode, Clear Desk is switched on at
+///   launch, on the demo's invented apps (nothing on the Mac is hidden).
 /// - `--settings [pane]` / `--settings=pane`: open Settings at launch.
 /// - `--allow-multiple`: skip the single-instance hand-off (development).
 ///
@@ -96,6 +105,14 @@ public struct LaunchOptions: Equatable, Sendable {
     public var wallpaperSource: String?
     /// Optimized Mode for this run (`--optimized`), not saved.
     public var optimized = false
+    /// "Run lighter on battery" is off for this run (`--full-rate`), not saved.
+    public var fullRate = false
+    /// Dock Art for this run (`--dock-art`: `on`, `still`, `off`), not saved.
+    public var dockArt: String?
+    /// Demo only: the local player plays generated tones, muted (`--demo-local`).
+    public var demoLocal = false
+    /// Demo only: the invented desk starts cleared (`--demo-desk-cleared`).
+    public var demoDeskCleared = false
 
     /// Demo content is used in both `--demo` and `--smoke`.
     public var usesDemoContent: Bool { mode != .normal }
@@ -104,6 +121,7 @@ public struct LaunchOptions: Equatable, Sendable {
     /// changes (a smoke check, a scene, a language) is never saved.
     public var usesDetachedSettings: Bool {
         mode == .smoke || demoScene != nil || language != nil || lyricsStyle != nil || wallpaperSource != nil || optimized
+            || fullRate || dockArt != nil
     }
 
     public init() {}
@@ -151,6 +169,14 @@ public struct LaunchOptions: Equatable, Sendable {
                 bridgeWait = Self.seconds(inlineValue ?? Self.popValue(&remaining))
             case "--optimized":
                 optimized = true
+            case "--full-rate":
+                fullRate = true
+            case "--dock-art":
+                dockArt = (inlineValue ?? Self.popValue(&remaining)).map { $0.lowercased() }
+            case "--demo-local":
+                demoLocal = true
+            case "--demo-desk-cleared":
+                demoDeskCleared = true
             case "--wallpaper-song":
                 wallpaperSongArgument = inlineValue ?? Self.popValue(&remaining)
             case "--wallpaper-source":

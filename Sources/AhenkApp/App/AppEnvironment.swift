@@ -95,7 +95,8 @@ final class AppEnvironment {
             ? ClearDeskController(workspace: SystemDeskWorkspace(), store: ClearDeskStore(fileURL: ClearDeskStore.standardURL))
             : ClearDeskController(workspace: InventedDeskWorkspace.demo(), store: ClearDeskStore(fileURL: nil))
         let ownAudio = OwnAudioTap()
-        localPlayer = LocalPlayer(tap: ownAudio, publishesNowPlaying: options.mode == .normal, muted: options.mode == .smoke)
+        // Silent in smoke runs and for the demo's generated tones.
+        localPlayer = LocalPlayer(tap: ownAudio, publishesNowPlaying: options.mode == .normal, muted: options.mode == .smoke || options.demoLocal)
         localLibrary = LocalLibraryStore(fileURL: options.mode == .normal ? LocalLibraryStore.standardURL : nil)
         let audio = AudioTapEngine(demo: demo, ownAudio: ownAudio)
         self.audio = audio
@@ -129,6 +130,21 @@ final class AppEnvironment {
         }
         if options.optimized {
             settings.general.optimizedMode = true
+        }
+        if options.fullRate {
+            settings.general.lighterOnBattery = false
+        }
+        switch options.dockArt {
+        case "on":
+            settings.dock.albumArtIcon = true
+            settings.dock.beatRing = true
+        case "still":
+            settings.dock.albumArtIcon = true
+            settings.dock.beatRing = false
+        case "off":
+            settings.dock.albumArtIcon = false
+        default:
+            break
         }
         if let name = options.lyricsStyle {
             if let style = LyricStyle(rawValue: name) {

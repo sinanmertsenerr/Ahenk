@@ -83,6 +83,20 @@ struct LaunchOptionsTests {
         #expect(LaunchOptions(arguments: ["Ahenk", "--smoke-only"]).smokeChecks == nil)
     }
 
+    @Test("Launch options for the desktop extras' demo")
+    func desktopExtras() {
+        let options = LaunchOptions(arguments: ["Ahenk", "--demo", "--demo-local", "--demo-desk-cleared"])
+        #expect(options.mode == .demo && options.demoLocal && options.demoDeskCleared)
+        let plain = LaunchOptions(arguments: ["Ahenk", "--demo-local", "--demo-desk-cleared"])
+        #expect(plain.mode == .normal, "neither turns the demo on by itself")
+        #expect(!LaunchOptions(arguments: ["Ahenk", "--demo"]).demoLocal)
+        let measured = LaunchOptions(arguments: ["Ahenk", "--demo", "--full-rate", "--dock-art=Still"])
+        #expect(measured.fullRate && measured.dockArt == "still")
+        #expect(measured.usesDetachedSettings, "what a measurement switches is never saved")
+        #expect(LaunchOptions(arguments: ["Ahenk", "--demo", "--dock-art", "off"]).usesDetachedSettings)
+        #expect(!options.usesDetachedSettings)
+    }
+
     @Test("Launch options for the live bridge check")
     func bridgeOptions() {
         let options = LaunchOptions(arguments: ["Ahenk", "--smoke", "--smoke-only", "bridgeLive", "--bridge-port", "43120", "--bridge-wait=45"])

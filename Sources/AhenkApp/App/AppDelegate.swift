@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func startServices() {
         let settings = environment.settings
+        let options = environment.options
         log.info("Settings: \(describe(settings.origin)), language \(settings.general.language.rawValue)")
 
         let status = StatusMenuController(environment: environment)
@@ -89,6 +90,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment.stickers.start(player: environment.desktopPlayer)
         if environment.demo != nil {
             Task { await environment.stickers.addDemoSticker() }
+        }
+        if environment.demo != nil, options.demoLocal {
+            Task { await LocalDemo.start(environment: environment) }
+        }
+        // The demo's desk is invented apps; on this Mac's apps only a click clears it.
+        if environment.demo != nil, options.demoDeskCleared, environment.deskController.workspace is InventedDeskWorkspace {
+            environment.deskController.clear()
         }
         scheduleDemoCommands()
 
@@ -177,6 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Ahenk's own player lets go of its files and the system's Now Playing.
         environment.localPlayer.shutdown()
         environment.localLibrary.flush()
+        LocalDemo.cleanUp()
         // Removes the process tap and its private aggregate device.
         environment.audio.stop()
         environment.nowPlaying.detach()
