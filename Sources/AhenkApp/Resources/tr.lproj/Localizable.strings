@@ -201,16 +201,58 @@
 "Skips the intro of each new song." = "Her yeni şarkının girişini atlar.";
 
 /* MARK: Desktop widgets: lists */
+"Recently played" = "Son çalınanlar";
+"Choose a playlist" = "Çalma listesi seç";
+"Playlists" = "Çalma Listeleri";
+"No playlists" = "Çalma listesi yok";
+"Loading…" = "Yükleniyor…";
+"Refresh Playlists" = "Çalma Listelerini Yenile";
+"Play the whole list" = "Listenin tamamını çal";
+"Pause the list" = "Listeyi duraklat";
+"Play from “%@”" = "“%@” şarkısından itibaren çal";
+"Songs you play appear here." = "Çaldığınız şarkılar burada görünür.";
+"This playlist is empty." = "Bu çalma listesi boş.";
+"Loading the playlist…" = "Çalma listesi yükleniyor…";
+"1 song" = "1 şarkı";
+"%d songs" = "%d şarkı";
+"Remove from Continue Playing" = "Çalmaya Devam Et listesinden kaldır";
 "Open Music to see its playlists." = "Çalma listelerini görmek için Müzik uygulamasını açın.";
 "Allow access to Music in Settings › Sources to see its playlists." = "Çalma listelerini görmek için Ayarlar › Kaynaklar bölümünden Müzik uygulamasına erişim izni verin.";
 "Music did not answer." = "Müzik uygulaması yanıt vermedi.";
 "The Spotify app does not share its playlists with other apps." = "Spotify uygulaması çalma listelerini diğer uygulamalarla paylaşmıyor.";
 "Playlists from music sites need the Ahenk browser extension." = "Müzik sitelerinin çalma listeleri için Ahenk tarayıcı eklentisi gerekir.";
 
+/* MARK: Desktop widgets: albums, artists and search */
+"Album" = "Albüm";
+"EP" = "EP";
+"Single" = "Tekli";
+"Compilation" = "Derleme";
+"Go to Album" = "Albüme Git";
+"The catalog does not know this artist." = "Bu sanatçı katalogda yok.";
+"The catalog cannot be reached. Check your connection." = "Kataloğa ulaşılamıyor. Bağlantınızı kontrol edin.";
+"The catalog did not answer." = "Katalog yanıt vermedi.";
+"Too many requests to the catalog. Try again in a minute." = "Kataloğa çok fazla istek gönderildi. Bir dakika sonra yeniden deneyin.";
+"Search" = "Ara";
+"Search Apple Music" = "Apple Music'te ara";
+"Search Spotify" = "Spotify'da ara";
+"Search YouTube Music" = "YouTube Music'te ara";
+"Search SoundCloud" = "SoundCloud'da ara";
+"Search Amazon Music" = "Amazon Music'te ara";
+"Search Deezer" = "Deezer'da ara";
+"Search TIDAL" = "TIDAL'da ara";
+"Search YouTube" = "YouTube'da ara";
+"Search the demo library" = "Demo arşivinde ara";
+
 /* MARK: Desktop widgets: the player bar */
 "Not in demo mode" = "Demo modunda kullanılamaz";
 
 /* MARK: Desktop widgets: the queue */
+"Play Next" = "Hemen Sonra Çal";
+"Add to Queue" = "Çalma Sırasına Ekle";
+"Plays next." = "Hemen sonra çalacak.";
+"These songs play next." = "Bu şarkılar hemen sonra çalacak.";
+"Added to the queue." = "Çalma sırasına eklendi.";
+"These songs were added to the queue." = "Bu şarkılar çalma sırasına eklendi.";
 "The queue stopped: the next song cannot be started from Ahenk." = "Çalma sırası durdu: sıradaki şarkı Ahenk'ten başlatılamıyor.";
 "The song did not start." = "Şarkı başlamadı.";
 
