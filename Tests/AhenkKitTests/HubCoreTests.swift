@@ -88,6 +88,28 @@ struct HubCoreTests {
         #expect(hub.state.activeSnapshot?.isPositionKnown == false)
     }
 
+    @Test("Ahenk's own player and the system's report of Ahenk are one player; commands go to the player itself")
+    func ownPlayerMerges() throws {
+        var hub = HubCore(configuration: HubConfiguration(), priorities: ["mediaremote": 10, "local": 20])
+        #expect(SourceResolver.standard.kind(of: KnownApps.ahenk) == .musicApp(.local))
+        let localID = PlayerID(source: .local, bundleIdentifier: KnownApps.ahenk)
+        let own = snapshot(
+            .local, "Generated One", bundle: KnownApps.ahenk, id: "/tmp/tones/one.m4a", elapsed: 12,
+            capabilities: [.playPause, .skip, .seek, .shuffle, .repeatAll, .repeatOne]
+        )
+        hub.ingest([own], from: "local", now: t0)
+        // What the system's Now Playing says about Ahenk while it plays.
+        hub.ingest([snapshot(.local, "Generated One", bundle: KnownApps.ahenk, id: "mr:7", elapsed: 12)], from: "mediaremote", now: t0 + 1)
+        #expect(hub.state.players.map(\.id) == [localID], "the same player, not two")
+        #expect(hub.state.conflict == nil)
+        #expect(hub.state.activeSnapshot?.track.id == "/tmp/tones/one.m4a")
+        #expect(hub.provider(for: .pause, on: localID) == "local")
+        #expect(hub.provider(for: .setShuffle(true), on: localID) == "local")
+        // Still one after 5 s of both reports: never a question about Ahenk and Ahenk.
+        hub.ingest([own], from: "local", now: t0 + 5)
+        #expect(hub.state.conflict == nil && hub.state.players.count == 1)
+    }
+
     @Test("Pinned follows only its source")
     func pinned() {
         var hub = core(HubConfiguration(selection: .pinned(.spotify)))
