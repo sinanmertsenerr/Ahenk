@@ -267,14 +267,21 @@ final class StickerController {
         }
     }
 
+    /// `width` and `rotation`: the demo's sticker; a user's sticker starts
+    /// at the default size, upright.
     @discardableResult
-    func add(_ cutout: StickerCutter.Cutout, name: String, at point: CGPoint? = nil, onto widget: DesktopWidget? = nil) -> Bool {
+    func add(
+        _ cutout: StickerCutter.Cutout, name: String, at point: CGPoint? = nil, onto widget: DesktopWidget? = nil,
+        width: Double? = nil, rotation: Double = 0
+    ) -> Bool {
         let frames = (player?.visibleWindows ?? [:]).mapValues(\.frame)
         let placement = StickerGeometry.newPlacement(at: point, onto: widget, widgets: frames, displays: Self.displays(), existing: stickers.count)
-        let width = StickerGeometry.defaultWidth(
+        let width = width ?? StickerGeometry.defaultWidth(
             pixelWidth: cutout.image.width, pixelHeight: cutout.image.height, screen: NSScreen.main?.visibleFrame.size
         )
-        let sticker = Sticker(name: name, pixelWidth: cutout.image.width, pixelHeight: cutout.image.height, placement: placement, width: width)
+        let sticker = Sticker(
+            name: name, pixelWidth: cutout.image.width, pixelHeight: cutout.image.height, placement: placement, width: width, rotation: rotation
+        )
         pictures[sticker.id] = cutout.image
         do {
             try store.add(sticker, png: cutout.png)
@@ -294,14 +301,15 @@ final class StickerController {
         return true
     }
 
-    /// The demo's sticker: a generated mug cut out by Vision, on the clock.
+    /// The demo's sticker: a generated mug cut out by Vision, small and
+    /// tilted on the clock's upper right corner, clear of the time.
     func addDemoSticker() async {
         guard stickers.isEmpty, let photo = DemoStickerArt.makeImage(.mug) else { return }
         let image = SendableCGImage(photo)
         let job = Task.detached(priority: .utility) { try StickerCutter.cut(image.image) }
         guard let cutout = try? await job.value else { return }
-        let onClock = player?.visibleWindows[.clock].map { CGPoint(x: $0.frame.maxX - 40, y: $0.frame.minY + 50) }
-        add(cutout, name: "Mug", at: onClock, onto: onClock == nil ? nil : .clock)
+        let onClock = player?.visibleWindows[.clock].map { CGPoint(x: $0.frame.maxX + 34, y: $0.frame.maxY - 24) }
+        add(cutout, name: "Mug", at: onClock, onto: onClock == nil ? nil : .clock, width: 84, rotation: -0.2)
     }
 
     // MARK: Menu and Settings
