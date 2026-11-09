@@ -53,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if environment.demo != nil {
             log.notice("Demo mode: invented songs, generated covers, 120 BPM")
             LyricsStageView.drawsWhenCovered = environment.options.drawCovered
+            WallpaperController.drawsWhenCovered = environment.options.drawCovered
         }
         let services = environment.services
         services.start(settings: settings)
@@ -67,6 +68,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment.power.start()
         // The edge light follows the music, the cover and the settings.
         environment.light.start()
+        // The song's motion artwork or video over the desktop picture.
+        environment.wallpaper.start()
         // Clock, Continue Playing and the player on the desktop.
         if environment.demo != nil, environment.options.demoBackdrop, let screen = NSScreen.screens.first {
             let backdrop = DemoStage.makeBackdrop(on: screen)
@@ -150,7 +153,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Log.flush()
             return
         }
-        // Later steps restore the user's desktop here (wallpaper, hidden apps).
+        // Later steps restore the user's desktop here (hidden apps). The live
+        // wallpaper only closes its own windows: the user's wallpaper setting
+        // was never changed.
+        environment.wallpaper.stop()
         environment.desktopPlayer.stop()
         environment.lyricsSync.stop()
         environment.lyrics.stop()

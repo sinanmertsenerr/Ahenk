@@ -90,4 +90,13 @@ struct LaunchOptionsTests {
         #expect(LaunchOptions(arguments: ["Ahenk", "--bridge-port", "80"]).bridgePort == nil, "a privileged port is refused")
         #expect(LaunchOptions(arguments: ["Ahenk", "--bridge-wait", "-3"]).bridgeWait == nil)
     }
+
+    @Test("Launch options for live wallpaper checks")
+    func wallpaperOptions() {
+        let options = LaunchOptions(arguments: ["Ahenk", "--demo", "--wallpaper-song", "Glass Harbor | Nova Atlas", "--wallpaper-source=songVideo"])
+        #expect(options.wallpaperSong?.title == "Glass Harbor" && options.wallpaperSong?.artist == "Nova Atlas")
+        #expect(options.wallpaperSource == "songVideo")
+        #expect(LaunchOptions(arguments: ["Ahenk", "--wallpaper-song", "No artist"]).wallpaperSong == nil)
+        #expect(!options.usesDetachedSettings, "nothing in the settings changes")
+    }
 }

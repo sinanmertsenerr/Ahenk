@@ -136,6 +136,8 @@ final class DesktopPlayerModel {
     @ObservationIgnored var onReleaseKeyboard: (() -> Void)?
     /// Clear Desk (Step 9); `nil` while it is not available.
     @ObservationIgnored var clearDesk: (() -> DeskClearing)?
+    /// The live wallpaper, for the picker dots above the player.
+    @ObservationIgnored var wallpaper: WallpaperController?
 
     @ObservationIgnored private var observers: [AnyObject] = []
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
@@ -800,9 +802,11 @@ final class DesktopPlayerModel {
     /// What the player window must hold right now.
     var layoutState: PlayerLayoutState {
         let player = settings.player
+        let wallpaper = settings.wallpaper
         return PlayerLayoutState(
             size: player.size, showsAlbums: player.showAlbums, showsSearch: player.showSearch,
-            showsBar: player.showPlayerBar, showsPage: showsPage, isSearchOpen: isSearchOpen || isSearching
+            showsBar: player.showPlayerBar, showsPage: showsPage, isSearchOpen: isSearchOpen || isSearching,
+            showsWallpaperPicker: self.wallpaper != nil && wallpaper.enabled && wallpaper.showPicker
         )
     }
 

@@ -37,6 +37,22 @@ final class AppEnvironment {
     }()
     /// Keeps the lyrics on time by listening (Settings › Lyrics).
     private(set) lazy var lyricsSync = LyricsAutoSync(lyrics: lyrics, nowPlaying: nowPlaying, audio: audio, settings: settings)
+    /// The live wallpaper on every display (started with the services).
+    private(set) lazy var wallpaper: WallpaperController = {
+        let lookups: WallpaperLookups
+        if demo == nil {
+            lookups = .live(services: services)
+        } else if options.wallpaperSong != nil {
+            lookups = .online(storefront: services.storefront.code)
+        } else {
+            lookups = .offline
+        }
+        return WallpaperController(
+            settings: settings, nowPlaying: nowPlaying, power: power, demo: demo, lookups: lookups,
+            songOverride: demo == nil ? nil : options.wallpaperSong,
+            forcedKind: options.wallpaperSource.flatMap(WallpaperCandidate.Kind.init(rawValue:))
+        )
+    }()
     /// The desktop widgets: clock, Continue Playing, the player and its
     /// queue (started with the services).
     private(set) lazy var desktopPlayer: DesktopPlayerController = {
@@ -45,6 +61,7 @@ final class AppEnvironment {
         )
         controller.model.onOpenSettings = { [weak self] in self?.showSettings(.player) }
         controller.model.clearDesk = { [weak self] in self?.clearDesk ?? UnavailableDeskClearing() }
+        controller.model.wallpaper = wallpaper
         return controller
     }()
 

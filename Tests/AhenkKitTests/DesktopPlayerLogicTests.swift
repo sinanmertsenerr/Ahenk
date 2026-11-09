@@ -203,6 +203,12 @@ struct PlayerLayoutTests {
         var plain = state
         plain.showsAlbums = false
         #expect(PlayerLayout.rows(plain).first == PlayerLayout.accessoryHeight, "messages keep a row when the albums are off")
+        let dots = PlayerLayoutState(size: .large, showsWallpaperPicker: true)
+        #expect(PlayerLayout.rows(dots) == [PlayerLayout.pickerHeight, PlayerLayout.albumsHeight, PlayerLayout.searchHeight, PlayerLayout.barHeight])
+        #expect(Double(PlayerLayout.size(dots).height) == Double(size.height) + PlayerLayout.pickerHeight + PlayerLayout.spacing, "the dots sit on top")
+        #expect(PlayerLayout.rows(PlayerLayoutState(size: .small, showsWallpaperPicker: true)).first == PlayerLayout.pickerHeight)
+        #expect(!PlayerLayout.rows(PlayerLayoutState(size: .large, showsAlbums: false, showsSearch: false, showsBar: false, showsWallpaperPicker: true))
+                .contains(PlayerLayout.pickerHeight), "no dots without a player")
         let nothing = PlayerLayoutState(size: .large, showsAlbums: false, showsSearch: false, showsBar: false)
         #expect(nothing.isEmpty)
         #expect(!PlayerLayoutState(size: .small, showsAlbums: false, showsSearch: false, showsBar: false).isEmpty)

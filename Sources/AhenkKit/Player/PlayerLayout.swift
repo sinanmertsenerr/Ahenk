@@ -13,10 +13,12 @@ public struct PlayerLayoutState: Hashable, Sendable {
     public var showsPage: Bool
     /// The small player's search field was opened.
     public var isSearchOpen: Bool
+    /// The live wallpaper's picker dots on top.
+    public var showsWallpaperPicker: Bool
 
     public init(
         size: PlayerSize, showsAlbums: Bool = true, showsSearch: Bool = true, showsBar: Bool = true,
-        showsPage: Bool = false, isSearchOpen: Bool = false
+        showsPage: Bool = false, isSearchOpen: Bool = false, showsWallpaperPicker: Bool = false
     ) {
         self.size = size
         self.showsAlbums = showsAlbums
@@ -24,6 +26,7 @@ public struct PlayerLayoutState: Hashable, Sendable {
         self.showsBar = showsBar
         self.showsPage = showsPage
         self.isSearchOpen = isSearchOpen
+        self.showsWallpaperPicker = showsWallpaperPicker
     }
 
     /// The small player always shows its bar: it is all there is of it.
@@ -36,14 +39,15 @@ public struct PlayerLayoutState: Hashable, Sendable {
         }
     }
 
-    /// Something is drawn at all.
+    /// Something is drawn at all (the dots alone are not a player).
     public var isEmpty: Bool {
         size == .large && !showsAlbums && !showsSearch && !showsBar && !showsPage
     }
 }
 
 /// The player window's parts, stacked from the bottom: the bar, the search
-/// field, then the albums or an open page. The window is anchored at its
+/// field, then the albums or an open page, and on top the live wallpaper's
+/// picker dots when they are on. The window is anchored at its
 /// bottom centre (`DesktopWidget.player.anchor`), so the bar stays where
 /// the user put it while the window grows or shrinks above it.
 public enum PlayerLayout {
@@ -58,6 +62,8 @@ public enum PlayerLayout {
     /// The small player's round buttons, or the row a message appears in
     /// when nothing else is above the field.
     public static let accessoryHeight: Double = 34
+    /// The live wallpaper's picker dots (or the artist's name field).
+    public static let pickerHeight: Double = 26
     public static let spacing: Double = 10
     /// Clear room around the glass for its shadow.
     public static let margin: Double = 14
@@ -67,6 +73,7 @@ public enum PlayerLayout {
     /// Heights of the parts from the top down (without margins).
     public static func rows(_ state: PlayerLayoutState) -> [Double] {
         var rows: [Double] = []
+        if state.showsWallpaperPicker, !state.isEmpty { rows.append(pickerHeight) }
         switch state.size {
         case .large:
             if state.showsPage {

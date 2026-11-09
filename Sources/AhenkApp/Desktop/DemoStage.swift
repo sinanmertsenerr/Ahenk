@@ -7,8 +7,10 @@ import AppKit
 /// `--demo-scene` opens the player in one state.
 @MainActor
 enum DemoStage {
-    /// A borderless window just under the widgets that covers the screen
-    /// with a generated dusk gradient. Clicks pass through it.
+    /// A borderless window that covers the screen with a generated dusk
+    /// gradient, standing in for the user's own wallpaper: under the live
+    /// wallpaper (which melts in over it and back), the desktop icons and
+    /// the widgets. Clicks pass through it.
     static func makeBackdrop(on screen: NSScreen) -> NSWindow {
         let window = NSWindow(contentRect: screen.frame, styleMask: [.borderless], backing: .buffered, defer: false)
         window.isOpaque = true
@@ -16,7 +18,7 @@ enum DemoStage {
         window.ignoresMouseEvents = true
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
-        window.level = NSWindow.Level(rawValue: DesktopWidgetWindow.level.rawValue - 1)
+        window.level = NSWindow.Level(rawValue: WallpaperWindow.level.rawValue - 1)
         let view = NSImageView(frame: CGRect(origin: .zero, size: screen.frame.size))
         view.imageScaling = .scaleAxesIndependently
         view.image = backdropImage(size: screen.frame.size, scale: screen.backingScaleFactor)

@@ -33,6 +33,13 @@ import Foundation
 /// - `--bridge-wait <s>`: with `--smoke`, run the live end-to-end check:
 ///   wait this long for a real browser with the extension (a test browser
 ///   on a mock music page), then drive it; see Scripts/bridge-e2e.sh.
+/// - `--wallpaper-song "<title>|<artist>"`: in demo mode, the live
+///   wallpaper looks up this (real) song online instead of the invented one,
+///   while the demo plays: checks and measurements of the real sources
+///   without playing music.
+/// - `--wallpaper-source <kind>`: the live wallpaper shows this kind of
+///   candidate first for this run (`motionArtwork`, `songVideo`,
+///   `artistVideo`, `artwork`).
 /// - `--settings [pane]` / `--settings=pane`: open Settings at launch.
 /// - `--allow-multiple`: skip the single-instance hand-off (development).
 ///
@@ -73,6 +80,16 @@ public struct LaunchOptions: Equatable, Sendable {
     public var bridgePort: Int?
     /// Seconds the live bridge check waits for a browser (`--bridge-wait`).
     public var bridgeWait: Double?
+    /// The song the demo's wallpaper looks up online (`--wallpaper-song`).
+    public var wallpaperSong: (title: String, artist: String)? {
+        guard let raw = wallpaperSongArgument else { return nil }
+        let parts = raw.split(separator: "|", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+        guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { return nil }
+        return (parts[0], parts[1])
+    }
+    public var wallpaperSongArgument: String?
+    /// The candidate kind the wallpaper shows first (`--wallpaper-source`).
+    public var wallpaperSource: String?
 
     /// Demo content is used in both `--demo` and `--smoke`.
     public var usesDemoContent: Bool { mode != .normal }
@@ -126,6 +143,10 @@ public struct LaunchOptions: Equatable, Sendable {
                 bridgePort = (inlineValue ?? Self.popValue(&remaining)).flatMap(Int.init).flatMap { (1024...65_535).contains($0) ? $0 : nil }
             case "--bridge-wait":
                 bridgeWait = Self.seconds(inlineValue ?? Self.popValue(&remaining))
+            case "--wallpaper-song":
+                wallpaperSongArgument = inlineValue ?? Self.popValue(&remaining)
+            case "--wallpaper-source":
+                wallpaperSource = inlineValue ?? Self.popValue(&remaining)
             case "--smoke-only":
                 let names = (inlineValue ?? Self.popValue(&remaining) ?? "")
                     .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
