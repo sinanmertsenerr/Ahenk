@@ -127,6 +127,25 @@ public struct PlayQueue: Hashable, Sendable, Codable {
         return true
     }
 
+    /// Removes the current entry; the one after it becomes current (with
+    /// `wrapping`, the first when it was the last). Returns the new current
+    /// entry, `nil` when none is left to play.
+    @discardableResult
+    public mutating func removeCurrent(wrapping: Bool) -> QueueEntry? {
+        guard let currentIndex else { return nil }
+        let id = entries[currentIndex].id
+        entries.remove(at: currentIndex)
+        unshuffledOrder?.removeAll { $0 == id }
+        if currentIndex < entries.count {
+            self.currentIndex = currentIndex
+        } else if wrapping, !entries.isEmpty {
+            self.currentIndex = 0
+        } else {
+            self.currentIndex = nil
+        }
+        return current
+    }
+
     /// Moves an up-next entry to another place in the up-next list.
     @discardableResult
     public mutating func move(_ id: UUID, toUpNextPosition position: Int) -> Bool {
