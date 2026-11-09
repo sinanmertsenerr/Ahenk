@@ -176,6 +176,19 @@ enum WallpaperCheck {
         try await wait("the demo song's candidates did not arrive") { controller.offer.count >= 3 && controller.phase == .ready }
         let kinds = controller.offer.map(\.kind)
         guard controller.windows.allSatisfy({ !$0.isVisible }) else { throw SmokeFailure("a wallpaper window appeared on a switched-off display") }
+        // A dot picks another candidate, and back; a typed artist name is
+        // searched with, then forgotten.
+        let first = controller.offer[0].id
+        let second = controller.offer[1].id
+        controller.choose(second)
+        try await wait("the second dot was not chosen") { controller.currentID == second }
+        controller.choose(first)
+        try await wait("the first dot was not chosen again") { controller.currentID == first }
+        let reported = controller.artistName
+        controller.searchArtist("Invented Artist Name")
+        try await wait("the typed artist name was not used") { controller.artistName == "Invented Artist Name" && controller.isArtistTyped }
+        controller.searchArtist(reported)
+        try await wait("the artist name was not forgotten") { controller.artistName == reported && !controller.isArtistTyped }
         func flip() throws {
             let menu = NSMenu()
             QuickMenu.populate(menu, environment: environment, placement: .menuBar)
@@ -203,7 +216,8 @@ enum WallpaperCheck {
             drawn += 1
         }
         return "the menu's Live Wallpaper item turns the running wallpaper off and on (now \(controller.status)); "
-            + "the demo song offers \(kinds.map(\.rawValue).joined(separator: ", ")); every display was switched off, nothing was shown; "
+            + "the demo song offers \(kinds.map(\.rawValue).joined(separator: ", ")), the dots choose among them and a typed artist name is used; "
+            + "every display was switched off, nothing was shown; "
             + "the dots drawn in \(drawn) languages"
     }
 

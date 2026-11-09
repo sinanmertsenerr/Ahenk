@@ -145,7 +145,7 @@ struct WallpaperPane: View {
     private var addRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                TextField(text: $address, prompt: Text("A YouTube link or a video's web address".l10n)) {
+                TextField(text: $address, prompt: Text("YouTube link or video address".l10n)) {
                     Text("Web address".l10n)
                 }
                 .labelsHidden()
@@ -238,6 +238,7 @@ extension WallpaperController.Status {
             }
         case .nothingToShow: "Nothing to show for this song".l10n
         case .hidden: "Paused while the desktop is hidden".l10n
+        case .everyDisplayOff: "Off on every display".l10n
         }
     }
 }

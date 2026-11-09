@@ -113,8 +113,10 @@ final class WallpaperController {
         case looking
         case showing(WallpaperCandidate.Kind, LightFramePlan.Reason)
         case nothingToShow
-        /// Covered, asleep, behind a full-screen app, or every display off.
+        /// Covered, asleep, behind a full-screen app.
         case hidden
+        /// Settings switch it off on every display.
+        case everyDisplayOff
 
         var description: String {
             switch self {
@@ -124,6 +126,7 @@ final class WallpaperController {
             case .showing(let kind, let reason): "showing \(kind.rawValue) (\(reason.rawValue))"
             case .nothingToShow: "nothing to show"
             case .hidden: "hidden"
+            case .everyDisplayOff: "off on every display"
             }
         }
     }
@@ -975,6 +978,8 @@ final class WallpaperController {
             next = .showing(candidate.kind, plan.reason)
         } else if music != .playing, settings.wallpaper.selectedVideoID == nil || nowPlaying.snapshot == nil {
             next = .waitingForMusic
+        } else if !screens.values.contains(where: isEnabled(on:)) {
+            next = .everyDisplayOff
         } else if !screens.values.contains(where: { isEnabled(on: $0) && isVisible($0) }) {
             next = .hidden
         } else if wanted != nil || !pending.isEmpty || !embedChecking.isEmpty {

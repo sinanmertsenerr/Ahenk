@@ -529,7 +529,20 @@ final class SmokeRunner {
     private func checkSettingsWindow() async throws -> String {
         let settings = environment.settings
         let original = settings.general.language
-        defer { settings.general.language = original }
+        let originalWallpaper = settings.wallpaper
+        defer {
+            settings.general.language = original
+            settings.wallpaper = originalWallpaper
+        }
+        // The user's video list with invented entries, so the snapshot shows
+        // its rows (in-memory settings only).
+        if snapshotDirectory() != nil, settings.wallpaper.savedVideos.isEmpty {
+            let shown = SavedVideo(title: "Harbor at Dusk", kind: .youtube, reference: "ahenkDemo01")
+            settings.wallpaper.addVideo(shown)
+            settings.wallpaper.addVideo(SavedVideo(title: "Rain Window", kind: .file, reference: "/Users/you/Movies/Rain Window.mov"))
+            settings.wallpaper.addVideo(SavedVideo(title: "Neon Tide", kind: .url, reference: "https://media.example/loops/neon-tide.mp4"))
+            settings.wallpaper.selectVideo(id: shown.id)
+        }
         let directory = snapshotDirectory()
         if let directory {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -543,9 +556,10 @@ final class SmokeRunner {
                 if let directory, let png = bitmap.representation(using: .png, properties: [:]) {
                     try png.write(to: directory.appendingPathComponent("settings-\(pane.rawValue)-\(language.rawValue).png"))
                 }
-                // Sources is taller than the window: its lower sections (the
-                // browser extension) in a tall copy.
-                if let directory, pane == .sources, let png = try await render(pane, height: 2_000).representation(using: .png, properties: [:]) {
+                // Sources and Live Wallpaper are taller than the window: their
+                // lower sections (the browser extension, the user's videos)
+                // in a tall copy.
+                if let directory, [.sources, .wallpaper].contains(pane), let png = try await render(pane, height: 2_000).representation(using: .png, properties: [:]) {
                     try png.write(to: directory.appendingPathComponent("settings-\(pane.rawValue)-full-\(language.rawValue).png"))
                 }
             }

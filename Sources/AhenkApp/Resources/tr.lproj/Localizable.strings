@@ -438,7 +438,7 @@
 "Show on the Desktop" = "Masaüstünde Göster";
 "On the Desktop" = "Masaüstünde";
 "Follow the Song Again" = "Şarkıya Geri Dön";
-"A YouTube link or a video's web address" = "Bir YouTube bağlantısı ya da bir videonun web adresi";
+"YouTube link or video address" = "YouTube bağlantısı ya da video adresi";
 "Web address" = "Web adresi";
 "Add" = "Ekle";
 "Add Video File…" = "Video Dosyası Ekle…";
@@ -453,6 +453,7 @@
 "Showing generated motion" = "Üretilen hareketli görüntü gösteriliyor";
 "Nothing to show for this song" = "Bu şarkı için gösterilecek bir şey yok";
 "Paused while the desktop is hidden" = "Masaüstü görünmediği için duraklatıldı";
+"Off on every display" = "Bütün ekranlarda kapalı";
 "Remove" = "Kaldır";
 
 /* MARK: Live wallpaper: the dots above the player */
