@@ -333,14 +333,59 @@ public final class DemoProvider: NowPlayingProvider, ArtworkProvider, LyricsProv
     // MARK: LyricsProvider
 
     public func fetch(_ query: LyricsQuery) async throws -> LyricsResult {
+        guard let match = lyricsSong(for: query) else { return .notFound }
+        return .synced(match.lyrics)
+    }
+
+    /// The demo song a lyrics query names.
+    private func lyricsSong(for query: LyricsQuery) -> DemoSong? {
         // Locale-neutral folding: with a Turkish locale, "I" folds to "ı" and
         // "DRIVE" would stop matching "Drive".
         func same(_ a: String, _ b: String) -> Bool {
             a.compare(b, options: [.caseInsensitive, .diacriticInsensitive], range: nil, locale: nil) == .orderedSame
         }
-        let match = (songs + library.songs).first { same($0.track.title, query.title) && same($0.track.artist, query.artist) }
-        guard let match else { return .notFound }
-        return .synced(match.lyrics)
+        return (songs + library.songs).first { same($0.track.title, query.title) && same($0.track.artist, query.artist) }
+    }
+
+    /// Three versions of a demo song's invented lines, so "Other Lyrics"
+    /// has something to offer: the right timing, a copy that runs late (as
+    /// one synced against another edit would) and the words alone.
+    public func versions(for query: LyricsQuery) async throws -> [LyricsVersion] {
+        guard let song = lyricsSong(for: query) else { return [] }
+        return Self.versions(of: song, provider: name)
+    }
+
+    static func versions(of song: DemoSong, provider: String) -> [LyricsVersion] {
+        let track = song.track
+        let plain = song.lyrics.lines.map(\.text).filter { !$0.isEmpty }.joined(separator: "\n")
+        func version(_ suffix: String, _ result: LyricsResult, album: String? = nil) -> LyricsVersion {
+            LyricsVersion(
+                provider: provider, reference: "\(track.id)#\(suffix)", title: track.title, artist: track.artist,
+                album: album ?? track.album, duration: track.duration, kind: LyricsVersion.kind(of: result), lyrics: result
+            )
+        }
+        return [
+            version("original", .synced(song.lyrics)),
+            version("late", .synced(song.lyrics.shifted(by: 0.7)), album: "\(track.album) (Live)"),
+            version("words", .plain(plain)),
+        ]
+    }
+
+    /// Demo songs whose title or artist hold every word typed.
+    public func search(_ query: LyricsQuery) async throws -> [LyricsVersion] {
+        let words = TrackMatching.normalized("\(query.title) \(query.artist)").split(separator: " ").map(String.init)
+        guard !words.isEmpty else { return [] }
+        var seen: Set<String> = []
+        let matches = (songs + library.songs).filter { song in
+            let text = TrackMatching.normalized("\(song.track.title) \(song.track.artist) \(song.track.album)")
+            return words.allSatisfy { text.contains($0) } && seen.insert(song.track.id).inserted
+        }
+        return matches.prefix(8).map { song in
+            LyricsVersion(
+                provider: name, reference: "\(song.track.id)#original", title: song.track.title, artist: song.track.artist,
+                album: song.track.album, duration: song.track.duration, kind: .synced, lyrics: .synced(song.lyrics)
+            )
+        }
     }
 
     // MARK: AudioFeatureSource
