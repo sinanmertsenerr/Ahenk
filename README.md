@@ -12,8 +12,10 @@ shows what is playing, and your own files.
 > Status: in development. In place: settings, menu bar, Settings window,
 > demo mode, the now-playing hub that follows Apple Music, Spotify, browsers
 > and any app that shows what is playing, the analysis that hears the beat,
-> and the edge light around every screen in 22 styles. The features arrive
-> step by step; see [docs/PROGRESS.md](docs/PROGRESS.md).
+> the edge light around every screen in 22 styles, and the glass desktop
+> player: a big clock, Continue Playing, the artist's albums as a cover flow,
+> search, the player bar and a play queue. The features arrive step by step;
+> see [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ### Requirements
 
@@ -38,9 +40,13 @@ listens to the app that plays your music, only while music plays, and
 analyzes the sound in memory. If you said no, turn Ahenk on in System
 Settings › Privacy & Security › Screen & System Audio Recording › System
 Audio Recording Only. Without Automation, Ahenk still shows what plays;
-it asks only when you press **Allow Access…** in Settings › Sources. To find
-covers, Ahenk sends a song's title and artist to Apple's public catalog and
-asks Spotify's public page for a track's cover; nothing else leaves your Mac.
+it asks only when you press **Allow Access…** in Settings › Sources (or, the
+first time, when you pick a song in the desktop player to play there). To
+find covers, albums and search results, Ahenk sends a song's title and artist,
+or what you type into the search, to Apple's public catalog and asks
+Spotify's public page for a track's cover; to play a pick in Spotify, it asks
+ListenBrainz (MetaBrainz) for the song's Spotify ID by its title, artist and
+album. Nothing else leaves your Mac.
 
 ### License
 
@@ -60,8 +66,10 @@ sitelerini, çalan şarkıyı gösteren her uygulamayı ve kendi dosyalarınız�
 > Durum: geliştiriliyor. Hazır olanlar: ayarlar, menü çubuğu, Ayarlar
 > penceresi, demo modu, Apple Music'i, Spotify'ı, tarayıcıları ve çalan
 > şarkıyı gösteren her uygulamayı izleyen "şu an çalıyor" merkezi, ritmi
-> duyan ses analizi ve her ekranın kenarında 22 farklı stille parlayan kenar
-> ışığı. Özellikler adım adım geliyor; ayrıntılar
+> duyan ses analizi, her ekranın kenarında 22 farklı stille parlayan kenar
+> ışığı ve masaüstündeki cam oynatıcı: büyük bir saat, Çalmaya Devam Et
+> listesi, sanatçının albümlerini dizen kapak akışı, arama, oynatıcı çubuğu ve
+> çalma sırası. Özellikler adım adım geliyor; ayrıntılar
 > [docs/PROGRESS.md](docs/PROGRESS.md) dosyasında.
 
 ### Gereksinimler
@@ -88,10 +96,14 @@ müziğinizi çalan uygulamayı dinler ve sesi bellekte analiz eder. Hayır
 dediyseniz Sistem Ayarları › Gizlilik ve Güvenlik › Ekran ve Sistem Sesi
 Kaydı › Yalnızca Sistem Sesi Kaydı bölümünden Ahenk'i açın. Otomasyon izni
 olmadan da neyin çaldığını gösterir; izni yalnızca Ayarlar › Kaynaklar'daki
-**Erişime İzin Ver…** düğmesine bastığınızda ister. Kapakları bulmak için
-şarkının adını ve sanatçısını Apple'ın herkese açık kataloğuna gönderir, bir
-parçanın kapağını Spotify'ın herkese açık sayfasından ister; Mac'inizden başka
-hiçbir şey çıkmaz.
+**Erişime İzin Ver…** düğmesine bastığınızda (ya da masaüstü oynatıcıda o
+uygulamada çalması için ilk kez bir şarkı seçtiğinizde) ister. Kapakları,
+albümleri ve arama sonuçlarını bulmak için şarkının adını ve sanatçısını ya da
+aramaya yazdıklarınızı Apple'ın herkese açık kataloğuna gönderir, bir parçanın
+kapağını Spotify'ın herkese açık sayfasından ister; seçtiğiniz bir şarkıyı
+Spotify'da çalmak için şarkının adını, sanatçısını ve albümünü ListenBrainz'e
+(MetaBrainz) göndererek Spotify kimliğini bulur. Mac'inizden başka hiçbir şey
+çıkmaz.
 
 ### Lisans
 

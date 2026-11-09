@@ -775,3 +775,189 @@ top strip includes the notch).
   frame may show the old layout.
 - `waitUntilCompleted` on the render thread: a stuck GPU would stall the light (not the app).
 - The gallery's tiles cost ~2 % CPU while Settings › Edge Light is visible.
+
+## Step 5 — Desktop player (done, 2026-11-09)
+
+### What exists
+
+```
+Sources/AhenkKit/
+  Catalog/     CatalogModels (artists, albums, songs, playlists, MusicCatalog), ITunesCatalog (search, artist of a song,
+               albums, album songs, top songs; cached, shared in flight, throttled), CatalogCache, RequestThrottle,
+               SpotifyTrackFinder (ListenBrainzSpotifyFinder: Spotify track IDs by title/artist/album, batched)
+  Demo/        DemoLibrary (6 invented artists, their albums/EPs/singles, 4 playlists, invented lines) + DemoMusicCatalog;
+               DemoProvider plays any library song alone after a start delay and keeps a volume
+  Player/      PlayQueue (+ SongMatching), QueueConductorPolicy (+ PlaybackAttempt), PlayerScripts (Music and Spotify
+               AppleScript: play by ID or name, playlists, volume), WidgetPlacement (+ DesktopWidget), CoverFlowGeometry,
+               ClockText, PlayerLayout (window sizes, queue panel place, ProgressSchedule, ListeningSourceChoice)
+  Bridge/      BrowserPlaybackRouting (+ BrowserPlayRequest/Outcome): what Step 7's extension implements
+Sources/AhenkApp/Desktop/
+  DesktopPlayerController   the widget windows on the chosen display: placement, saved places, grow/shrink, the queue
+                            panel, occlusion, screens, keyboard for the search field
+  DesktopWidgetWindow       non-activating panel one level above the desktop icons (+ DesktopHostingView, WidgetMover)
+  DesktopPlayerModel        what the widgets show and do (theme, lists, albums, pages, search, volume, status)
+  QueueConductor            plays Ahenk's queue in a source that knows one song at a time (+ PlayerStatus)
+  PlaybackRouter            plays a pick in the demo, Music, Spotify or (Step 7) a site; playlists and volume
+  CoverImageStore           covers at the size shown (catalog, generated, stored), memory + ~/Library/Caches/Ahenk/Covers
+  DemoStage                 --demo-backdrop (generated wallpaper window) and --demo-scene
+  Views/                    ClockWidget, ContinuePlayingWidget, PlayerWidget, CoverFlowView, PlayerBar (source picker,
+                            transport, song, actions, volume slider, status toast), SearchField, PlayerPages (search
+                            results, album, artist), QueuePanel (+ QueueList), ProgressLine, WidgetStyle
+Sources/AhenkApp/Settings/Panes/PlayerPane   show/hide each widget, size, display, clock date/format/size, where picks
+                            play, start at 0:15, Reset Layout
+Scripts/widget-shot.swift   captures only Ahenk's windows (ScreenCaptureKit), for checks and screenshots
+Tests/AhenkKitTests/        315 tests in 51 suites (was 258/36): catalog decoding, ListenBrainz decoding, throttle, demo
+                            library, play queue, conductor rules, Music/Spotify scripts, placement and clamping, cover
+                            flow index math, clock text, window layout, progress pacing, listening source, launch options
+```
+
+The widgets (default layout): the clock with the date at the top left, Continue Playing under it, and the player in the
+lower middle (moved right of the list when they would overlap): the cover flow of the playing artist's albums (the playing
+album in the centre with its title and "2025 · Album"), the search field with round buttons (Clear Desk when Step 9 makes it
+available, small player), and the player bar. Clicking the centre cover opens its songs (its play button plays it); a side
+cover comes to the centre; drag, swipe or scroll to browse. Search shows artists, songs (eight, "Show All") and albums;
+artist and album pages open above the field with Back and Close; right-click on any song: Play Next, Add to Queue, Go to
+Album; Return plays the first song; Esc empties the field. The bar: source picker (a coloured badge; its menu chooses where
+picked songs play, Automatic follows what plays), shuffle, previous, play/pause, next, repeat (with Ahenk's queue they act on the
+queue), cover, title, "artist — album", a thin line (click or drag to seek), More (album, artist, size, Reset Layout,
+settings, hide), lyrics (flips `settings.lyrics.enabled`; Step 6 draws them), queue, like (when the source has it) and
+volume (an inline slider, when the source's volume can be read). The list's title is a menu of the source's playlists; its
+round button plays the whole list or pauses it. The small player is the bar with round buttons above it (search, Clear
+Desk, large). While a song starts, the bar shows it with "Starting…", a pulse on the cover and a light along the line.
+
+### Build, run, verify
+
+```sh
+swift build && swift test             # 315 tests, no warnings
+./Scripts/make-app.sh && ./Scripts/smoke.sh --snapshots   # desktop-*.png: every widget and page in both languages
+open -n dist/Ahenk.app --args --demo                      # the player on the desktop with the demo library
+open -n dist/Ahenk.app --args --demo-scene album --demo-backdrop --language tr
+swift Scripts/widget-shot.swift /tmp/album.png            # only Ahenk's windows, cropped to the widgets
+pkill -x Ahenk
+```
+
+Scenes (`--demo-scene`): `albums` (default), `search` ("nova"), `album`, `artist`, `queue` (an album started, two songs
+added, the queue open), `small`, `small-search`, `status` (a message), `loading` (a song held while starting), `off` (player
+hidden). Scenes, `--language en|tr` and smoke runs work on an in-memory copy of the settings: nothing they change is saved.
+`--demo-backdrop` covers the screen with Ahenk's own generated wallpaper (under the widgets) so the glass can be captured
+without the user's desktop.
+
+New smoke check `desktopPlayer`: the widget window sits one level above the desktop icons, joins every Space, stays put,
+is a non-activating panel and never main; the playing demo artist's albums and a search arrive through the demo catalog; an
+album song picked from the player plays through Ahenk's queue until the demo source confirms it, with the rest of the album
+up next; seven player states, the clock, the list and the queue panel are drawn offscreen in English and Turkish (glass is
+painted in these bitmaps; Core Animation also flattens the cover flow's 3D turn there). `resources` checks every SF Symbol
+the widgets use. Nothing appears on screen.
+
+Measured on the M5 (release build, demo playing, Soft Glow light, one 1512 × 982 display, load ~2.5): player + light
+**3.94 %** CPU vs light alone (player off) 3.73 %, so **the player costs ~0.2 %** while a song plays; paused (light faded
+out, widgets on screen) **0.05 %**. Footprint 97 MB with both running.
+
+### Decisions
+
+- **One window per widget, one level above the desktop icons.** `DesktopWidgetWindow` is a borderless non-activating
+  `NSPanel` at `CGWindowLevelForKey(.desktopIconWindow) + 1` (`isFloatingPanel = false` is set *before* the level: it
+  resets the level), `.canJoinAllSpaces`, `.stationary`, `.ignoresCycle`; below every app window, above the icons, on every
+  Space, left alone by Mission Control and Show Desktop. Clicks reach a window only where it has paint, so clear margins pass
+  clicks to the desktop; areas that must take drags (the clock, the cover flow) get an invisible 1/255 fill (`hitArea()`).
+  `ignoresMouseEvents` is never set (setting it at all turns that off).
+- **Focus.** Clicks never activate Ahenk. The hosting view says `needsPanelToBecomeKey = false`, so buttons, menus and lists
+  leave the user's app as it is; only the search field (an AppKit text field inside) makes the player's panel key, when
+  clicked or when the search button / "Add Songs" asks (`makeKey`, still without activating Ahenk). Esc, Return and a pick
+  give the keyboard back. SwiftUI focuses the first text field of a new window; the controller clears that.
+- **Places.** Each widget's anchor (clock and list: top left; player: bottom centre) is saved relative to the display's
+  visible frame when a drag ends (`settings.layout`, per display UUID) and kept on screen with an 8 pt margin. The player
+  window grows upwards at once when a page or the search opens and shrinks after its content has faded out (0.32 s), always
+  around the saved anchor, so the bar never moves. The widgets live on Settings › Desktop Player › Display (main by default).
+- **The queue.** The music apps' scripting cannot read or change their own queues, so Ahenk keeps one (`PlayQueue`) and starts
+  each song itself 0.35 s before the previous one ends (`QueueConductorPolicy`); it follows the source when it moves to the
+  queue's next song by itself, takes back when autoplay picks something in the last 4 s, and steps back when the user plays
+  something else there. When the queue moves on by itself (`interactive: false`), nothing is brought to the front: a song that
+  would need the user's click is skipped (up to eight in a row). The queue panel opens beside the player when it fits there
+  without covering another widget, else as a page above the search field (on a 1512 pt screen with the default layout).
+- **Apple Music.** A library song plays by AppleScript (`play` the track with its persistent ID — from Continue Playing or a
+  Music playlist, inside that playlist so Music goes on through it — else a library search by title and artist, preferring
+  the same album). macOS gives other apps no way to start an Apple Music *catalog* item without MusicKit (an App ID with the
+  MusicKit service and a provisioning profile, excluded by the no-accounts rule), so a song that is not in the library opens on
+  its catalog page in Music (`music://music.apple.com/…?i=<id>`; for a song that played elsewhere, the iTunes catalog's match
+  gives the page) and the status says "press Play there"; the queue then waits up to 90 s for it. That is the most reliable
+  way available; it brings Music to the front (the user asked to play the song).
+- **Spotify.** `play track "spotify:track:<id>"` by AppleScript. The ID comes from the song itself (Continue Playing) or from
+  ListenBrainz Labs' public "Spotify ID from metadata" mapping (MetaBrainz; no key; batched, one request a second, hits kept a
+  month, misses three days). Without a match, Spotify's own search opens (`spotify:search:…`).
+- **Odesli (song.link) was evaluated and is not used:** `api.song.link/v1-alpha.1/links` answers
+  `401 PUBLIC_API_ACCESS_DEPRECATED` to every request without a key (checked again on 2026-11-09), so it cannot map catalog
+  items without an account. Spotify IDs come from ListenBrainz (above); the music sites will find a pick by its title, artist
+  and album themselves through Step 7's extension (`BrowserPlayRequest` carries the song and, for the Spotify Web Player, the ID).
+- **Browser sources** are pickable now; playing there goes through `NowPlayingServices.browserPlayback`
+  (`BrowserPlaybackRouting`), which is `nil` until Step 7, so the player says "Playing in the browser needs the Ahenk browser
+  extension." Playlists and the volume of sites go through the same protocol.
+- **Asking for Automation.** Reading (playlists, volume) never asks and never launches an app. Playing a pick in Music or
+  Spotify is something the user asked for: the app is launched in the background if needed and macOS may ask for Automation
+  once (Step 2's rule "never prompts by itself" still holds for everything else).
+- **Where picks play.** The source picker sets `player.listeningSource`; Automatic follows the source that plays, and a
+  Continue Playing song goes back to where it played. With "pause the previous source when switching" on, picking another
+  source pauses the others.
+- **Search covers every source with Apple's catalog** (the iTunes Search API; artists and songs in one request, albums from
+  the songs), shown with the picked source's own wording ("Search Spotify"); the pick then plays in that source.
+- **Performance.** SwiftUI never redraws per frame: the progress line is an AppKit layer moved by a timer about one pixel per
+  step (at most four steps a second, `ProgressSchedule`), only while playing and visible; the playing bars are a Core
+  Animation loop capped at 20 fps, only while playing and visible; the clock redraws once a minute and only while its window
+  can be seen; the cover flow animates only while it moves. Catalog lookups happen only while the widgets are on screen.
+  Closed widget windows are released at once (AppKit frees closed windows on its next event, which an idle background app may
+  not get for a long time, so a no-op event is posted).
+- **Glass.** `glassEffect(.regular.tint(...))` on macOS 26 with a faint shade under the content (small glass turns almost
+  clear on bright wallpapers); `NSVisualEffectView` (.hudWindow, behind window) with the tint on 14.2–15. Tint: the playing
+  cover's `palette.backdrop`; highlights: `palette.vivid[0]`; the clock: `palette.onDark[0]` mixed with white.
+- **Language.** Every widget window gets the app's language as its SwiftUI locale (upper-case titles are "NOW PLAYING" in
+  English, "ŞU AN ÇALIYOR" in Turkish, whatever the Mac's language). The search prompt is a whole sentence per source so
+  Turkish gets the right ending ("Spotify'da ara", "Apple Music'te ara").
+
+### Deviations from PLAN.md
+
+- Odesli is not used (see Decisions); its decoding has no tests. ListenBrainz's mapping is tested instead.
+- Apple Music catalog songs that are not in the library open in Music for one click instead of starting by themselves.
+- The queue panel opens as a page above the search field when it cannot sit beside the player without covering a widget.
+- The lyrics toggle flips the setting; the lyrics widget itself is Step 6 (`DesktopWidget.lyrics` is reserved).
+- Extra launch arguments `--demo-scene`, `--demo-backdrop`, `--language`; extra script `Scripts/widget-shot.swift`; extra
+  folders `AhenkKit/Player`, `AhenkApp/Desktop/Views`.
+- **Shared API changes** (call sites and tests updated): `HTTPFetching.post(_:json:)` (default throws); `DemoProvider` gains
+  `library`, `play(_:startDelay:)`, `volume`/`setVolume`; `NowPlayingServices` gains `catalog`, `spotifyFinder`, `scripts`,
+  `presence`, `fetcher`, `browserPlayback`, `storefront`, `pausePlayers(otherThan:)`, and the demo's Continue Playing starts
+  with invented history; `OfflineFetcher` moved there from `SmokeRunner`; `PlayerSettings` gains `clockScale`,
+  `showPlayerBar`, `listeningSource`; `AppEnvironment` gains `desktopPlayer` and uses in-memory settings for scenes and
+  `--language`; `LaunchOptions` gains `demoScene`, `demoBackdrop`, `language`, `usesDetachedSettings`.
+
+### For Step 6 (lyrics)
+
+- **Where the lyrics view lives:** a fourth widget window. `DesktopWidget.lyrics` exists (anchor `.center`, default place
+  right of the middle in `WidgetPlacement.defaultFrames`); in `DesktopPlayerController` return your view from
+  `root(for: .lyrics)`, its size from `size(of: .lyrics)`, and make `shouldShow(.lyrics)` follow `settings.lyrics.enabled`
+  (it returns `false` now). Dragging and saved places then work as for the others. "Beside the album cover": the player's
+  frame is `visibleWindows[.player]`; the cover flow's centre card is 170 pt wide in the player's upper part.
+- **Lyrics toggle:** the bar's quote-bubble button calls `DesktopPlayerModel.toggleLyrics()`, which flips
+  `settings.lyrics.enabled` (also the menu bar's Lyrics item); `lyricsOn` reads it. Observe the setting in the controller (it
+  already re-applies on `settings.player` changes; add `settings.lyrics`).
+- **Palette and fonts:** `DesktopPlayerModel.theme` (`PlayerTheme`: `accent` = `palette.vivid[0]`, `glass` =
+  `palette.backdrop`, `clock` = `palette.onDark[0]` + white, `palette`), `widgetGlass(_:tint:)`, `desktopTextShadow()`,
+  SF Pro everywhere; the clock is SF Pro Ultralight Compressed. The song and its position come from `NowPlayingModel`
+  (`snapshot`, `lyrics`, `lyricLine(at:)`); do not drive SwiftUI per frame (see Step 1/3 notes) — use a leaf layer view and a
+  display link only while visible (`ProgressLineView` is a small example of pausing on occlusion).
+- **Checks:** `--demo-scene albums --demo-backdrop` then `swift Scripts/widget-shot.swift out.png` shows the widgets on
+  their glass; add a lyrics state to the smoke check's offscreen renders (`renderWidget`).
+
+### Known gaps and risks
+
+- **Nothing was played in Music or Spotify** (the rules forbid touching the user's playback): the scripts are tested against
+  fixtures, the routing and the queue against the demo. First real use: pick a library song with Music as the source, then a
+  catalog-only song, then a Spotify song; watch the `[player]` lines in the log.
+- Spotify IDs from ListenBrainz can miss newer releases or pick another edition of a song.
+- Apple Music: a catalog page needs the user's click; library search by name can pick a different version.
+- Click-through of clear areas follows macOS's handling of transparent window pixels; it could not be clicked through live
+  here (no input on the user's screen).
+- Keyboard focus of the search field (a non-activating panel taking the key) and every hover/drag/scroll interaction were
+  checked in code and through scenes, not by clicking.
+- The queue panel's side placement was only seen as a page on this 1512 pt screen.
+- Once the search field exists, macOS's text input services keep two hidden windows in Ahenk (`TUINSWindow`,
+  `SPRoundedWindow`); they are never on screen.
+- Covers in the cover flow come from Apple's catalog at the shown size; a different edition's artwork is possible.
