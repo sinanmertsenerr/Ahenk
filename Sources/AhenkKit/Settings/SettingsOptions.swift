@@ -161,6 +161,7 @@ public enum SoundPreset: String, CaseIterable, Codable, Sendable, Identifiable {
     case vaporwave
     case lofi
     case concertHall
+    case underwater
 
     public var id: String { rawValue }
 }

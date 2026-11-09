@@ -118,6 +118,7 @@ extension SoundPreset {
         case .vaporwave: "Vaporwave"
         case .lofi: "Lo-fi"
         case .concertHall: "Concert Hall".l10n
+        case .underwater: "Underwater".l10n
         }
     }
 }
