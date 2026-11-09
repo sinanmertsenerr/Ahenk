@@ -200,6 +200,35 @@
 "Start every song at 0:15" = "Her şarkıyı 0:15'ten başlat";
 "Skips the intro of each new song." = "Her yeni şarkının girişini atlar.";
 
+/* MARK: Desktop widgets: lists */
+"Open Music to see its playlists." = "Çalma listelerini görmek için Müzik uygulamasını açın.";
+"Allow access to Music in Settings › Sources to see its playlists." = "Çalma listelerini görmek için Ayarlar › Kaynaklar bölümünden Müzik uygulamasına erişim izni verin.";
+"Music did not answer." = "Müzik uygulaması yanıt vermedi.";
+"The Spotify app does not share its playlists with other apps." = "Spotify uygulaması çalma listelerini diğer uygulamalarla paylaşmıyor.";
+"Playlists from music sites need the Ahenk browser extension." = "Müzik sitelerinin çalma listeleri için Ahenk tarayıcı eklentisi gerekir.";
+
+/* MARK: Desktop widgets: the player bar */
+"Not in demo mode" = "Demo modunda kullanılamaz";
+
+/* MARK: Desktop widgets: playing in a source */
+"In demo mode, songs play in the demo player." = "Demo modunda şarkılar demo oynatıcısında çalar.";
+"This song is not part of the demo." = "Bu şarkı demoda yok.";
+"This source cannot play songs from the catalog." = "Bu kaynak katalogdaki şarkıları çalamaz.";
+"Music is not installed." = "Müzik uygulaması yüklü değil.";
+"Music did not open." = "Müzik uygulaması açılmadı.";
+"Allow Ahenk to control Music in System Settings › Privacy & Security › Automation." = "Sistem Ayarları › Gizlilik ve Güvenlik › Otomasyon bölümünde Ahenk'in Müzik uygulamasını denetlemesine izin verin.";
+"This song is not in your Music library." = "Bu şarkı Müzik arşivinizde yok.";
+"This song is not in your Music library. Music shows it now: press Play there." = "Bu şarkı Müzik arşivinizde yok. Müzik şarkıyı şimdi gösteriyor; oradan Çal düğmesine basın.";
+"Spotify is not installed." = "Spotify yüklü değil.";
+"Spotify did not open." = "Spotify açılmadı.";
+"This song could not be found on Spotify. Spotify shows its search results instead." = "Bu şarkı Spotify'da bulunamadı. Spotify bunun yerine arama sonuçlarını gösteriyor.";
+"Allow Ahenk to control Spotify in System Settings › Privacy & Security › Automation." = "Sistem Ayarları › Gizlilik ve Güvenlik › Otomasyon bölümünde Ahenk'in Spotify'ı denetlemesine izin verin.";
+"Spotify did not start the song." = "Spotify şarkıyı başlatmadı.";
+"Playing in the browser needs the Ahenk browser extension." = "Tarayıcıda çalmak için Ahenk tarayıcı eklentisi gerekir.";
+"The site did not find this song." = "Site bu şarkıyı bulamadı.";
+"Open the site in your browser first." = "Önce siteyi tarayıcınızda açın.";
+"The browser did not start the song." = "Tarayıcı şarkıyı başlatmadı.";
+
 /* MARK: Lyrics */
 "Synced lyrics on the desktop, line by line, beside the album cover." = "Masaüstünde, albüm kapağının yanında satır satır eşzamanlı şarkı sözleri.";
 "Show lyrics on the desktop" = "Şarkı sözlerini masaüstünde göster";

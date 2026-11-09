@@ -535,10 +535,3 @@ final class SmokeRunner {
         return bitmap
     }
 }
-
-/// The smoke run never touches the network.
-private struct OfflineFetcher: HTTPFetching {
-    func get(_ url: URL) async throws -> (data: Data, status: Int) {
-        throw URLError(.notConnectedToInternet)
-    }
-}

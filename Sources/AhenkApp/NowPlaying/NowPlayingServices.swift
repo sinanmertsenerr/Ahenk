@@ -55,14 +55,27 @@ final class NowPlayingServices {
     @ObservationIgnored let recentlyPlayed: RecentlyPlayedStore
     @ObservationIgnored let apps = AppDirectory()
     @ObservationIgnored let isDemo: Bool
+    /// Albums, songs and search for the desktop player (Apple's public
+    /// catalog, or the demo library).
+    @ObservationIgnored let catalog: any MusicCatalog
+    /// Spotify track IDs for catalog songs (live only).
+    @ObservationIgnored let spotifyFinder: (any SpotifyTrackFinding)?
+    /// Runs the desktop player's AppleScript (live only).
+    @ObservationIgnored let scripts: (any ScriptRunning)?
+    @ObservationIgnored let presence: (any AppPresenceMonitoring)?
+    /// Cover downloads for catalog items (never used in the demo).
+    @ObservationIgnored let fetcher: any HTTPFetching
+    /// Playing picks on music sites: Step 7's browser extension.
+    @ObservationIgnored let browserPlayback: (any BrowserPlaybackRouting)?
     @ObservationIgnored private(set) var installedBrowsers: Set<String> = KnownApps.browsers
 
     @ObservationIgnored private let mediaRemote: MediaRemoteProvider?
     @ObservationIgnored private let appleMusic: AppleMusicProvider?
     @ObservationIgnored private let spotify: SpotifyProvider?
     @ObservationIgnored private let resolver: ResolverBox
-    @ObservationIgnored private let storefront: StorefrontBox
+    @ObservationIgnored let storefront: StorefrontBox
     @ObservationIgnored private let diskCache: ArtworkDiskCache?
+    @ObservationIgnored private let catalogCache: CatalogCache?
     @ObservationIgnored private var bridge: MusicNotificationBridge?
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
     @ObservationIgnored private var observers: [AnyObject] = []
@@ -76,7 +89,9 @@ final class NowPlayingServices {
     private init(
         hub: NowPlayingHub, artwork: any ArtworkProvider, lyrics: (any LyricsProvider)?, features: (any AudioFeatureSource)?,
         recentlyPlayed: RecentlyPlayedStore, isDemo: Bool, mediaRemote: MediaRemoteProvider?, appleMusic: AppleMusicProvider?,
-        spotify: SpotifyProvider?, resolver: ResolverBox, storefront: StorefrontBox, diskCache: ArtworkDiskCache?
+        spotify: SpotifyProvider?, resolver: ResolverBox, storefront: StorefrontBox, diskCache: ArtworkDiskCache?,
+        catalog: any MusicCatalog, catalogCache: CatalogCache?, spotifyFinder: (any SpotifyTrackFinding)?,
+        scripts: (any ScriptRunning)?, presence: (any AppPresenceMonitoring)?, fetcher: any HTTPFetching
     ) {
         self.hub = hub
         self.artwork = artwork
@@ -90,6 +105,14 @@ final class NowPlayingServices {
         self.resolver = resolver
         self.storefront = storefront
         self.diskCache = diskCache
+        self.catalog = catalog
+        self.catalogCache = catalogCache
+        self.spotifyFinder = spotifyFinder
+        self.scripts = scripts
+        self.presence = presence
+        self.fetcher = fetcher
+        // Step 7 passes the browser extension's bridge here.
+        self.browserPlayback = nil
         if let appleMusic, let spotify {
             bridge = MusicNotificationBridge(appleMusic: appleMusic, spotify: spotify)
         }
@@ -122,13 +145,18 @@ final class NowPlayingServices {
         let storefront = StorefrontBox(settings.general.storefront)
         let catalog = ITunesSearch(fetcher: fetcher, storefront: { storefront.code })
         let pipeline = ArtworkPipeline(disk: disk, fetcher: fetcher, catalog: catalog)
+        let catalogCache = CatalogCache(directory: CatalogCache.standardDirectory)
 
         return NowPlayingServices(
             hub: NowPlayingHub(inputs: inputs, configuration: configuration(settings)),
             artwork: pipeline, lyrics: nil, features: features,
             recentlyPlayed: RecentlyPlayedStore(fileURL: RecentlyPlayedStore.standardURL),
             isDemo: false, mediaRemote: mediaRemote, appleMusic: appleMusic, spotify: spotify,
-            resolver: resolver, storefront: storefront, diskCache: disk
+            resolver: resolver, storefront: storefront, diskCache: disk,
+            catalog: ITunesCatalog(fetcher: fetcher, storefront: { storefront.code }, cache: catalogCache),
+            catalogCache: catalogCache,
+            spotifyFinder: ListenBrainzSpotifyFinder(fetcher: fetcher, cache: catalogCache),
+            scripts: runner, presence: presence, fetcher: fetcher
         )
     }
 
@@ -142,10 +170,29 @@ final class NowPlayingServices {
             hub: NowPlayingHub(inputs: inputs, configuration: configuration(settings)),
             artwork: RoutingArtworkProvider(routes: [.demo: demo], fallback: nil),
             lyrics: demo, features: features,
-            recentlyPlayed: RecentlyPlayedStore(fileURL: nil),
+            recentlyPlayed: demoRecentlyPlayed(demo.library),
             isDemo: true, mediaRemote: nil, appleMusic: nil, spotify: nil,
-            resolver: ResolverBox(), storefront: StorefrontBox(nil), diskCache: nil
+            resolver: ResolverBox(), storefront: StorefrontBox(nil), diskCache: nil,
+            catalog: DemoMusicCatalog(library: demo.library, latency: 0.25), catalogCache: nil,
+            spotifyFinder: nil, scripts: nil, presence: nil, fetcher: OfflineFetcher()
         )
+    }
+
+    /// Continue Playing in the demo starts with a few songs "played" over
+    /// the last hours (in memory only).
+    private static func demoRecentlyPlayed(_ library: DemoLibrary) -> RecentlyPlayedStore {
+        let store = RecentlyPlayedStore(fileURL: nil)
+        let earlier = [
+            "demo:sodium-lights", "demo:mavi-saat-sarki", "demo:satellite-hearts-song", "demo:kettle-song",
+            "demo:afterglow-exit-song", "demo:glasswork-song", "demo:field-notes-song", "demo:rihtimda-dans",
+            "demo:orbitals", "demo:moonwake", "demo:bloom-frequency", "demo:cedar-smoke",
+        ]
+        let now = Date()
+        for (index, id) in earlier.enumerated().reversed() {
+            guard let song = library.demoSong(id: id) else { continue }
+            store.record(song.track, bundleIdentifier: nil, at: now.addingTimeInterval(-Double(index + 1) * 1_500))
+        }
+        return store
     }
 
     static func configuration(_ settings: AppSettings) -> HubConfiguration {
@@ -212,6 +259,7 @@ final class NowPlayingServices {
                 self?.installedBrowsers = KnownApps.browsers.union(found)
             }
             diskCache?.prune()
+            catalogCache?.prune()
             // Permissions may have changed in System Settings meanwhile.
             activation = NotificationCenter.default.addObserver(
                 forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
@@ -275,6 +323,17 @@ final class NowPlayingServices {
         Task.detached(priority: .userInitiated) { await hub.perform(command) }
     }
 
+    /// Pauses every playing player of another source (the desktop player's
+    /// source picker, with "pause the previous source" on).
+    func pausePlayers(otherThan source: MusicSource) {
+        let hub = self.hub
+        let others = state.players.filter { $0.isPlaying && $0.id.source != source }.map(\.id)
+        guard !others.isEmpty else { return }
+        Task.detached(priority: .userInitiated) {
+            for player in others { await hub.perform(.pause, on: player) }
+        }
+    }
+
     private func scriptedProvider(for source: MusicSource) -> (any PermissionRefreshing)? {
         switch source {
         case .appleMusic: appleMusic
@@ -310,3 +369,11 @@ protocol PermissionRefreshing: Sendable {
 }
 
 extension ScriptedPlayerProvider: PermissionRefreshing {}
+
+/// Answers every request with "offline" (the demo and the smoke run never
+/// touch the network).
+struct OfflineFetcher: HTTPFetching {
+    func get(_ url: URL) async throws -> (data: Data, status: Int) {
+        throw URLError(.notConnectedToInternet)
+    }
+}

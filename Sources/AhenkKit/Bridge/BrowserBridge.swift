@@ -143,3 +143,40 @@ public final class LocalPlaybackProvider: NowPlayingProvider, Sendable {
         false
     }
 }
+
+/// What the desktop player asks of a music site in the browser (Step 7's
+/// extension implements it): play a pick found in the catalog, the site's
+/// playlists and its volume.
+public protocol BrowserPlaybackRouting: AnyObject, Sendable {
+    func play(_ request: BrowserPlayRequest) async -> BrowserPlayOutcome
+    /// `nil` when the site shares no playlists.
+    func playlists(on site: MusicSource) async -> [CatalogPlaylist]?
+    func songs(ofPlaylist id: String, on site: MusicSource) async -> [CatalogSong]
+    /// 0…1, `nil` when the site's player has no volume to read.
+    func volume(on site: MusicSource) async -> Double?
+    func setVolume(_ volume: Double, on site: MusicSource) async
+}
+
+/// A song to play on a site: found there by its title, artist and album,
+/// or by the site's own ID when it is known.
+public struct BrowserPlayRequest: Hashable, Sendable {
+    public var site: MusicSource
+    public var song: CatalogSong
+    /// For the Spotify Web Player.
+    public var spotifyTrackID: String?
+
+    public init(site: MusicSource, song: CatalogSong, spotifyTrackID: String? = nil) {
+        self.site = site
+        self.song = song
+        self.spotifyTrackID = spotifyTrackID
+    }
+}
+
+public enum BrowserPlayOutcome: Hashable, Sendable {
+    case started
+    /// The site has no such song.
+    case notFound
+    /// No tab of the site is open (the extension may open one).
+    case noTab
+    case failed(String)
+}
