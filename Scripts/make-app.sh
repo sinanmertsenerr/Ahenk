@@ -5,6 +5,9 @@
 #   Contents/Resources/Ahenk_AhenkApp.bundle UI strings and shader sources
 #   Contents/Resources/<lang>.lproj          localized permission texts
 #   Contents/Resources/adapter/              mediaremote-adapter script + framework + LICENSE
+#   Contents/Resources/Extension/Chromium    the browser extension, ready to load unpacked
+#                                            (Chrome, Edge, Brave, Arc, Opera, Vivaldi, Search)
+#   Contents/Resources/Extension/Firefox     the same scripts with Firefox's manifest
 #   Contents/Resources/LICENSE, THIRD_PARTY_NOTICES.md
 #
 # Signing: the stable "Apple Development" identity below, so macOS privacy
@@ -102,6 +105,15 @@ cp "$ADAPTER_SCRIPT" "$S/Resources/adapter/"
 cp "$ADAPTER_SRC/LICENSE" "$S/Resources/adapter/LICENSE"
 ditto "$ADAPTER_FW" "$S/Resources/adapter/MediaRemoteAdapter.framework"
 cp LICENSE THIRD_PARTY_NOTICES.md "$S/Resources/"
+
+# The browser extension: one folder per browser family, each with its
+# manifest at the top (what a browser's "Load unpacked" expects).
+EXT="$S/Resources/Extension"
+[ -f Extension/manifest.json ] && [ -f Extension/firefox/manifest.json ] || fail "Extension/ is incomplete"
+mkdir -p "$EXT/Chromium" "$EXT/Firefox"
+rsync -a --exclude 'firefox/' --exclude '.DS_Store' Extension/ "$EXT/Chromium/"
+rsync -a --exclude 'firefox/' --exclude 'manifest.json' --exclude '.DS_Store' Extension/ "$EXT/Firefox/"
+cp Extension/firefox/manifest.json "$EXT/Firefox/manifest.json"
 
 # --- Sign: nested framework first, then the app ------------------------------
 codesign --force --sign "$SIGN_ID" --timestamp=none "$S/Resources/adapter/MediaRemoteAdapter.framework"
