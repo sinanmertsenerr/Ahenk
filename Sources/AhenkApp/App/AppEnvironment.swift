@@ -34,6 +34,8 @@ final class AppEnvironment {
         controller.onOpenSettings = { [weak self] in self?.showSettings(.lyrics) }
         return controller
     }()
+    /// Keeps the lyrics on time by listening (Settings › Lyrics).
+    private(set) lazy var lyricsSync = LyricsAutoSync(lyrics: lyrics, nowPlaying: nowPlaying, audio: audio, settings: settings)
     /// The desktop widgets: clock, Continue Playing, the player and its
     /// queue (started with the services).
     private(set) lazy var desktopPlayer: DesktopPlayerController = {

@@ -34,6 +34,10 @@ public final class AudioAnalysisPipeline: @unchecked Sendable {
     public private(set) var digitalSilence: Double = 0
     /// Seconds of audio analysed since `configure`.
     public private(set) var analysedSeconds: Double = 0
+    /// Automatic lyrics sync listens along while this is set: every
+    /// analysed sample also goes to the capture, until its window is full.
+    /// Set and read on the analysis queue only.
+    public var lyricsCapture: LyricsSyncCapture?
 
     private let scratch: UnsafeMutablePointer<Float>
     private let scratchCapacity = 4096
@@ -114,16 +118,23 @@ public final class AudioAnalysisPipeline: @unchecked Sendable {
         }
         var drained = 0
         var peak: Float = 0
+        // The oldest waiting sample arrived about this long ago.
+        let backlog = Double(ring.availableSamples) / analyzer.sampleRate
         while true {
             let count = ring.reader.read(into: scratch, maxCount: scratchCapacity)
             guard count > 0 else { break }
             var chunkPeak: Float = 0
             vDSP_maxmgv(scratch, 1, &chunkPeak, vDSP_Length(count))
             peak = max(peak, chunkPeak)
-            drained += count
             if isGateOpen {
                 analyzer.process(scratch, count: count)
+                if let capture = lyricsCapture {
+                    let hostTime = now - backlog + Double(drained) / analyzer.sampleRate
+                    capture.append(scratch, count: count, rate: analyzer.sampleRate, hostTime: hostTime)
+                    if capture.isFinished { lyricsCapture = nil }
+                }
             }
+            drained += count
         }
         if drained > 0 {
             let seconds = Double(drained) / analyzer.sampleRate

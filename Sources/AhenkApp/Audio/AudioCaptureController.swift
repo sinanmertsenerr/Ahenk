@@ -97,6 +97,11 @@ final class AudioCaptureController: @unchecked Sendable {
         analysis.async { [pipeline] in pipeline.sensitivity = Float(sensitivity) }
     }
 
+    /// Automatic lyrics sync listens along with the analysis (`nil` stops).
+    func setLyricsCapture(_ capture: LyricsSyncCapture?) {
+        analysis.async { [pipeline] in pipeline.lyricsCapture = capture }
+    }
+
     /// Tears everything down and waits for it (on quit).
     func stop() {
         control.sync {

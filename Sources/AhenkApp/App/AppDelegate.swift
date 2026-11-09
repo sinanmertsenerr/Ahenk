@@ -60,6 +60,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment.lyrics.start()
         // Listens to the followed player's app while music plays.
         environment.audio.start(hub: services.hub, settings: settings)
+        // Checks the lyrics' timing against the vocals, when allowed.
+        environment.lyricsSync.start()
         // Battery, Low Power Mode and heat make drawing lighter.
         environment.power.start()
         // The edge light follows the music, the cover and the settings.
@@ -147,6 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Later steps restore the user's desktop here (wallpaper, hidden apps).
         environment.desktopPlayer.stop()
+        environment.lyricsSync.stop()
         environment.lyrics.stop()
         environment.light.stop()
         environment.power.stop()

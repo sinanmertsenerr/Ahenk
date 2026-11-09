@@ -126,6 +126,19 @@ final class AudioTapEngine {
         controller.update(permission: permission)
     }
 
+    /// Lends the analysed audio to automatic lyrics sync for one window
+    /// (`nil` takes it back). Nothing is recorded: the capture lives in
+    /// memory until it has been measured.
+    func listen(forLyrics capture: LyricsSyncCapture?) {
+        controller.setLyricsCapture(capture)
+    }
+
+    /// The analysis hears the followed player itself (a tap on its
+    /// processes, or the demo), not every app at once.
+    var hearsFollowedPlayer: Bool {
+        status.isRunning && (isDemo || status.processCount > 0)
+    }
+
     /// True when the menu should offer "Allow Listening…".
     var needsPermission: Bool {
         !isDemo && (permission == .notDetermined || permission == .unknown)
