@@ -97,6 +97,11 @@ struct LaunchOptionsTests {
         #expect(options.wallpaperSong?.title == "Glass Harbor" && options.wallpaperSong?.artist == "Nova Atlas")
         #expect(options.wallpaperSource == "songVideo")
         #expect(LaunchOptions(arguments: ["Ahenk", "--wallpaper-song", "No artist"]).wallpaperSong == nil)
-        #expect(!options.usesDetachedSettings, "nothing in the settings changes")
+        #expect(options.wallpaperSong?.duration == 0)
+        #expect(LaunchOptions(arguments: ["Ahenk", "--wallpaper-song", "Glass Harbor|Nova Atlas|212"]).wallpaperSong?.duration == 212)
+        #expect(options.usesDetachedSettings, "a run that picks the source never saves")
+        #expect(!LaunchOptions(arguments: ["Ahenk", "--demo", "--wallpaper-song", "A|B"]).usesDetachedSettings)
+        let optimized = LaunchOptions(arguments: ["Ahenk", "--demo", "--optimized"])
+        #expect(optimized.optimized && optimized.usesDetachedSettings)
     }
 }

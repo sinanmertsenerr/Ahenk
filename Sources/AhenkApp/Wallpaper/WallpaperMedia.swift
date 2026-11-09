@@ -105,7 +105,10 @@ final class SharedVideoPlayer {
         player.preventsDisplaySleepDuringVideoPlayback = false
         player.allowsExternalPlayback = false
         player.actionAtItemEnd = .none
-        player.automaticallyWaitsToMinimizeStalling = true
+        // A muted picture may stall for a moment; it should start quickly
+        // and not buffer far ahead.
+        player.automaticallyWaitsToMinimizeStalling = false
+        item.preferredForwardBufferDuration = 4
         apply(plan)
         if isFile {
             // Seamless loops for files on this Mac.

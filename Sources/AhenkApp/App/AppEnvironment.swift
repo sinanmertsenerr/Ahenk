@@ -97,6 +97,12 @@ final class AppEnvironment {
         if let code = options.language, let language = AppLanguage(rawValue: code) {
             settings.general.language = language
         }
+        if options.wallpaperSource == "off" {
+            settings.wallpaper.enabled = false
+        }
+        if options.optimized {
+            settings.general.optimizedMode = true
+        }
         if let name = options.lyricsStyle {
             if let style = LyricStyle(rawValue: name) {
                 settings.lyrics.style = style

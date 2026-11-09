@@ -33,13 +33,16 @@ import Foundation
 /// - `--bridge-wait <s>`: with `--smoke`, run the live end-to-end check:
 ///   wait this long for a real browser with the extension (a test browser
 ///   on a mock music page), then drive it; see Scripts/bridge-e2e.sh.
-/// - `--wallpaper-song "<title>|<artist>"`: in demo mode, the live
-///   wallpaper looks up this (real) song online instead of the invented one,
-///   while the demo plays: checks and measurements of the real sources
-///   without playing music.
+/// - `--wallpaper-song "<title>|<artist>[|<seconds>]"`: in demo mode, the
+///   live wallpaper looks up this (real) song online instead of the invented
+///   one, while the demo plays: checks and measurements of the real sources
+///   without playing music. With a length, the song's own video follows the
+///   demo's position.
 /// - `--wallpaper-source <kind>`: the live wallpaper shows this kind of
 ///   candidate first for this run (`motionArtwork`, `songVideo`,
-///   `artistVideo`, `artwork`).
+///   `artistVideo`, `artwork`), or `off` for none (measurements).
+/// - `--optimized`: Optimized Mode for this run only (measurements of the
+///   lighter mode).
 /// - `--settings [pane]` / `--settings=pane`: open Settings at launch.
 /// - `--allow-multiple`: skip the single-instance hand-off (development).
 ///
@@ -81,15 +84,18 @@ public struct LaunchOptions: Equatable, Sendable {
     /// Seconds the live bridge check waits for a browser (`--bridge-wait`).
     public var bridgeWait: Double?
     /// The song the demo's wallpaper looks up online (`--wallpaper-song`).
-    public var wallpaperSong: (title: String, artist: String)? {
+    public var wallpaperSong: (title: String, artist: String, duration: Double)? {
         guard let raw = wallpaperSongArgument else { return nil }
-        let parts = raw.split(separator: "|", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
-        guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { return nil }
-        return (parts[0], parts[1])
+        let parts = raw.split(separator: "|", maxSplits: 2).map { $0.trimmingCharacters(in: .whitespaces) }
+        guard parts.count >= 2, !parts[0].isEmpty, !parts[1].isEmpty else { return nil }
+        let duration = parts.count == 3 ? Self.seconds(parts[2]) ?? 0 : 0
+        return (parts[0], parts[1], duration)
     }
     public var wallpaperSongArgument: String?
     /// The candidate kind the wallpaper shows first (`--wallpaper-source`).
     public var wallpaperSource: String?
+    /// Optimized Mode for this run (`--optimized`), not saved.
+    public var optimized = false
 
     /// Demo content is used in both `--demo` and `--smoke`.
     public var usesDemoContent: Bool { mode != .normal }
@@ -97,7 +103,7 @@ public struct LaunchOptions: Equatable, Sendable {
     /// The run works on an in-memory copy of the settings, so what it
     /// changes (a smoke check, a scene, a language) is never saved.
     public var usesDetachedSettings: Bool {
-        mode == .smoke || demoScene != nil || language != nil || lyricsStyle != nil
+        mode == .smoke || demoScene != nil || language != nil || lyricsStyle != nil || wallpaperSource != nil || optimized
     }
 
     public init() {}
@@ -143,6 +149,8 @@ public struct LaunchOptions: Equatable, Sendable {
                 bridgePort = (inlineValue ?? Self.popValue(&remaining)).flatMap(Int.init).flatMap { (1024...65_535).contains($0) ? $0 : nil }
             case "--bridge-wait":
                 bridgeWait = Self.seconds(inlineValue ?? Self.popValue(&remaining))
+            case "--optimized":
+                optimized = true
             case "--wallpaper-song":
                 wallpaperSongArgument = inlineValue ?? Self.popValue(&remaining)
             case "--wallpaper-source":

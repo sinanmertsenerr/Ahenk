@@ -414,6 +414,23 @@ struct WallpaperStageTests {
     }
 }
 
+@Suite("Wallpaper: a desktop covered by windows")
+struct WallpaperCoverageTests {
+    let desktop = CGRect(x: 0, y: 25, width: 1512, height: 880)
+
+    @Test("Windows covering the desktop hide the wallpaper; a gap or a small window does not")
+    func coverage() {
+        #expect(WallpaperCoverage.coveredShare(of: desktop, by: []) == 0)
+        #expect(WallpaperCoverage.isHidden(desktop, by: [CGRect(x: 0, y: 0, width: 1512, height: 982)]), "a maximized window")
+        let halves = [CGRect(x: 0, y: 25, width: 760, height: 880), CGRect(x: 752, y: 25, width: 760, height: 880)]
+        #expect(WallpaperCoverage.isHidden(desktop, by: halves), "two windows side by side")
+        let gap = [CGRect(x: 0, y: 25, width: 700, height: 880), CGRect(x: 812, y: 25, width: 700, height: 880)]
+        #expect(!WallpaperCoverage.isHidden(desktop, by: gap), "the desktop shows between them")
+        #expect(abs(WallpaperCoverage.coveredShare(of: desktop, by: [CGRect(x: 0, y: 25, width: 756, height: 880)]) - 0.5) < 0.04)
+        #expect(!WallpaperCoverage.isHidden(desktop, by: [CGRect(x: 2000, y: 0, width: 800, height: 600)]), "another display's window")
+    }
+}
+
 @Suite("Wallpaper: choosing what shows")
 struct WallpaperSelectionTests {
     let motion = WallpaperCandidate(id: "motion:1", kind: .motionArtwork, media: .stream(URL(string: "https://motion.example/a.m3u8")!))

@@ -49,6 +49,9 @@ final class WallpaperScreen {
     let id: String
     let displayID: CGDirectDisplayID
     private(set) var frame: CGRect
+    /// The part apps can cover (without the menu bar and the Dock), in
+    /// CoreGraphics' coordinates (top-left origin), as window lists use.
+    var usableArea: CGRect = .zero
     let window: WallpaperWindow
     var stage = WallpaperStage()
     var media: [String: WallpaperMediaView] = [:]
@@ -154,7 +157,7 @@ final class WallpaperController {
     @ObservationIgnored private let power: PowerMonitor
     @ObservationIgnored private let demo: DemoProvider?
     @ObservationIgnored private let lookups: WallpaperLookups
-    @ObservationIgnored private let songOverride: (title: String, artist: String)?
+    @ObservationIgnored private let songOverride: (title: String, artist: String, duration: Double)?
     @ObservationIgnored private let forcedKind: WallpaperCandidate.Kind?
     @ObservationIgnored private let desktop = DesktopWatcher()
     @ObservationIgnored private var screens: [String: WallpaperScreen] = [:]
@@ -184,6 +187,10 @@ final class WallpaperController {
     // Visibility.
     @ObservationIgnored private var screensAsleep = false
     @ObservationIgnored private var sessionLocked = false
+    /// Displays whose desktop other apps' windows cover (see
+    /// `WallpaperCoverage`), looked at while music plays.
+    @ObservationIgnored private var coveredDisplays: Set<CGDirectDisplayID> = []
+    @ObservationIgnored private var coverageTimer: Timer?
 
     // Timers.
     @ObservationIgnored private var wake: DispatchWorkItem?
@@ -196,7 +203,7 @@ final class WallpaperController {
 
     init(
         settings: AppSettings, nowPlaying: NowPlayingModel, power: PowerMonitor, demo: DemoProvider?, lookups: WallpaperLookups,
-        songOverride: (title: String, artist: String)? = nil, forcedKind: WallpaperCandidate.Kind? = nil
+        songOverride: (title: String, artist: String, duration: Double)? = nil, forcedKind: WallpaperCandidate.Kind? = nil
     ) {
         self.settings = settings
         self.nowPlaying = nowPlaying
@@ -242,7 +249,10 @@ final class WallpaperController {
         let distributed = DistributedNotificationCenter.default()
         listen(distributed, Notification.Name("com.apple.screenIsLocked")) { $0.sessionLocked = true; $0.refresh() }
         listen(distributed, Notification.Name("com.apple.screenIsUnlocked")) { $0.sessionLocked = false; $0.refresh() }
-        desktop.onChange = { [weak self] in self?.refresh() }
+        desktop.onChange = { [weak self] in
+            self?.readCoverage()
+            self?.refresh()
+        }
         desktop.start()
 
         lastLook = nil
@@ -266,6 +276,8 @@ final class WallpaperController {
         patience?.cancel()
         syncTimer?.invalidate()
         syncTimer = nil
+        coverageTimer?.invalidate()
+        coverageTimer = nil
         screens.values.forEach { $0.close() }
         screens = [:]
         players.values.forEach { $0.tearDown() }
@@ -373,14 +385,13 @@ final class WallpaperController {
         }
         // A new song (or new terms) looks things up again.
         if let snapshot, follows, settings.wallpaper.enabled {
-            var next = makeRequest(snapshot)
+            let next = makeRequest(snapshot)
             let identity = [
                 next.songKey, next.artist, next.source.rawValue, next.trackID, next.songVideoKind?.rawValue ?? "",
                 settings.wallpaper.preferredSource.rawValue,
             ].joined(separator: "|")
             if identity != requestIdentity {
                 requestIdentity = identity
-                next.duration = snapshot.track.duration
                 startLookup(next)
             }
         } else if snapshot == nil || !follows {
@@ -413,6 +424,8 @@ final class WallpaperController {
             song.track.artist = songOverride.artist
             song.track.source = .appleMusic
             song.track.id = "override:\(songOverride.artist)|\(songOverride.title)"
+            // The demo song's length says nothing about the real one.
+            song.track.duration = songOverride.duration
             song.songVideoKind = nil
         }
         let plain = WallpaperRequest(snapshot: song)
@@ -481,11 +494,28 @@ final class WallpaperController {
         guard let catalog = lookups.catalog, let finder = lookups.motion else { return }
         let track = Track(id: request.trackID, source: request.source, title: request.title, artist: request.artist,
                           album: request.album, duration: request.duration)
-        guard let match = try? await catalog.artist(for: track), let album = match.albumID.flatMap(ITunesCatalog.number(in:)) else { return }
+        let match: CatalogArtistMatch?
+        do {
+            match = try await catalog.artist(for: track)
+        } catch {
+            Self.log.info("Motion artwork: the catalog did not answer (\(String(describing: error)))")
+            return
+        }
+        guard let album = match?.albumID.flatMap(ITunesCatalog.number(in:)) else {
+            Self.log.info("Motion artwork: the song's album is not in the catalog (\(match == nil ? "no match" : "artist only"))")
+            return
+        }
         guard !Task.isCancelled else { return }
-        if case .found(let artwork) = await finder.artwork(albumID: album), !Task.isCancelled,
-           let url = artwork.url(forAspectRatio: mainAspectRatio) {
+        let lookup = await finder.artwork(albumID: album)
+        switch lookup {
+        case .found(let artwork):
+            guard !Task.isCancelled, let url = artwork.url(forAspectRatio: mainAspectRatio) else { return }
+            Self.log.info("Motion artwork found for the song's album")
             add([.motion(artwork, url: url)], for: request)
+        case .none:
+            Self.log.info("Motion artwork: the album has none")
+        case .failed:
+            Self.log.info("Motion artwork: the catalog did not answer")
         }
     }
 
@@ -618,11 +648,14 @@ final class WallpaperController {
         for nsScreen in NSScreen.screens {
             guard let id = DisplayIdentity.stableID(of: nsScreen), let displayID = DisplayIdentity.displayID(of: nsScreen) else { continue }
             seen.insert(id)
+            let usable = Self.quartzRect(of: nsScreen.visibleFrame)
             if let existing = screens[id] {
                 existing.move(to: nsScreen.frame)
+                existing.usableArea = usable
                 continue
             }
             let screen = WallpaperScreen(id: id, displayID: displayID, frame: nsScreen.frame)
+            screen.usableArea = usable
             screen.occlusion = NotificationCenter.default.addObserver(
                 forName: NSWindow.didChangeOcclusionStateNotification, object: screen.window, queue: .main
             ) { [weak self, weak screen] _ in
@@ -656,8 +689,55 @@ final class WallpaperController {
     private func isVisible(_ screen: WallpaperScreen) -> Bool {
         if screensAsleep || sessionLocked { return false }
         if desktop.fullScreenDisplays.contains(screen.displayID) { return false }
-        if screen.isOccluded, !Self.drawsWhenCovered { return false }
-        return true
+        if Self.drawsWhenCovered { return true }
+        return !screen.isOccluded && !coveredDisplays.contains(screen.displayID)
+    }
+
+    /// AppKit's coordinates (bottom-left origin) → CoreGraphics' (top-left).
+    private static func quartzRect(of rect: CGRect) -> CGRect {
+        let height = NSScreen.screens.first?.frame.height ?? rect.maxY
+        return CGRect(x: rect.minX, y: height - rect.maxY, width: rect.width, height: rect.height)
+    }
+
+    /// Which displays other apps' windows cover (bounds, owners and levels
+    /// only: no window contents, no permission).
+    private func readCoverage() {
+        guard !Self.drawsWhenCovered else { return }
+        let me = ProcessInfo.processInfo.processIdentifier
+        let windows = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? [])
+            .compactMap { info -> CGRect? in
+                guard (info[kCGWindowLayer as String] as? Int) == 0,
+                      (info[kCGWindowOwnerPID as String] as? Int32) != me,
+                      (info[kCGWindowAlpha as String] as? Double ?? 1) > 0.5,
+                      let raw = info[kCGWindowBounds as String] as? NSDictionary,
+                      let bounds = CGRect(dictionaryRepresentation: raw)
+                else { return nil }
+                return bounds
+            }
+        let covered = Set(screens.values.filter { WallpaperCoverage.isHidden($0.usableArea, by: windows) }.map(\.displayID))
+        guard covered != coveredDisplays else { return }
+        coveredDisplays = covered
+        Self.log.info("Desktop covered by app windows on \(covered.count) display(s)")
+        refresh()
+    }
+
+    /// Windows move and resize without telling anyone: while music plays,
+    /// look every 2 s (a millisecond of work).
+    private func updateCoverageWatch() {
+        let watching = music == .playing && settings.wallpaper.enabled && !Self.drawsWhenCovered
+        if watching, coverageTimer == nil {
+            let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.readCoverage() }
+            }
+            timer.tolerance = 0.5
+            RunLoop.main.add(timer, forMode: .common)
+            coverageTimer = timer
+            readCoverage()
+        } else if !watching, let timer = coverageTimer {
+            timer.invalidate()
+            coverageTimer = nil
+            if !coveredDisplays.isEmpty { coveredDisplays = [] }
+        }
     }
 
     // MARK: Applying
@@ -685,6 +765,7 @@ final class WallpaperController {
         }
         schedule(nextWake)
         updateSync()
+        updateCoverageWatch()
         updateStatus(plan: plan)
         let shown = screens.values.compactMap { $0.stage.isShowing ? $0.front : nil }.first
         let current = request == nil && settings.wallpaper.selectedVideoID == nil ? nil : (chosenID ?? shown)
@@ -788,6 +869,7 @@ final class WallpaperController {
             view = generated
         }
         view.setLoops(!follows)
+        if follows { Self.log.info("The song's video follows the song (\(candidate.media.kindName))") }
         let id = candidate.id
         let screenID = screen.id
         view.onReady = { [weak self] in self?.mediaReady(id, on: screenID) }
@@ -816,10 +898,10 @@ final class WallpaperController {
     // MARK: Following the song
 
     private func syncMode(of candidate: WallpaperCandidate?) -> VideoSyncMode {
-        guard let candidate, let snapshot = nowPlaying.snapshot else { return .loops }
+        guard let candidate, nowPlaying.snapshot != nil else { return .loops }
         return VideoSync.mode(
             isSongVideo: candidate.kind == .songVideo, syncEnabled: settings.wallpaper.followSong,
-            songDuration: snapshot.track.duration, videoDuration: candidate.duration
+            songDuration: request?.duration ?? nowPlaying.snapshot?.track.duration, videoDuration: candidate.duration
         )
     }
 
@@ -862,6 +944,7 @@ final class WallpaperController {
                 guard let time else { return }
                 let song = snapshot.elapsed(at: Date())
                 if let target = VideoSync.correction(songPosition: song, videoPosition: time, videoDuration: length ?? duration) {
+                    Self.log.info("The song's video was \(String(format: "%.1f", time - song)) s off; moved to \(String(format: "%.1f", target)) s")
                     view.seek(to: target)
                 }
             }
@@ -910,4 +993,17 @@ final class WallpaperController {
 
     /// The windows (smoke checks).
     var windows: [WallpaperWindow] { screens.values.map(\.window) }
+}
+
+extension WallpaperCandidate.Media {
+    /// For the log: what plays it, never what it is.
+    var kindName: String {
+        switch self {
+        case .youtube: "embedded player"
+        case .stream: "stream"
+        case .file: "file"
+        case .artwork: "cover"
+        case .generated: "generated"
+        }
+    }
 }

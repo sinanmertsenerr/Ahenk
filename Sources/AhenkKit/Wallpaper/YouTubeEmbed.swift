@@ -55,6 +55,11 @@ public enum YouTubeEmbed {
           var report = function (state) {
             post({ type: 'state', state: state, time: player.getCurrentTime(), duration: player.getDuration(), muted: player.isMuted() });
           };
+          // A muted player turns captions on by itself; the wallpaper shows
+          // none (Ahenk draws its own lyrics).
+          var noCaptions = function (target) {
+            try { target.unloadModule('captions'); target.unloadModule('cc'); } catch (e) {}
+          };
           window.onYouTubeIframeAPIReady = function () {
             player = new YT.Player('player', {
               host: '\(playerHost)',
@@ -63,17 +68,19 @@ public enum YouTubeEmbed {
               height: '100%',
               playerVars: {
                 autoplay: 1, mute: 1, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, rel: 0, playsinline: 1,
-                start: \(startSeconds), origin: '\(originText)', enablejsapi: 1
+                cc_load_policy: 0, start: \(startSeconds), origin: '\(originText)', enablejsapi: 1
               },
               events: {
                 onReady: function (event) {
                   ready = true;
                   event.target.mute();
+                  noCaptions(event.target);
                   event.target.playVideo();
                   post({ type: 'ready', duration: event.target.getDuration() });
                 },
                 onStateChange: function (event) {
                   if (!event.target.isMuted()) event.target.mute();
+                  if (event.data === 1) noCaptions(event.target);
                   if (event.data === 0 && loops) {
                     event.target.seekTo(0, true);
                     event.target.playVideo();

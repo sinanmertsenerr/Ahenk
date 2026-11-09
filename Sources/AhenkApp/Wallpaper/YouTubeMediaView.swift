@@ -43,11 +43,20 @@ final class YouTubeMediaView: WallpaperMediaView {
     private static let muteScript = WKUserScript(
         source: """
         (function () {
+          var reported = '';
           var hush = function (event) {
             var media = event.target;
             if (media && (media.tagName === 'VIDEO' || media.tagName === 'AUDIO')) {
               if (!media.muted) media.muted = true;
               if (media.volume !== 0) media.volume = 0;
+              // What the element really does, once per change (the app logs it).
+              var state = media.muted + '/' + media.volume;
+              if (state !== reported) {
+                reported = state;
+                try {
+                  window.webkit.messageHandlers.\(YouTubeEmbed.messageHandler).postMessage({ type: 'media', muted: media.muted, volume: media.volume });
+                } catch (e) {}
+              }
             }
           };
           ['play', 'playing', 'volumechange', 'loadedmetadata'].forEach(function (name) {
@@ -192,6 +201,17 @@ final class YouTubeMediaView: WallpaperMediaView {
     // MARK: The page's messages
 
     fileprivate func received(_ body: Any) {
+        if let message = body as? [String: Any], message["type"] as? String == "media" {
+            let muted = message["muted"] as? Bool ?? false
+            let volume = (message["volume"] as? NSNumber)?.doubleValue ?? 1
+            if muted, volume == 0 {
+                Self.log.info("Wallpaper video element: muted, volume 0")
+            } else {
+                Self.log.error("Wallpaper video element not silent (muted \(muted), volume \(volume)); muting again")
+                run("window.ahenk && window.ahenk.play()")
+            }
+            return
+        }
         guard let event = YouTubeEmbed.event(from: body) else { return }
         switch event {
         case .ready(let duration):
