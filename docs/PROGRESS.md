@@ -1129,3 +1129,200 @@ only while visible.
 - Lines longer than three rows shrink to fit; right-to-left scripts were not tried (CoreText shapes them, rows run left to right).
 - `CALayer.render(in:)` in the smoke check draws the layer tree without some window-server effects; the live captures were
   checked by eye in both languages.
+
+## Step 7 — Browser bridge and extension (done, 2026-11-09)
+
+### What exists
+
+```
+Sources/AhenkKit/Bridge/
+  BridgeProtocol        the wire protocol (version 1): hello/welcome, tabs, tab, tabRemoved, lyrics, result, command,
+                        request, ping/pong, error; every field decoded on its own; BridgeProtocol (ports, timing, negotiate)
+  BridgeOriginPolicy    who may connect: the extension's origins on the loopback host, nothing else
+  BridgeRegistry        the bridge as a pure state machine (connections, hello, identity, tabs, timeouts → effects)
+  BrowserBridgeServer   NWListener + NWProtocolWebSocket on 127.0.0.1, first free port of 42617–42620; BrowserBridge
+  BridgeLoopbackClient  a stand-in extension (URLSessionWebSocketTask) for tests and the smoke check
+  BrowserSite           site ↔ MusicSource, host names, song IDs (spotify:track:…, watch URLs, song pages)
+  BrowserIdentity       bundle IDs a reported browser name may stand for (fallback when the socket owner is unknown)
+  BrowserPlaybackPolicy which tab takes a request, where a new tab opens, answers, songs/playlists as the player lists them
+  BridgePlaybackRouter  BrowserPlaybackRouting over the server: play a pick, playlists, a site's queue, volume
+  BrowserLyricsProvider the sites' own synced lyrics (memory only), first in the lyrics chain
+  BrowserBridge         BrowserTabReport (+ tab fields), BrowserProvider (one player per tab, shadows the system guess),
+                        BrowserPlaybackRouting (+ playPlaylist, queue, hasVolume, isConnected), BrowserQueue
+  NowPlaying/Hub        HubCore.setShadowing + shadowGrace, HubInput.shadowsSameApp
+Sources/AhenkApp/Bridge/
+  BrowserProcessLookup  which app holds a connection: the kernel's socket table, then the app bundle of that process
+  BrowserExtensionInstaller   "Install Browser Extension…": the folders in Finder and the steps per browser
+  BridgeCheck           smoke checks `bridge` and `bridgeLive`
+Extension/              the browser extension, plain JS, no build step
+  manifest.json         Chrome MV3 (Chrome 116+; Edge, Brave, Arc, Opera, Vivaldi; Search), `key` → fixed ID
+  firefox/manifest.json the same scripts for Firefox 128+ (`browser_specific_settings.gecko`)
+  background.js         the WebSocket to Ahenk, tabs, commands, requests (jobs that survive a page load)
+  content/relay.js      isolated world: page ↔ background, reconnects when the worker restarts
+  page/hooks.js         MAIN world at document_start: Media Session handlers/metadata/position, media elements, lyrics JSON
+  page/sites.js         per-site readers and actions (selectors on data-testid/aria/state attributes, never labels)
+  page/engine.js        reads the tab, reports changes, runs commands and requests
+  lib/common.js, lib/protocol.js, lib/lyrics.js   pure helpers (node --test)
+  popup/, _locales/{en,tr}, icons/ (Scripts/make-extension-icons.swift)
+Tests/Extension/        node --test for the pure helpers (23 tests); e2e.mjs + mock/ (a stand-in music site)
+Tests/Fixtures/bridge/  wire fixtures both sides test against (Swift decodes them, JS must produce them exactly)
+Tests/AhenkKitTests/    434 tests in 72 suites (was 385/61): protocol, origins, registry, server (real sockets),
+                        tabs as players, sites, identity, hub dedupe/conflict/tap, playback policy, site lyrics
+```
+
+Data flow: page (MAIN world) → `window.postMessage` → relay (isolated) → `runtime.Port` → background → WebSocket →
+`BrowserBridgeServer` → `BridgeRegistry` → `BrowserTabReport`s → `BrowserProvider` → `NowPlayingHub` (one player per tab,
+`PlayerID(source: site, bundleIdentifier: browser, instance: "<profile>/<tabId>")`). Commands go back the same way and are
+answered with a `result`; the desktop player's picks, playlists, queue and volume go through `BridgePlaybackRouter`
+(`request` → a job in the tab → `result`). Lyrics a site loads for itself → `lyrics` → `BrowserLyricsProvider`.
+
+| Site | Reads | Commands | Search & play | Playlists | Queue | Own lyrics | Volume |
+|---|---|---|---|---|---|---|---|
+| YouTube Music | Media Session, player bar, player API (exact position), watch URL | transport, seek, like, shuffle (when the bar shows a state), repeat off/all/one | ✓ | sidebar: list, songs, play from any | read, play, remove | ✓ (Lyrics tab) | ✓ |
+| YouTube | player API (title, channel as artist), music vs video | transport (next/previous in a playlist), seek, like, shuffle in a playlist | ✓ | sidebar: list, songs, play | playlist panel: read, play | — | ✓ |
+| Spotify Web Player | Media Session, now-playing widget, `spotify:track:<id>` | transport, seek, like, shuffle, repeat off/all/one | ✓ (by track ID when known) | sidebar: list, songs, play | — | ✓ (lyrics view) | read |
+| SoundCloud | Media Session, play controls, track page | transport, seek, like, shuffle, repeat | ✓ | — | read, play | — | read |
+| Amazon Music | Media Session, transport bar | transport, seek, shuffle, repeat | ✓ | — | — | ✓ (lyrics view, shape found by scanning) | — |
+| Deezer | Media Session, player bar, track ID | transport, seek, like, shuffle, repeat | ✓ | — | — | ✓ | — |
+| TIDAL | Media Session, footer player, track ID | transport, seek, like, shuffle, repeat | ✓ | — | — | ✓ | — |
+
+Transport = play, pause, next, previous. Only what a tab can do right now is offered (`can` in each report). Any other
+site that publishes Media Session still shows through the system's Now Playing as before.
+
+### Build, run, verify
+
+```sh
+swift build && swift test             # 434 tests, no warnings
+node --test "Tests/Extension/*.test.mjs"   # 23 tests (also part of ./Scripts/test.sh)
+./Scripts/make-app.sh && ./Scripts/smoke.sh --snapshots   # bridge check; settings-sources-full-*.png, extension-installer-*.png
+./Scripts/bridge-e2e.sh               # end to end: headless test Chromium + the extension + a mock site, driven by Ahenk
+open -n dist/Ahenk.app --args --demo --settings sources   # the extension section with an invented connected browser
+```
+
+Smoke check `bridge` (every run): a real server on a spare loopback port; a web page's origin is refused (HTTP 400); the
+extension's origin is welcomed; a reported tab becomes the hub's player and hides the system's guess of the same song in the
+same browser; a pause goes to the tab and back; the site's lyrics answer as the recording's own; a pick reaches the tab; a
+connection that never says hello is closed; the kernel's socket table names the connecting process; the tab leaves with its
+connection; the packaged app carries `Extension/Chromium` (its key gives the accepted ID) and `Extension/Firefox`.
+
+`bridgeLive` (`--smoke --smoke-only bridgeLive --bridge-port <p> --bridge-wait <s>`, run by `Scripts/bridge-e2e.sh`):
+Playwright 1.63.0's own Chromium (Chrome for Testing 1243, new headless mode, muted, a throwaway profile) loads a copy of the
+extension whose default port is the test port (it can never reach an Ahenk the user runs) and opens music.youtube.com;
+every request is answered from `Tests/Extension/mock` (a stand-in with the site's element names, a player API object, Media
+Session, a generated tone and invented songs) and every other host is refused, so nothing reaches the real site. Ahenk then
+drives the tab: pause, play, seek to 1:00, like, unlike, shuffle, repeat one, repeat off, next, previous, the site's lyrics
+(4 lines), volume read and set, queue read / play item 3 / remove item 4, playlists (2; one has 3 songs; played from its
+second), search and play (a page load; the near miss is passed over). Passed in ~4 s; the browser identified as
+`com.google.chrome.for.testing` with its main process. `AHENK_E2E_SHOTS=<dir>` also pictures the popup.
+
+Measured on the M5 (release build, live, nothing playing, no browser connected): **0.0 % CPU** over 12 s with the server
+listening on 127.0.0.1:42617 (the listener waits in the kernel; the only timer runs while connections exist), ~104 MB.
+
+### Decisions
+
+- **Wire protocol.** One JSON object per text frame, `type` first. The extension says `hello` (protocol, minProtocol,
+  extension version, browser, a random per-profile ID); Ahenk answers `welcome` with the version both speak or `error` and
+  closes. Unknown types and fields are ignored and a wrong value drops only that field, so either side can grow. The
+  extension pings every 20 s (also what keeps an MV3 service worker alive, Chrome 116+); Ahenk closes a connection silent for
+  65 s, one without hello after 5 s, frames over 1 MB and connections beyond 32. Ports 42617–42620: Ahenk takes the first
+  free one, the extension tries them in order and accepts only a `welcome` from "Ahenk" (Settings › Sources › First Port and
+  the popup's Connection change both).
+- **Who may connect.** Browsers set `Origin` themselves: Chromium origins only with our ID (fixed by the manifest's `key`,
+  `goajefoldohohgnmcfkpkembdpjbpfde`); Firefox (`moz-extension://<uuid>`) and WebKit (`webkit-extension://<uuid>`) give each
+  installation a random origin, accepted when well formed; the Search browser runs Chrome extensions on WebKit, ignores the
+  key and names an unpacked one `chrome-extension://local-<8 hex>` (read from its source), accepted too. `Host` must be the
+  loopback address (no DNS rebinding). Web pages get HTTP 400.
+- **Which browser.** The other end of the loopback socket is found in the kernel's file tables (`proc_pidinfo`, this user's
+  processes, no permission); its app is the outermost `.app` its executable lies in (Chromium's network helper lives inside
+  the browser's bundle) and the main process the topmost ancestor in that bundle. LaunchServices' "responsible process" is
+  only a fallback: a browser started from a terminal is "the terminal's" (the first e2e run reported the terminal app).
+  Last resort: the reported name → a running app. Tabs wait for this (≤ 1.5 s) so each joins the hub once, under its browser;
+  a reconnect from the same profile keeps its tabs (no flicker) and is looked up again.
+- **One song, one player.** The bridge's reports shadow lower-priority reports of the same app (the system reader's guess)
+  that describe one of its songs (core titles overlap, artists agree) or have no title; a guess that matches no tab is
+  another player in that browser (a site the extension does not know) and shows after 4 s (`shadowGrace`), so a song change
+  seen first by the system never flashes a second player. Two tabs playing raise the existing conflict question; choosing one
+  pauses the others through the bridge.
+- **Song IDs.** `spotify:track:<id>` for the Spotify Web Player (the lyrics' recording ID), the watch URL for YouTube and
+  YouTube Music, the song's own page (no query) or `<site>:<id>` elsewhere. Content kind comes from the page: YouTube's
+  category, a "- Topic"/VEVO channel or a tag in the title make music, else video; adverts and podcasts are marked. Music
+  sites move the light, plain videos do not (`AudioCapturePolicy.reactsTo`), and the tap targets the tab's browser.
+- **In the page.** MAIN-world scripts at `document_start` (hooks before the site's own code): Media Session handlers,
+  metadata and position, played media elements, and the JSON responses that may hold lyrics (a copy made before the site
+  reads the body). The engine polls 1 s while playing (2 s paused, 5 s hidden) and reports only noticeable changes (a seek,
+  state, song, capabilities…) or every 30 s while playing. Commands use the site's own Media Session handlers first, then its
+  player API, then its buttons, then the media element. Requests that need another page navigate there and continue in the
+  next page (a job's "phase"); a job also survives a page load it did not announce, and ends when its tab closes.
+- **Sites' own lyrics** are read only from responses the page fetched for its own lyrics view (no request of ours), matched
+  to the tab's song (the track ID when the response names one, the length otherwise), kept in memory (24 songs), never
+  cached, never logged. They come first in the chain (`answersFromMemory`, before the disk cache) as
+  `.canonicalRecording` (no auto-sync), replace what shows when they arrive mid-song, and picking them in Other Lyrics is the
+  automatic pick (nothing stored).
+- **Where requests go.** The site's playing tab, else its selected or most recently used tab; with no tab of the site the
+  browser used last opens one (play and play-playlist only), and a blocked autoplay answers "press Play there". The site's
+  queue shows in the queue panel while Ahenk's own queue does not play; site playlists play in the site in its own order.
+- **Demo.** Settings › Sources shows an invented connected browser (no server runs), so the section can be seen and
+  snapshotted; `--smoke --snapshots` also writes the whole Sources pane (`settings-sources-full-*`) and the install steps.
+
+### Deviations from PLAN.md
+
+- The Search browser is WebKit, not Chromium: it loads the same `Chromium` folder through its own extension engine; its
+  unpacked origin form is accepted (see Decisions). Firefox and WebKit origins are per installation, so any extension there
+  could connect (web pages still cannot).
+- Firefox loads the extension as a temporary add-on (removed when Firefox quits); a permanent install needs Mozilla's signing.
+- Queue editing (remove) only on YouTube Music; reading a site playlist's songs opens that playlist's page in the tab (sites
+  list a playlist's songs only there; playback goes on).
+- Extra: launch arguments `--bridge-port`, `--bridge-wait`; `Scripts/bridge-e2e.sh`, `Scripts/make-extension-icons.swift`;
+  `Tests/Extension` (node tests, e2e, mock, `package.json` pinning Playwright 1.63.0; `node_modules/` is ignored);
+  Settings › Sources › First Port.
+- **Shared API changes** (call sites and tests updated): `BrowserTabReport` gained `trackIdentifier`, `processIdentifier`,
+  `isPositionKnown`, `playbackRate`, `browserTabID`, `connectionID`, `bridgeCapabilities`, `volume`, `isActiveTab`,
+  `lastActive`, `browserName`, `playerID`; `BrowserPlaybackRouting` gained `playPlaylist`, `queue`, `playQueueItem`,
+  `removeQueueItem`, `hasVolume`, `isConnected`; `BrowserPlayOutcome` gained `.noExtension`, `.opened`; `HubInput.shadowsSameApp`,
+  `HubCore.setShadowing`; `LyricsProvider.answersFromMemory`, `LyricsFinder.Origin.playingSource` (and `choose` of a
+  memory provider's version clears the choice); `MusicSource.isSite`; `NowPlayingServices` gained `bridgeServer`,
+  `siteLyrics`, `bridgeStatus`, `browsers` (and `browserPlayback` is live); `LyricsController.siteLyrics`;
+  `LaunchOptions.bridgePort`, `bridgeWait`; `SmokeRunner.render(_:height:)`.
+
+### For Step 8 (live wallpaper)
+
+- **The song's video.** When the followed player is a YouTube Music or YouTube tab (`snapshot.track.source` is
+  `.youtubeMusic` or `.youtube`), `snapshot.track.id` is its watch URL (`https://music.youtube.com/watch?v=<id>` or
+  `https://www.youtube.com/watch?v=<id>`) and `BrowserSite.youtubeVideoID(snapshot.track.id)` gives the 11-character ID (the
+  page's `getVideoData().video_id`, else the URL's `v`). Without the extension the system's guess carries no ID (search by
+  artist and title instead). On YouTube Music the ID may be an "art track" (the album cover as a still): its player response
+  says `videoDetails.musicVideoType` (`MUSIC_VIDEO_TYPE_ATV` art track, `_OMV` official video, `_UGC` upload); it is not
+  sent yet — add a `musicVideoType` field to `BridgeTab` (older builds ignore unknown fields) and read it in
+  `page/sites.js` (`ytResponse()`) if the wallpaper should prefer a real video.
+- **Timing.** `snapshot.elapsed(at:)` follows the tab closely (reports on every seek and state change, every 30 s while
+  playing, with the page's own sample time); an embedded muted video can be seeked to it. The tab plays the sound, so the
+  wallpaper's player must stay muted.
+- Plain YouTube videos are `.video`: the user watches them in the browser; the wallpaper (like the light) should not react.
+
+### Known gaps and risks
+
+- **The real sites were not opened** (no login, no contact with them; only the mock): the Media Session path is the common
+  base and works anywhere; each site's extras (like, shuffle, repeat, search results, playlists, queue, lyrics responses) rely
+  on today's page structure and may fail quietly when a site changes (the capability is then not offered, or a request answers
+  "failed"). First real use: open each site, play, and watch `[bridge]` lines in the log and Settings › Sources.
+- Sites' own lyrics arrive only when the site's lyrics view loads them (Spotify's lyrics button, YouTube Music's Lyrics tab).
+- Search and play loads the site's search page in the tab: the current song stops for a moment; a site may block autoplay
+  after the load ("press Play there").
+- Search (WebKit) and Firefox were not tried (the rules forbid using the user's browsers; Playwright's Firefox does not load
+  extensions this way). Search runs MAIN-world scripts and WebSockets through its own shims.
+- Volume can be set on YouTube and YouTube Music (player API); elsewhere it is read from the page's slider and set on the
+  media element, which a site may override.
+- While Ahenk is closed, the extension retries every 30 s; Chromium may list the refused connections on the extension's
+  Errors page.
+- A local process (not a web page) can send any `Origin`; like any loopback service, the bridge trusts the Mac's own user.
+- If a browser's network process cannot be found (it closed the socket at once), the browser is guessed from its reported
+  name; with two Chromium browsers running, the guess can name the wrong one (only the icon and the tap target differ).
+
+### What the user must do once
+
+Install the extension in each browser (menu bar menu › **Install Browser Extension…** shows the folders and the steps):
+Chrome, Edge, Brave or Arc: `chrome://extensions` › Developer mode › **Load unpacked** › `Ahenk.app/Contents/Resources/
+Extension/Chromium`; the Search browser: the puzzle button › **Load Unpacked…** › the same folder; Firefox: `about:debugging`
+› This Firefox › **Load Temporary Add-on…** › `Extension/Firefox/manifest.json` (again after each Firefox restart). Then open a
+music site; the extension's button turns green and Settings › Sources lists the browser and its music tabs. No permission is
+asked.
