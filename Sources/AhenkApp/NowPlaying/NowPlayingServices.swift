@@ -47,6 +47,10 @@ final class NowPlayingServices {
     private(set) var state = HubState()
     private(set) var statuses: [MusicSource: ScriptedSourceStatus] = [:]
     private(set) var adapterHealth: AdapterHealth = .stopped
+    /// The browser extension's local server (Settings › Sources).
+    private(set) var bridgeStatus: BrowserBridgeServer.Status = .stopped
+    /// The browsers connected through the extension, with their tabs.
+    private(set) var browsers: [BridgeBrowserSummary] = []
 
     @ObservationIgnored let hub: NowPlayingHub
     @ObservationIgnored let artwork: any ArtworkProvider
@@ -69,8 +73,12 @@ final class NowPlayingServices {
     @ObservationIgnored let presence: (any AppPresenceMonitoring)?
     /// Cover downloads for catalog items (never used in the demo).
     @ObservationIgnored let fetcher: any HTTPFetching
-    /// Playing picks on music sites: Step 7's browser extension.
+    /// Playing picks on music sites through the browser extension.
     @ObservationIgnored let browserPlayback: (any BrowserPlaybackRouting)?
+    /// The browser extension's local WebSocket server (live only).
+    @ObservationIgnored let bridgeServer: BrowserBridgeServer?
+    /// Synced lyrics the music sites loaded themselves (live only).
+    @ObservationIgnored let siteLyrics: BrowserLyricsProvider?
     @ObservationIgnored private(set) var installedBrowsers: Set<String> = KnownApps.browsers
 
     @ObservationIgnored private let mediaRemote: MediaRemoteProvider?
@@ -96,7 +104,8 @@ final class NowPlayingServices {
         recentlyPlayed: RecentlyPlayedStore, isDemo: Bool, mediaRemote: MediaRemoteProvider?, appleMusic: AppleMusicProvider?,
         spotify: SpotifyProvider?, resolver: ResolverBox, storefront: StorefrontBox, diskCache: ArtworkDiskCache?,
         catalog: any MusicCatalog, catalogCache: CatalogCache?, spotifyFinder: (any SpotifyTrackFinding)?,
-        scripts: (any ScriptRunning)?, presence: (any AppPresenceMonitoring)?, fetcher: any HTTPFetching
+        scripts: (any ScriptRunning)?, presence: (any AppPresenceMonitoring)?, fetcher: any HTTPFetching,
+        bridgeServer: BrowserBridgeServer? = nil, siteLyrics: BrowserLyricsProvider? = nil
     ) {
         self.hub = hub
         self.artwork = artwork
@@ -117,8 +126,9 @@ final class NowPlayingServices {
         self.scripts = scripts
         self.presence = presence
         self.fetcher = fetcher
-        // Step 7 passes the browser extension's bridge here.
-        self.browserPlayback = nil
+        self.bridgeServer = bridgeServer
+        self.siteLyrics = siteLyrics
+        self.browserPlayback = bridgeServer.map { BridgePlaybackRouter(server: $0) }
         if let appleMusic, let spotify {
             bridge = MusicNotificationBridge(appleMusic: appleMusic, spotify: spotify)
         }
@@ -135,7 +145,10 @@ final class NowPlayingServices {
         let presence = RunningApps()
         let appleMusic = AppleMusicProvider(runner: runner, presence: presence)
         let spotify = SpotifyProvider(runner: runner, presence: presence)
-        let browser = BrowserProvider(bridge: nil)
+        let bridgeServer = BrowserBridgeServer(configuration: bridgeConfiguration(settings)) { clientPort, serverPort, hello in
+            BrowserProcessLookup.identify(clientPort: clientPort, serverPort: serverPort, hello: hello)
+        }
+        let browser = BrowserProvider(bridge: bridgeServer)
         let local = LocalPlaybackProvider()
 
         var inputs: [HubInput] = [
@@ -155,8 +168,10 @@ final class NowPlayingServices {
         // Lyrics get their own session: their providers can be slow, and a
         // lookup must never hold up covers or the catalog.
         let lyricsFetcher = URLSessionFetcher(timeout: 10)
+        // The sites' own lyrics first: they belong to the exact recording.
+        let siteLyrics = BrowserLyricsProvider()
         let makeChain: @Sendable (Set<String>) -> LyricsChain = { disabled in
-            LyricsChain.standard(http: lyricsFetcher, disabled: disabled)
+            LyricsChain(providers: [siteLyrics] + LyricsChain.standard(http: lyricsFetcher, disabled: disabled).providers)
         }
         let lyricsFinder = LyricsFinder(
             chain: makeChain(settings.lyrics.disabledProviders), cache: LyricsCache(),
@@ -172,8 +187,15 @@ final class NowPlayingServices {
             catalog: ITunesCatalog(fetcher: fetcher, storefront: { storefront.code }, cache: catalogCache),
             catalogCache: catalogCache,
             spotifyFinder: ListenBrainzSpotifyFinder(fetcher: fetcher, cache: catalogCache),
-            scripts: runner, presence: presence, fetcher: fetcher
+            scripts: runner, presence: presence, fetcher: fetcher,
+            bridgeServer: bridgeServer, siteLyrics: siteLyrics
         )
+    }
+
+    /// The bridge server's settings: the port range from Settings, 127.0.0.1
+    /// only, the extension's origins only.
+    static func bridgeConfiguration(_ settings: AppSettings) -> BrowserBridgeServer.Configuration {
+        BrowserBridgeServer.Configuration(basePort: settings.sources.browserBridgePort, appVersion: AppInfo.version)
     }
 
     /// The invented demo songs (`--demo`, `--smoke`). `second` adds another
@@ -183,7 +205,7 @@ final class NowPlayingServices {
         var inputs: [HubInput] = [.provider(demo, priority: HubInput.dedicatedPriority)]
         if let second { inputs.append(.provider(second, id: "demo-b", priority: HubInput.dedicatedPriority)) }
         let makeChain: @Sendable (Set<String>) -> LyricsChain = { _ in LyricsChain(providers: [demo]) }
-        return NowPlayingServices(
+        let services = NowPlayingServices(
             hub: NowPlayingHub(inputs: inputs, configuration: configuration(settings)),
             artwork: RoutingArtworkProvider(routes: [.demo: demo], fallback: nil),
             lyricsFinder: LyricsFinder(chain: makeChain([]), cache: nil, songs: LyricsSongStore(fileURL: nil)),
@@ -194,6 +216,21 @@ final class NowPlayingServices {
             catalog: DemoMusicCatalog(library: demo.library, latency: 0.25), catalogCache: nil,
             spotifyFinder: nil, scripts: nil, presence: nil, fetcher: OfflineFetcher()
         )
+        // Settings › Sources shows the extension as it looks with a browser
+        // connected (an invented one; no server runs in the demo).
+        services.bridgeStatus = .listening(port: UInt16(clamping: settings.sources.browserBridgePort))
+        services.browsers = [demoBrowser()]
+        return services
+    }
+
+    /// A browser with one music tab, for the demo.
+    private static func demoBrowser() -> BridgeBrowserSummary {
+        let song = DemoCatalog.songs[1].track
+        let tab = BrowserTabReport(
+            tabID: "demo/1", browserBundleIdentifier: nil, site: .youtubeMusic, title: song.title, artist: song.artist,
+            album: song.album, duration: song.duration, isPlaying: false, sampledAt: Date()
+        )
+        return BridgeBrowserSummary(id: 1, browserName: "Chrome", bundleIdentifier: nil, extensionVersion: "1.0.0", connectedAt: Date(), tabs: [tab])
     }
 
     /// Continue Playing in the demo starts with a few songs "played" over
@@ -257,6 +294,9 @@ final class NowPlayingServices {
                 for await health in mediaRemote.healthUpdates() { self?.adapterHealth = health }
             })
         }
+        if let bridgeServer {
+            startBridge(bridgeServer, settings: settings)
+        }
 
         hub.start()
         mediaRemote?.start()
@@ -296,12 +336,41 @@ final class NowPlayingServices {
         tasks = []
         observers = []
         if let activation { NotificationCenter.default.removeObserver(activation) }
+        bridgeServer?.stop()
+        siteLyrics?.removeAll()
         bridge?.stop()
         appleMusic?.stop()
         spotify?.stop()
         mediaRemote?.stop()
         hub.stop()
         recentlyPlayed.flush()
+    }
+
+    /// Runs the extension's server while Settings allow it, follows the
+    /// port setting, and publishes its state for Settings › Sources.
+    private func startBridge(_ server: BrowserBridgeServer, settings: AppSettings) {
+        let siteLyrics = self.siteLyrics
+        tasks.append(Task { [weak self] in
+            for await status in server.statusUpdates() { self?.bridgeStatus = status }
+        })
+        tasks.append(Task { [weak self] in
+            for await browsers in server.summaries() { self?.browsers = browsers }
+        })
+        tasks.append(Task.detached(priority: .utility) {
+            for await (tabKey, lyrics) in server.lyricsUpdates() { siteLyrics?.store(lyrics, tabKey: tabKey) }
+        })
+        observers.append(ChangeObserver({ Self.bridgeConfiguration(settings) }) { configuration in
+            server.update(configuration)
+        })
+        observers.append(ChangeObserver({ settings.sources.browserBridgeEnabled }) { [weak self] enabled in
+            if enabled {
+                server.start()
+            } else {
+                server.stop()
+                self?.siteLyrics?.removeAll()
+            }
+        })
+        if settings.sources.browserBridgeEnabled { server.start() }
     }
 
     // MARK: Actions

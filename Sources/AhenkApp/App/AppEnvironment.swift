@@ -32,6 +32,7 @@ final class AppEnvironment {
             settings: settings, nowPlaying: nowPlaying, finder: services.lyricsFinder, makeChain: services.makeLyricsChain
         )
         controller.onOpenSettings = { [weak self] in self?.showSettings(.lyrics) }
+        controller.siteLyrics = services.siteLyrics
         return controller
     }()
     /// Keeps the lyrics on time by listening (Settings › Lyrics).

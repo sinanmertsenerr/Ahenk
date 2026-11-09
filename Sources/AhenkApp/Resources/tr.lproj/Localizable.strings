@@ -498,6 +498,7 @@
 "%@ BPM" = "%@ BPM";
 
 /* Step 7: browser bridge and extension */
+"Music Site" = "Müzik sitesi";
 "Playing on music sites needs the Ahenk browser extension." = "Müzik sitelerinde çalmak için Ahenk tarayıcı eklentisi gerekir.";
 "Open the site in your browser to see its playlists." = "Çalma listelerini görmek için siteyi tarayıcınızda açın.";
 "The site shows it now: press Play there." = "Site şimdi onu gösteriyor; oradan Çal düğmesine basın.";

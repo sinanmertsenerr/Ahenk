@@ -80,6 +80,10 @@ final class LyricsController {
     @ObservationIgnored var onFocusSearch: (() -> Void)?
     /// Asked by the hover menu.
     @ObservationIgnored var onOpenSettings: (() -> Void)?
+    /// The lyrics music sites loaded themselves (live only); they replace
+    /// what is shown when they arrive for the song that plays.
+    @ObservationIgnored var siteLyrics: BrowserLyricsProvider?
+    @ObservationIgnored private var siteTask: Task<Void, Never>?
     private let log = AhenkLogger(category: "lyrics")
 
     /// Nudges move the timing this much (seconds).
@@ -111,12 +115,19 @@ final class LyricsController {
             guard let self else { return }
             self.finder = self.finder.with(chain: self.makeChain(disabled))
         })
+        if let siteLyrics {
+            siteTask = Task { [weak self] in
+                for await _ in siteLyrics.changes() { self?.siteLyricsArrived() }
+            }
+        }
         songChanged()
     }
 
     func stop() {
         isStarted = false
         observers = []
+        siteTask?.cancel()
+        siteTask = nil
         task?.cancel()
         listTask?.cancel()
         finder.songs.flush()
@@ -191,6 +202,20 @@ final class LyricsController {
             guard let self, !Task.isCancelled, self.query == query else { return }
             self.apply(found.response, choice: found.choice, for: query, allFailed: found.allFailed, origin: found.origin)
         }
+    }
+
+    /// A site sent lyrics: when they are this song's, they replace what is
+    /// shown (unless the user picked a version), even mid-lookup.
+    private func siteLyricsArrived() {
+        guard settings.lyrics.enabled, let query, choice == nil,
+              BrowserLyricsProvider.site(ofSource: source ?? "") == nil,
+              let found = siteLyrics?.lookup(query)
+        else { return }
+        task?.cancel()
+        let response = LyricsResponse(
+            result: .synced(found.lyrics), source: BrowserLyricsProvider.sourceName(for: found.site), timingAuthority: .canonicalRecording
+        )
+        apply(response, choice: nil, for: query, origin: .playingSource)
     }
 
     /// Tries the providers again (the failed state's button).
@@ -345,7 +370,9 @@ final class LyricsController {
                 // Another version has its own timing: the old nudge is gone.
                 self.manualOffset = nil
                 finder.songs.setManualOffset(nil, for: query.cacheKey)
-                self.apply(response, choice: version.withoutLyrics, for: query)
+                // A site's own lyrics are the automatic pick, not a choice.
+                let isSite = BrowserLyricsProvider.site(ofSource: response.source) != nil
+                self.apply(response, choice: isSite ? nil : version.withoutLyrics, for: query, origin: isSite ? .playingSource : nil)
                 self.choosing = nil
                 self.panel = nil
             } catch {
@@ -403,8 +430,11 @@ final class LyricsController {
     /// True while a song with lyrics to look for plays (the widget shows).
     var hasSong: Bool { phase != .idle }
 
-    /// "LRCLIB", "Musixmatch", "NetEase", "Demo".
+    /// "LRCLIB", "Musixmatch", "NetEase", "Demo", or the site whose own
+    /// lyrics these are ("YouTube Music").
     static func displayName(ofProvider name: String) -> String {
-        name == "demo" ? "Demo".l10n : name
+        if let site = BrowserLyricsProvider.site(ofSource: name) { return site.source.title }
+        if name == BrowserLyricsProvider.providerName { return "Music Site".l10n }
+        return name == "demo" ? "Demo".l10n : name
     }
 }
