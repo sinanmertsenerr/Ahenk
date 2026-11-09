@@ -21,8 +21,10 @@ shows what is playing, and your own files.
 > Spotify, SoundCloud, Amazon Music, Deezer and TIDAL; and the live wallpaper:
 > the album's motion artwork, the song's music video or another by the
 > artist, or the cover itself, melting in over your wallpaper while the song
-> plays, chosen with the dots above the player. The features arrive step by
-> step; see [docs/PROGRESS.md](docs/PROGRESS.md).
+> plays, chosen with the dots above the player; and the desktop extras: the
+> Dock icon as the cover with a ring that beats along, Clear Desk, stickers
+> cut out of your photos, and your own song files played by Ahenk itself. The
+> features arrive step by step; see [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ### Requirements
 
@@ -92,6 +94,33 @@ above the player choose among them; Settings › Live Wallpaper adds your own
 video files and addresses. It pauses while windows cover the desktop and
 shows only the cover in Low Power Mode.
 
+### Desktop extras
+
+- **Dock icon.** While a song plays, Ahenk's Dock icon is its cover with a
+  ring in the cover's colors that swells on every beat and shows the song's
+  progress; it stays still while paused and Ahenk's own icon comes back when
+  nothing plays. The ring changes a few times a second (fewer in Optimized
+  Mode and on battery, not at all in Low Power Mode). Settings › Desktop
+  Player › Dock, or **Dock Art** in the menu bar menu.
+- **Clear Desk.** The moon button beside the search field (or **Clear Desk**
+  in the menu bar menu) hides every other app, so only the desktop, the
+  widgets and the wallpaper remain; another click shows exactly the apps it
+  hid. Apps are only hidden and shown, never quit; apps you had hidden
+  yourself, full-screen apps and menu bar extras are left alone, and whatever
+  Ahenk hid comes back when it quits.
+- **Stickers.** Pick any photo (Settings › Stickers, **Add Sticker…** in the
+  player's menu, or drop it on a widget) and Ahenk cuts its subject out on
+  your Mac with Vision; nothing is uploaded. Drag a sticker to move it, its
+  corner to resize it and the handle above it to turn it; right-click to stick
+  it to the clock, the list or the player (it then moves with it) or to
+  remove it.
+- **Your own songs.** Drop a folder of songs (or song files) on Continue
+  Playing, or choose **Add Folder…** in the list's menu, and Ahenk plays them
+  itself as the source "Files on This Mac": titles and covers come from the
+  files, and the light, the lyrics, the wallpaper, the queue, shuffle and
+  repeat work as with any other source. The light needs no permission for these songs. The
+  folders are remembered in Settings › Sources; the files are never copied.
+
 ### License
 
 MIT. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
@@ -120,9 +149,11 @@ sitelerini, çalan şarkıyı gösteren her uygulamayı ve kendi dosyalarınız�
 > Deezer ve TIDAL için tarayıcı eklentisi; ve canlı duvar kâğıdı: şarkı
 > çalarken albümün hareketli kapağı, şarkının müzik videosu ya da sanatçının
 > başka bir videosu veya kapağın kendisi duvar kâğıdınızın üzerine yavaşça
-> gelir; hangisinin gösterileceği oynatıcının üstündeki noktalarla seçilir.
-> Özellikler adım adım geliyor; ayrıntılar [docs/PROGRESS.md](docs/PROGRESS.md)
-> dosyasında.
+> gelir; hangisinin gösterileceği oynatıcının üstündeki noktalarla seçilir;
+> ve masaüstü ekleri: ritimle atan bir halkayla albüm kapağına dönüşen Dock
+> simgesi, Masayı Temizle, fotoğraflarınızdan kesilen çıkartmalar ve Ahenk'in
+> kendisinin çaldığı şarkı dosyalarınız. Özellikler adım adım geliyor;
+> ayrıntılar [docs/PROGRESS.md](docs/PROGRESS.md) dosyasında.
 
 ### Gereksinimler
 
@@ -197,6 +228,39 @@ sırada akış olarak oynatılır, asla indirilmez. Oynatıcının üstündeki n
 bunlar arasında seçim yapar; Ayarlar › Canlı Duvar Kâğıdı'ndan kendi video
 dosyalarınızı ve adreslerinizi ekleyebilirsiniz. Pencereler masaüstünü
 örttüğünde duraklar, Düşük Güç Modunda yalnızca kapağı gösterir.
+
+### Masaüstü ekleri
+
+- **Dock simgesi.** Şarkı çalarken Ahenk'in Dock simgesi şarkının kapağına
+  dönüşür; çevresindeki halka kapağın renklerini taşır, her vuruşta genişler
+  ve şarkının ne kadarının çalındığını gösterir. Şarkı duraklatıldığında halka
+  durur, hiçbir şey çalmadığında Ahenk'in kendi simgesi geri gelir. Halka
+  saniyede birkaç kez değişir (Optimize Edilmiş Modda ve pilde daha seyrek,
+  Düşük Güç Modunda hiç). Ayarlar › Masaüstü Oynatıcı › Dock bölümünden ya da
+  menü çubuğu menüsündeki **Dock'ta Albüm Kapağı** seçeneğinden açılıp
+  kapatılır.
+- **Masayı Temizle.** Arama alanının yanındaki ay düğmesi (ya da menü çubuğu
+  menüsündeki **Masayı Temizle**) diğer bütün uygulamaları gizler; geriye
+  masaüstü, araçlar ve duvar kâğıdı kalır. Bir kez daha tıkladığınızda yalnızca
+  Ahenk'in gizlediği uygulamalar geri gelir. Uygulamalar yalnızca gizlenir ve
+  gösterilir, hiçbiri kapatılmaz; sizin gizlediğiniz uygulamalara, tam ekran
+  uygulamalara ve menü çubuğu araçlarına dokunulmaz. Ahenk kapanırken
+  gizlediği her şeyi geri getirir.
+- **Çıkartmalar.** Herhangi bir fotoğrafı seçin (Ayarlar › Çıkartmalar,
+  oynatıcı menüsündeki **Çıkartma Ekle…** ya da fotoğrafı bir aracın üstüne
+  bırakmak); Ahenk fotoğraftaki özneyi Vision ile Mac'inizde arka plandan
+  ayırır, hiçbir şey yüklenmez. Çıkartmayı taşımak için kendisini, boyutunu
+  değiştirmek için köşesini, döndürmek için üstündeki tutamacı sürükleyin;
+  saate, listeye ya da oynatıcıya yapıştırmak (çıkartma artık onunla birlikte
+  taşınır) veya silmek için sağ tıklayın.
+- **Kendi şarkılarınız.** Bir şarkı klasörünü (ya da şarkı dosyalarını) Çalmaya
+  Devam Et listesine bırakın veya listenin menüsünden **Klasör Ekle…**
+  komutunu seçin; Ahenk bu şarkıları "Bu Mac'teki Dosyalar" kaynağı olarak
+  kendisi çalar.
+  Şarkı adları ve kapaklar dosyalardan okunur; ışık, şarkı sözleri, duvar
+  kâğıdı, çalma sırası, karıştırma ve tekrar diğer kaynaklardaki gibi çalışır.
+  Bu şarkılarda ışık için izin gerekmez. Klasörler Ayarlar › Kaynaklar'da
+  durur; dosyalar hiçbir yere kopyalanmaz.
 
 ### Lisans
 
