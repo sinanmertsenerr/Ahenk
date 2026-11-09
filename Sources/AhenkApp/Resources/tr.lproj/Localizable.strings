@@ -502,3 +502,6 @@
 "Open the site in your browser to see its playlists." = "Çalma listelerini görmek için siteyi tarayıcınızda açın.";
 "The site shows it now: press Play there." = "Site şimdi onu gösteriyor; oradan Çal düğmesine basın.";
 "The site did not find this playlist." = "Site bu çalma listesini bulamadı.";
+"The site did not play this song." = "Site bu şarkıyı çalmadı.";
+"The site did not remove this song." = "Site bu şarkıyı çıkarmadı.";
+"The queue on %@" = "%@ çalma sırası";

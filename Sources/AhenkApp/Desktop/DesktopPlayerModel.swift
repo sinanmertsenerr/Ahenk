@@ -108,7 +108,11 @@ final class DesktopPlayerModel {
     private(set) var focusRequest = 0
 
     // Panels
-    var isQueueOpen = false
+    var isQueueOpen = false {
+        didSet { if isQueueOpen != oldValue { refreshSiteQueue() } }
+    }
+    /// The music site's own queue, shown while Ahenk's queue is not playing.
+    private(set) var siteQueue: BrowserQueue?
     /// The queue has no room beside the player and opens as a page (set by
     /// the controller from the widgets' places).
     var queueAsPage = false
@@ -139,6 +143,7 @@ final class DesktopPlayerModel {
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var listTask: Task<Void, Never>?
     @ObservationIgnored private var volumeTask: Task<Void, Never>?
+    @ObservationIgnored private var siteQueueTask: Task<Void, Never>?
     @ObservationIgnored private var statusEnd: DispatchWorkItem?
     @ObservationIgnored private var artistKey: String?
     @ObservationIgnored private var pendingVolume: Double?
@@ -173,6 +178,7 @@ final class DesktopPlayerModel {
         if let palette = nowPlaying.artwork?.palette { theme = PlayerTheme(palette: palette) }
         observers.append(ChangeObserver({ nowPlaying.snapshot?.track }) { [weak self] track in
             self?.trackChanged(track)
+            self?.refreshSiteQueue()
         })
         observers.append(ChangeObserver({ settings.player.listeningSource }) { [weak self] _ in
             self?.sourceChanged()
@@ -197,7 +203,7 @@ final class DesktopPlayerModel {
         observers = []
         tasks.forEach { $0.cancel() }
         tasks = []
-        [artistTask, searchTask, listTask, volumeTask].forEach { $0?.cancel() }
+        [artistTask, searchTask, listTask, volumeTask, siteQueueTask].forEach { $0?.cancel() }
         statusEnd?.cancel()
     }
 
@@ -345,7 +351,68 @@ final class DesktopPlayerModel {
     func play(_ songs: [CatalogSong], at index: Int, context: QueueContext?) {
         guard songs.indices.contains(index) else { return }
         clearStatus()
+        // A music site's playlist plays in the site, in its own order.
+        if case .playlist(let id, let name) = context, PlaybackRouter.isSitePlaylist(CatalogPlaylist(id: id, name: name)) {
+            let source = listeningSource
+            Task { [weak self] in
+                guard let self else { return }
+                let outcome = await self.router.playSitePlaylist(CatalogPlaylist(id: id, name: name), from: index, in: source)
+                self.report(outcome)
+            }
+            return
+        }
         conductor.play(songs, at: index, context: context, in: source(for: songs[index]))
+    }
+
+    /// A router answer as a message above the bar (nothing when it started).
+    private func report(_ outcome: PlaybackRouter.Outcome) {
+        switch outcome {
+        case .started, .needsUser: break
+        case .shown(let message): show(PlayerStatus(text: message, kind: .info))
+        case .unavailable(let message), .failed(let message): show(PlayerStatus(text: message, kind: .problem))
+        }
+    }
+
+    // MARK: The site's own queue
+
+    /// Reads the playing site's queue while the queue panel is open and
+    /// Ahenk's own queue is not playing.
+    func refreshSiteQueue() {
+        siteQueueTask?.cancel()
+        guard isQueueOpen, !conductor.isActive, let source = nowPlaying.snapshot?.track.source, source.isSite else {
+            if siteQueue != nil { siteQueue = nil }
+            return
+        }
+        siteQueueTask = Task { [weak self] in
+            // The site updates its list a moment after the song changes.
+            try? await Task.sleep(for: .milliseconds(400))
+            guard let self, !Task.isCancelled else { return }
+            let queue = await self.router.siteQueue(of: source)
+            guard !Task.isCancelled else { return }
+            self.siteQueue = queue
+        }
+    }
+
+    func playSiteQueueItem(_ item: BrowserQueue.Item) {
+        guard let source = siteQueue?.site else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            if !(await self.router.playSiteQueueItem(item.index, in: source)) {
+                self.show(PlayerStatus(text: "The site did not play this song.".l10n, kind: .problem))
+            }
+            self.refreshSiteQueue()
+        }
+    }
+
+    func removeSiteQueueItem(_ item: BrowserQueue.Item) {
+        guard let source = siteQueue?.site else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            if !(await self.router.removeSiteQueueItem(item.index, in: source)) {
+                self.show(PlayerStatus(text: "The site did not remove this song.".l10n, kind: .problem))
+            }
+            self.refreshSiteQueue()
+        }
     }
 
     /// Where a pick plays: the chosen source; with the picker on Automatic,

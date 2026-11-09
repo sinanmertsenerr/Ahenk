@@ -4,7 +4,8 @@ import SwiftUI
 
 /// The queue beside the player (when there is room for it): what plays,
 /// what is up next (play any of it, remove it), and a way to add more.
-/// Ahenk keeps this queue itself; the music apps do not share theirs.
+/// Ahenk keeps this queue itself; the music apps do not share theirs. While
+/// Ahenk's queue is not playing, a music site's own queue shows instead.
 struct QueuePanel: View {
     let model: DesktopPlayerModel
 
@@ -94,6 +95,8 @@ struct QueueList: View {
                 }
                 .scrollIndicators(.never)
                 .fadesScrollEdges()
+            } else if let siteQueue = model.siteQueue, !siteQueue.items.isEmpty {
+                SiteQueueList(model: model, queue: siteQueue, showsContext: showsContext)
             } else {
                 WidgetMessage(
                     symbol: "list.bullet",
@@ -116,6 +119,9 @@ struct QueueList: View {
 
     @MainActor
     static func contextText(_ model: DesktopPlayerModel) -> String {
+        if !model.conductor.isActive, let siteQueue = model.siteQueue, !siteQueue.items.isEmpty {
+            return L10n.format("The queue on %@", siteQueue.site.title)
+        }
         guard model.conductor.isActive, let context = model.conductor.queue.context else {
             return "Songs started from the player".l10n
         }
@@ -200,5 +206,109 @@ private struct QueueRow: View {
                 Button("Remove from the Queue".l10n, systemImage: "minus.circle") { model.conductor.remove(entry.id) }
             }
         }
+    }
+}
+
+/// A music site's own queue: what plays there and what comes next (play any
+/// of it; remove it where the site allows).
+private struct SiteQueueList: View {
+    let model: DesktopPlayerModel
+    let queue: BrowserQueue
+    let showsContext: Bool
+
+    var body: some View {
+        let current = queue.items.first(where: \.isCurrent)
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 8) {
+                if showsContext {
+                    Text(QueueList.contextText(model))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .lineLimit(1)
+                }
+                if let current {
+                    WidgetSectionTitle(title: "Now Playing".l10n)
+                    SiteQueueRow(model: model, item: current, canRemove: false)
+                }
+                WidgetSectionTitle(title: "Up Next".l10n)
+                    .padding(.top, current == nil ? 0 : 6)
+                if queue.upNext.isEmpty {
+                    Text("Nothing is up next.".l10n)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .padding(.vertical, 6)
+                } else {
+                    LazyVStack(spacing: 1) {
+                        ForEach(queue.upNext) { item in
+                            SiteQueueRow(model: model, item: item, canRemove: queue.canRemove)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
+        .scrollIndicators(.never)
+        .fadesScrollEdges()
+    }
+}
+
+private struct SiteQueueRow: View {
+    let model: DesktopPlayerModel
+    let item: BrowserQueue.Item
+    let canRemove: Bool
+    @State private var isHovering = false
+
+    var body: some View {
+        let theme = model.theme
+        HStack(spacing: 4) {
+            Button {
+                model.playSiteQueueItem(item)
+            } label: {
+                HStack(spacing: 10) {
+                    CoverArt(song: item.song, side: 34, cornerRadius: 7)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(item.song.title)
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        Text(item.song.artistName)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.58))
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 2)
+                    if item.isCurrent {
+                        EqualizerBars(isPlaying: model.isPlaying, color: theme.accent)
+                            .frame(width: 14, height: 12)
+                            .padding(.trailing, 6)
+                    }
+                }
+                .padding(.leading, 6)
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .allowsHitTesting(!item.isCurrent)
+            .help(item.isCurrent ? "" : "Play Now".l10n)
+
+            if canRemove, !item.isCurrent {
+                Button {
+                    model.removeSiteQueueItem(item)
+                } label: {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(isHovering ? 0.75 : 0.32))
+                        .frame(width: 26, height: 26)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Remove from the Queue".l10n)
+                .accessibilityLabel("Remove from the Queue".l10n)
+            }
+        }
+        .padding(.trailing, 4)
+        .rowHighlight(isPlaying: item.isCurrent, accent: theme.accent, cornerRadius: 11)
+        .onHover { isHovering = $0 }
     }
 }
