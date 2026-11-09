@@ -1843,3 +1843,323 @@ the first version of the tile took 181 ms (3.0 %; +4.7 % by `top`). With lyrics,
 
 Nothing new is required. Song files need no permission for the light. To try Clear Desk for real, use the installed app
 (not `--demo`, where the desk is invented).
+
+## Step 10 — Sound effects and local lyric alignment (done, 2026-11-10)
+
+### What exists
+
+```
+Sources/AhenkKit/Effects/             SoundEffectChain (what every stage does, from the settings; adapted to who controls the speed),
+                                      SoundPreset.recipe + SoundEffectSettings.select / reset, SoundEcho, SoundOrbit, ReverbSpace,
+                                      SoundOrbiter (8D: equal-power pan along a sine, in place), SoundEffectRouter (the route per
+                                      player, when to switch off), SoundEffectTapRule (what a tap may mute)
+Sources/AhenkKit/Lyrics/Alignment/    WhisperTranscript (whisper-cli's JSON → words with times), LyricAligner (plain lines × heard
+                                      words → SyncedLyrics with word times; the fallbacks), WhisperLocator + WhisperTools (find the
+                                      tool and a model, say what is missing), WhisperRunner (the command line, progress, cancel),
+                                      WhisperAudio (16 kHz mono WAV from captured samples or a song file)
+Sources/AhenkKit/Audio/AtomicSlots    lock-free 64-bit slots (numbers, doubles, pointers, a try-lock) for the audio threads
+Sources/AhenkApp/Effects/             EffectsGraph (AVAudioEngine nodes: pitch → equalizer → echo → reverb), LocalEffectsProcessor
+                                      (the graph inside Ahenk's own player, rendered by hand on its audio thread), EffectsOutput +
+                                      ExternalEffects (the graph playing another app's muted sound to the output device),
+                                      SoundEffectsController (one switchboard that follows the hub's player), SoundEffectsPanel
+                                      (the panel beside the lyrics), EffectsCheck
+Sources/AhenkApp/Lyrics/              LyricsAlignmentController (file / listening / demo, the tool and the model, ModelDownloader),
+                                      LyricsAlignPanel, LyricsAlignmentCheck
+Sources/AhenkApp/Audio/               ProcessTapSession(… effects:) (a muted tap that also hands the stereo sound on),
+                                      AudioCaptureController.setEffects / setEffectsDelay / endLyricsCapture
+Extension/ 1.2.0                      "rate" command and capability (C.playbackRate, C.rateCorrection); a tab gets its own speed
+                                      back when Ahenk goes away
+Settings                              Sound › Sound Effects (status, preset, speed, pitch, reverb, reset) and Equalizer;
+                                      Lyrics › alignment (whisper-cli, speech model, Choose…, Download the Model)
+Tests/AhenkKitTests/                  553 tests in 94 suites (was 510/88): SoundEffectTests (+ the real-time helpers),
+                                      LyricAlignmentTests (transcript, aligner, tools, audio, the real tool when present),
+                                      bridge rate cases; 25 node tests (was 24)
+```
+
+**Sound effects.** The slider button in the lyrics' bar (lit while the effects are on), "Sound Effects…" in the player's
+⋯ menu and Settings › Sound all edit `settings.effects`. The panel over the lyrics: a status line, the presets as chips
+(Custom, Nightcore, Slowed + Reverb, 8D Audio, Bass Boost, Echo, Vaporwave, Lo-fi, Concert Hall, Underwater), speed
+(0.5–2×), pitch (±12 semitones), reverb, and ten vertical equalizer bands (32 Hz–16 kHz, ±12 dB) with Flatten, Reset and
+the switch. Choosing a preset writes its values into the sliders (and switches the effects on); the parts no slider
+reaches (the echo, the 8D orbit, the kind of room) stay with the preset until Custom is chosen. `SoundEffectChain` is
+what the audio side reads: nothing at all while the switch is off.
+
+`SoundEffectsController` follows `nowPlaying.snapshot` and routes (`SoundEffectRouter`):
+
+- **Song files (`.local`)**: `LocalEffectsProcessor`, an `AVAudioEngine` in real-time manual rendering mode. The player's
+  `MTAudioProcessingTap` callback hands the dry buffer to the analysis first, then, when `OwnAudioTap.effectsHook` holds a
+  processor, runs the buffer through it in place (mono, separate or interleaved stereo floats). Speed is the player's own
+  rate (`LocalPlayer.setSpeed`, `.varispeed`): the pitch follows the speed as on a record, and the pitch stage only does
+  what is left (`SoundEffectChain.adapted(to: .ownPlayer)`: nothing for Nightcore, Slowed + Reverb and Vaporwave; the way
+  back to the song's pitch when only the speed slider moved). The snapshot reports the real `playbackRate`, so the lyrics
+  and the progress keep up; the tap hands audio over before the rate is applied, so the analysis is told the speed
+  (`OwnAudioTap.playbackSpeed` → `analysisRate`).
+- **Another app**: the capture's tap on that app is rebuilt with `muteBehavior = .mutedWhenTapped` and its IOProc also
+  writes the stereo sound into a ring (`TapIOContext.feed`, whole chunks only); `EffectsOutput` (an `AVAudioSourceNode`
+  reading the ring → the same graph → the output device) plays it. The mono analysis mix is taken from the same buffer
+  before, so the light never follows an echo. The output is started before the tap is built and stopped after it is
+  gone; if the output cannot start, or the tap runs at another rate than the clock device, the tap is built unmuted.
+  A browser tab whose extension reports the `rate` capability takes the speed through the bridge
+  (`BrowserBridgeServer.setRate`); the browser keeps the pitch, Ahenk shifts it. Apple Music, Spotify and other apps have
+  no speed: the chain is adapted (`speed = 1`), the pitch still shifts, and the panel and Settings say "This player
+  cannot change its speed, so only the pitch moves."
+- **The demo**: an invented player with nothing to hear; the route is `.demo` and the UI says so. `--demo-local` routes
+  to the real local chain (the player is muted).
+- **Not possible** (the status line says why, with a button where there is something to press): system audio access not
+  asked yet or denied, macOS older than 14.2, Ahenk hearing every app at once (the fallback tap: never muted), a video or
+  a podcast, a player that cannot be told.
+
+Nothing stays muted: `SoundEffectTapRule` lets a tap mute only the processes of the app the effects were asked for,
+and only while Ahenk's output runs; a tap on everything, the demo and Ahenk's own player never are; the switch goes off
+when another player (source + app) is followed than the one it was switched on for; `stop()` (in
+`applicationWillTerminate`, so also on SIGTERM) removes the processor, asks the capture for an unmuted tap, puts the
+tab's and the local player's speed back and switches the effects off; a run that ended without quitting finds the
+switch on and turns it off before anything plays; an output that is interrupted three times in ten seconds gives the
+app its own sound back; and the extension puts a tab's speed back when its connection to Ahenk closes. A muted tap
+unmutes by itself when Ahenk's process goes away (Core Audio's rule, not Ahenk's).
+
+**Lyric alignment (Beta).** "Align Lyrics" is a panel over the lyrics: the words on the left (the plain lyrics that were
+found, or pasted and edited), on the right what is needed, the button and the progress. It opens from the wand button in
+the lyrics' bar (shown while the song has plain, missing or failed lyrics), from the ⋯ menu (always, to time other words
+again), and by itself after picking a "Words only" version in Search Lyrics (the list is where the right song is picked
+when the match is uncertain). `LyricsAlignmentController`:
+
+- **Song files**: `Track.id` is the path; `WhisperAudio.convert` reads the file with `AVAssetReader` into a 16 kHz mono
+  WAV in the temporary folder.
+- **Another app**: no file, so `LyricsSyncCapture` collects the analysis' mono audio (in memory) from now to the end of
+  the song (at most 6 minutes; "Align Now" after 20 s); the song must play straight through at its own speed, which is
+  checked against the snapshot before anything is recognised. The capture is resampled to 16 kHz and written the same
+  way. Automatic sync steps aside meanwhile (`LyricsAutoSync.isSuspended`).
+- **Recognising**: `whisper-cli -m <model> -f <wav> -l auto --output-json-full --max-len 1 --split-on-word
+  --print-progress` (progress from stderr, the task's cancellation ends the process, 15 minutes at most), the JSON read
+  by `WhisperTranscript`.
+- **Timing** (`LyricAligner`): both sides reduced to bare words (case, accents, punctuation folded; ı as i; hyphenated
+  words one by one), a dynamic-programming pairing in order where equal words score, nearly equal ones (edit distance)
+  score less, neighbours in a row score extra and skips cost a little; lone short words are dropped. A line with heard
+  words takes their times and gets word timings (unheard words spread between or beside the heard ones); a line without
+  any is placed between its neighbours by its length (shared out when the room is about what the lines need, leading
+  into the next heard line after a long stretch, squeezed in before the song ends) and carries no word timings.
+  Quality: good (≥ 70 % of the lines heard), rough (≥ 30 %), failed (less: nothing is changed and the panel says how
+  many lines were found).
+- **Kept**: `LyricsFinder.adopt` stores the result under the song's choice key with the source `aligned` ("Timed on This
+  Mac"), `timingAuthority = .canonicalRecording` (no automatic correction afterwards); "Use the Lyrics Ahenk Found"
+  drops it.
+- **The tool and the model**: `WhisperLocator` looks for `whisper-cli` / `whisper-cpp` in `/opt/homebrew/bin`,
+  `/usr/local/bin`, `~/.local/bin`, `~/bin`, and for `ggml-*.bin` in `~/Library/Application Support/Ahenk/Models`,
+  `~/Developer/whisper-models`, `~/whisper-models`, the whisper.cpp caches and Homebrew's share folders; the best model
+  wins (larger first, every language before English only, full before compressed); `settings.lyrics.whisperExecutablePath`
+  / `whisperModelPath` override both. What is missing is said in the panel and in Settings › Lyrics with Copy the Command
+  (`brew install whisper-cpp`), Choose… and Download the Model (ggml-large-v3-turbo-q5_0.bin, 574 MB, into Ahenk's Models
+  folder). Nothing is fetched unless that button is pressed.
+- **The demo**: nothing to listen to; the demo song's own timing plays the recogniser and the real aligner times the
+  words in the editor against it (the panel says so).
+
+### Build, run, verify
+
+```sh
+swift build && ./Scripts/test.sh      # 553 Swift tests + 25 node tests, no warnings
+./Scripts/make-app.sh && ./Scripts/smoke.sh --snapshots   # 30 checks; desktop-lyrics-{effects,align,align-working}-{en,tr}.png,
+                                                          # settings-{sound,lyrics}-full-{en,tr}.png in ~/Library/Logs/Ahenk/snapshots
+open -n dist/Ahenk.app --args --demo --demo-backdrop --demo-scene effects        # the effects panel, Slowed + Reverb on
+open -n dist/Ahenk.app --args --demo --demo-backdrop --demo-scene align          # Align Lyrics with the demo song's words
+open -n dist/Ahenk.app --args --demo --demo-backdrop --demo-scene align-working  # … at "Recognising the words… 40 %"
+open -n dist/Ahenk.app --args --demo --demo-backdrop --demo-local --draw-covered --demo-scene effects   # the real local chain, muted
+pkill -x Ahenk
+```
+
+New demo scenes: `effects`, `align`, `align-working`. No new launch arguments.
+
+Tests by name. Effects: "Switched off, the chain does nothing whatever the sliders say", "Choosing a preset puts its
+values into the sliders", "Sliders moved after a preset keep its echo and orbit; Custom drops them and keeps the
+sliders", "Every preset but Custom changes something, stays inside the sliders' ranges and has ten bands", "A player
+without a speed keeps its own; the pitch still shifts", "Ahenk's own player gains its pitch from the speed; the pitch
+stage does what is left", "The orbit moves the sound from ear to ear at even loudness", "Song files go through Ahenk's
+own chain, with or without the permission", "Another app goes through a muting tap, only with the permission", "Effects
+are switched off when another player is followed, not between songs or tabs", "A tap mutes only the app the effects
+were asked for, and only while Ahenk plays the sound", "The tap on every app, the demo and Ahenk's own player are never
+muted". Bridge: "A speed for a tab has a wire form and stays within what a tab takes", the loopback server test sends
+`setRate`; node: "the speed Ahenk asks a tab for". Alignment: "A word per segment: the segment's times, without markers
+and sounds", "Longer segments: words are put together from their pieces", "Every line takes the time its first word was
+sung; every word gets its own", "Misheard, swallowed and added words do not move the lines", "A refrain is timed where
+it is sung, each time", "A line the recogniser missed sits between its neighbours, by its length", "After a long
+instrumental stretch, missed lines lead into the next heard one", "Lines before the first and after the last heard one
+stay in order and inside the song", "Audio that starts in the middle of the song gives song positions", "Another song's
+words, or nothing heard, is a failure and keeps the lines in order", "Turkish lines match what a recogniser writes
+without the dots and tails", "Whatever was heard, the lines stay in order and never share a start" (40 random
+transcripts), "Aligned lyrics are kept like a picked version and come back with the song", the locator on invented
+folders, model ranks, the command line, resampling, the WAV header, a generated song file converted, and "Spoken
+invented lines are recognised and timed by the real tool" (runs only when this Mac has the tool and a model; `say -o`
+writes a file and plays nothing).
+
+Smoke checks (30, all `ok`; two are new):
+
+- `soundEffects` — the processor the player's tap calls, on generated tones, measured and never played: the neutral
+  chain returns the input exactly; Bass Boost lifts 64 Hz by 9.5 dB against 4 kHz without clipping; twelve semitones up
+  put 880 Hz far over 440 Hz; the echo comes back 0.32 s after a burst with silence before it; the reverb leaves a tail;
+  the orbit carries a tone 12× to each ear; all nine presets render (0.6 % of real time at most); the pitch stage delays
+  by exactly 4096 frames, wired in but idle, and a shifted burst by 92 ms; a mono buffer and an interleaved one come out
+  like two separate channels. Then a generated tone played by a muted `LocalPlayer` with the processor hooked in: its
+  audio thread rendered 16–17 buffers, none left dry, the position moved at 0.83–0.85× for 0.85×, the tap handed audio
+  over at 0.80–0.86× real time, and without the hook the song played on at 1×. Then another app's way without a tap or a
+  device: `TapIOContext.feed` (interleaved and separate) → the ring → a silent `EffectsOutput` rendered by hand: silence
+  until a buffer is in reserve, the buffers in order with left as left, silence when dry, a jump to the newest (keeping
+  one in reserve) after half a second of backlog, the analysis' mono mix complete, a full ring taking no half chunk, Bass
+  Boost in the way of the sound, and the pitch stage wired in and out while the engine runs. Last: the tap rule refuses
+  the fallback tap and an output that does not run, and this run can neither make an `EffectsOutput` that plays nor a
+  muted `ProcessTapSession` (both throw).
+- `lyricAlignment` — the demo song's 16 invented lines timed against that song's own timing (±0.000 s heard in full; 16
+  of 16 within 0.75 s with a third of the words missing and strays added); a generated M4A converted to 3.0 s of 16 kHz
+  WAV; the download's mechanics from one temporary file to another (no network); the demo's controller timing the playing
+  song's words, the result adopted as the song's lyrics (`aligned`, with word timings) and dropped again by "use the
+  lyrics Ahenk found"; and, with the tool and model of this Mac, three invented lines spoken into a file by `say -o`:
+  whisper-cli with ggml-large-v3-turbo-q5_0 recognised 19 words of 7.6 s in 1.5 s and the lines were timed at 0.0, 3.1 and
+  5.5 s. Without the tool the last part is skipped and says what is missing.
+
+Seen (offscreen snapshots of Ahenk's own views, both languages): the effects panel with "Demo: the effects are shown,
+the demo's songs make no sound", the chips on two rows with Slowed + Reverb lit, Speed 0.85×, Pitch −3, Reverb 45 %,
+the speed note, the equalizer with its ten bands and labels; Align Lyrics with the Beta badge, the song's words in the
+editor, the explanation, the demo note and the button; the same at "Recognising the words… 40 %" with its bar and
+Cancel; Settings › Sound and Settings › Lyrics in full (`/opt/homebrew/bin/whisper-cli`, `ggml-large-v3-turbo-q5_0.bin`,
+Choose…). In the log of `--demo-local --demo-scene effects`: "Sound effects: in Ahenk's own player", "Song files play at
+0.85× speed", "Sound effects run in Ahenk's own player (44100 Hz…)", and on SIGTERM "Song files play at 1.00× speed"
+before "Quitting".
+
+Measured on the M5 (release build, on battery, the user working, `--demo --demo-local --draw-covered --wallpaper-source
+off`, `top`, 3 s samples): without effects 2.0–6.0 % and 135–180 MB; with Slowed + Reverb on and the panel open
+4.1–8.0 % and 144–186 MB. The chain itself renders at 0.6 % of real time at most (smoke). With the switch off no engine,
+no timer and no processor exists; the tap's callback reads one atomic slot.
+
+### Decisions
+
+- **One graph, three hosts.** `EffectsGraph` (pitch → equalizer → echo → reverb) is the same nodes whether an engine
+  renders by hand inside the local player's tap, plays to the device for another app, or renders offline for a check.
+  Speed is never a stage (only a player can play faster); the 8D orbit works on the samples before the engine
+  (`SoundOrbiter`, Kit, tested), so it is the same everywhere.
+- **The local player is processed in place**, not muted and replayed: the processed samples leave through the player, so
+  the lyrics, the progress and the measured lead need nothing new, and nothing can be left muted. The engine is fed by
+  an `AVAudioSourceNode` (pulled while it renders); the input node of a manual-rendering engine delivered the buffer one
+  call late.
+- **The pitch stage is wired in only while the pitch is shifted.** `AVAudioUnitTimePitch` holds the sound back by 4096
+  frames even when bypassed, whatever the size of the render calls or the engine's maximum (measured). For song files
+  a change from or to zero pitch swaps the processor; the device engine rewires while running. The light waits as long
+  (`AudioTapEngine.setEffectsDelay`).
+- **Song files change speed the way a record does** (`.varispeed`): no time stretching (the stretched player cost a
+  few percent of CPU), and the classic sped-up and slowed sound. The chain is adapted so that the sliders still mean
+  what they say: speed alone keeps the pitch (the stage shifts back), pitch alone shifts it.
+- **A tab keeps its pitch** (the browser's default `preservesPitch`); Ahenk shifts it. The extension keeps the rate over
+  song changes (sites reset it) and reports the element's real rate, so position interpolation stays right.
+- **The capture mutes; the controller only asks.** The decision to mute sits next to the tap
+  (`AudioCaptureController.build`): the output is started first, the rule is asked with what is true at that moment, and
+  the stop order is tap first, output second. The UI learns through `AudioEngineStatus.playsEffects`.
+- **Effects belong to the player and the run they were switched on for.** Another player (source + app) switches them
+  off; so does quitting and starting. Presets and sliders are kept; the switch is not. A browser's tabs are one player
+  (the rate follows the playing tab, the old tab gets its speed back).
+- **Demo and smoke runs cannot mute or play.** `EffectsOutput.isAllowed` and `ProcessTapSession.mutingAllowed` are set
+  from the launch mode once; both initialisers throw otherwise, and the smoke check tries. The silent `EffectsOutput`
+  (manual rendering) is the same code with no device.
+- **Alignment reads whisper's JSON with a word per segment** (`--max-len 1 --split-on-word`): the segment's times are
+  better than a token's own end. No prompt with the lyrics is passed (it would invite the model to write the lyrics
+  instead of hearing them).
+- **Runs of words beat lone words.** The pairing rewards neighbours in a row (so a refrain is found where it is sung)
+  and drops lone words of three letters or fewer. Lines that were not heard get no word timings, so the styles fall back
+  to the line.
+- **Aligned lyrics are a choice.** They live where a picked version lives (the choice key in the lyrics cache and the
+  per-song store), so every existing path (the finder's order, "Use the Lyrics Ahenk Found", Clear) treats them right.
+- **The model download is in the app but never automatic.** One button, in the panel and in Settings › Lyrics; a
+  `URLSession` download into `~/Library/Application Support/Ahenk/Models`. Choose… works for any model or tool already
+  on the Mac.
+- **The effects button is lit while the effects are on**; the wand shows only where timing is what is missing.
+
+### Deviations from PLAN.md
+
+- **Not pushed.** The step's instructions were to commit locally and leave the push to the orchestrator.
+- Song files are processed inside Ahenk's own player instead of through a tap (no tap can hear Ahenk, and none is
+  needed).
+- Three presets beyond the list: Lo-fi, Concert Hall, Underwater.
+- The switch of the effects does not survive a run (see Decisions).
+- Alignment also offers "Align Now" (a part of the song), word timings, and a model picker.
+- `Scripts/widget-shot.swift` could not be used in this step: screen capture was denied to the shell the agent ran in
+  (TCC, `SCStreamErrorDomain -3801`). The UI was checked through the offscreen snapshots of the smoke run instead.
+- `Scripts/bridge-e2e.sh` was not run: its test browser plays a generated tone.
+- **Shared API changes** (call sites and tests updated): `SoundPreset.underwater`; `SoundEffectSettings.select(_:)`,
+  `reset()`, `matchesPreset`; `Comparable.clamped(to:)` is public; `AudioRingBuffer.Writer.free`, `Reader.skip(_:)`;
+  `ahenk_compare_exchange`; `OwnAudioTap.effectsHook`, `playbackSpeed`, `analysisRate`, `Context.sampleRate`;
+  `BridgeCapability.rate`, `BridgeCommand.Name.rate`, `BridgeCommand.rate`, `BridgeCommand(id:tabID:rate:)`,
+  `BrowserBridgeServer.setRate(_:forTab:)`; `LyricsFinder.adopt(_:for:)`, `alignedSource`;
+  `ProcessTapSession.init(scope:ring:effects:)`, `isMuted`, `mutingAllowed`; `TapIOContext.init(writer:stereo:scratchCapacity:)`,
+  `feed(_:)`; `AudioEngineStatus.playsEffects`; `AudioCaptureController.setEffects`, `effectsInterrupted`,
+  `setEffectsDelay`, `endLyricsCapture`; `AudioTapEngine.setEffects`, `effectsInterrupted`, `setEffectsDelay`,
+  `stopListening(forLyrics:)`, `hearsEverything`; `LocalPlayer.speed`, `setSpeed(_:)`, items play with `.varispeed`, the
+  snapshot's `playbackRate` is the speed; `LyricsController.Panel.effects` / `.align`, `adoptAligned`, `wordsToAlign`,
+  and `choose` opens Align Lyrics after a plain pick; `LyricsWidget(… effects:audio:aligner:)`;
+  `DesktopPlayerController.effects`, `audio`, `aligner`; `DesktopPlayerModel.onOpenSoundEffects`;
+  `LyricsAutoSync.isSuspended`; `SoundPane(audio:effects:apps:settings:)`, `LyricsPane(… aligner:)`;
+  `AppEnvironment.effects`, `aligner`; `ValueFormat.shortFrequency`; the extension is 1.2.0.
+
+### For Step 11 (polish, performance, release)
+
+- **Try the effects on a real app first** (see Known gaps): the muted tap and the device output have only run in
+  pieces. `[audio] Listening to … muted and played with effects` and `[effects] Playing the app's sound with effects`
+  are the lines to look for; `The effects' output could not start`, `no effects for this app` and `keeps being
+  interrupted` are the failures. Tune the presets by ear (levels, `EffectsGraph.fullReverb`, the echo, the orbit's
+  period); they were chosen from numbers.
+- **Onboarding** should say that the browser extension must be reloaded (1.2.0) for the speed presets in tabs, and that
+  the effects for other apps use the same system audio permission as the light.
+- **Lyrics with the pitch stage** run 93 ms ahead of the sound (the light is compensated, the lyrics' clock is not);
+  if it shows, add `appliedDelay` to the stage's clock.
+- **Alignment** needs a pass with real songs: thresholds (`LyricAligner.goodLineShare`, `roughLineShare`,
+  `fuzzyThreshold`), how long a whole song takes, whether `--max-len 1` word times hold up over music, and whether a
+  vocal-forward pre-filter helps. The capture keeps a song's mono audio in memory (about 15 MB for four minutes).
+- The Settings panes for Sound and Lyrics are complete for this step; the About pane's acknowledgements should name
+  whisper.cpp as an optional tool the user installs (nothing of it is bundled).
+- The feature list's items for QA: the effects button beside the lyrics, the presets by name, reverb, pitch, the
+  ten-band equalizer, live toggling; Search lyrics → pick the song → aligned on the Mac, one download, Beta.
+
+### Known gaps and risks
+
+- **The muted tap and the device output never ran on a real app.** Creating a muted tap on the user's music, or playing
+  anything aloud, was ruled out for this step. Covered: the rules (unit tests), the hand-over, the ring, the source node,
+  the effects and the rewiring (smoke, with no device). Not covered: `AudioHardwareCreateProcessTap` with
+  `.mutedWhenTapped` (that the app really falls silent, at once, and comes back when the tap goes), `AVAudioEngine`
+  starting on the control queue and playing to the default output, the gap or overlap at the moment of switching, the
+  added latency by ear, an output device whose clock is not the tap's (the default output has an input stream, as some
+  headsets do: the two then drift, and the output skips or waits now and then), AirPlay and Bluetooth, a change of
+  output while playing (`AVAudioEngineConfigurationChange` → rebuild), the app's own volume control while muted, and
+  multichannel sources (the first two channels are used).
+- **Nothing was heard.** Every effect was measured, none listened to: presets may be too strong, too quiet or clip on
+  real music (the equalizer takes 60 % of its largest boost off as headroom; echo and reverb add level on top).
+- **The speed command never ran in a real browser.** The wire form, the server and the pure parts are tested; the page
+  code (`setRate`, the correction in `read()`, the reset when Ahenk disconnects) is not. Sites that manage their own
+  rate (YouTube's speed menu) will show another speed than they play; a site that fights the rate will flicker between
+  the two.
+- **Song files**: the preloaded next song's first buffers pass through the same processor (one buffer at a time, by a
+  try-lock: a buffer that finds it busy stays dry), so a reverb tail carries over a song change and a click is possible
+  there. Moving the pitch from or to zero swaps the engine and cuts a tail. Files in other layouts than mono or stereo
+  floats are left dry (`LocalEffectsProcessor.skips` says why). The lead is measured again after a speed change; until
+  then the light may be off by a few tens of milliseconds.
+- **Alignment was only tried on a synthetic voice.** No song was recognised: whisper on singing over music misses and
+  invents words, its word times are coarse, and instrumental parts can produce text. The aligner's fallbacks are tested
+  on invented transcripts, not on such output. Listening to another app was not tried with a real tap either (the
+  capture is Step 6's; the checks for a pause or a seek are new and untested live). A song longer than 6 minutes is
+  timed up to there; the rest is placed by length.
+- **The model download never ran against its real address** (`WhisperLocator.suggestedModelURL`, 574,041,195 bytes
+  expected; the size is that of the file on this Mac). Its mechanics ran on a local file. There is no checksum and no
+  resume.
+- **No pointer and no keyboard touched the new panels**: the sliders, the chips, the editor's focus in a desktop-level
+  window and the open panels were not driven by hand; their layout was looked at in offscreen snapshots only, and
+  `widget-shot.swift` was not available (see Deviations).
+- The effects' switch is off after every launch; a listener who wants them always on has to press it each time.
+- Effects for a source Ahenk follows only through the system's Now Playing work as for any app when its bundle is
+  known; when only "every app" can be heard they are refused.
+- `LyricsAlignmentController` and `SoundEffectsController` have no unit tests of their own (they are app code); their
+  rules are in the Kit and their paths in the two smoke checks.
+
+### What the user must do once
+
+- **Effects for another app** need "System Audio Recording Only" for Ahenk (the permission the light already asks for).
+  First real use: play a song, open the effects beside the lyrics, pick Bass Boost, and listen for a clean switch; then
+  switch them off and quit Ahenk once while they are on, to see the app keep its own sound.
+- **Speed presets in a browser tab**: reload the Ahenk extension (1.2.0) from the folder the menu shows.
+- **Align Lyrics**: `whisper-cli` and a model are already on this Mac (`/opt/homebrew/bin/whisper-cli`,
+  `~/Developer/whisper-models/ggml-large-v3-turbo-q5_0.bin`), so nothing is needed here. On another Mac: `brew install
+  whisper-cpp`, then Download the Model in the panel or Choose… a model file.
