@@ -209,12 +209,16 @@ final class SmokeRunner {
         let services = environment.services
         services.start(settings: environment.settings)
         let model = environment.nowPlaying
-        model.attach(provider: services.hub, artwork: services.artwork, lyrics: services.lyrics, features: services.features)
+        model.attach(provider: services.hub, artwork: services.artwork, features: services.features)
         let deadline = Date().addingTimeInterval(5)
-        while model.snapshot == nil || model.artwork == nil || model.lyrics == nil {
-            guard Date() < deadline else { throw SmokeFailure("The model did not receive song, cover and lyrics within 5 s") }
+        while model.snapshot == nil || model.artwork == nil {
+            guard Date() < deadline else { throw SmokeFailure("The model did not receive song and cover within 5 s") }
             try await Task.sleep(for: .milliseconds(20))
         }
+        // The lyrics come through the finder (the demo's invented lines).
+        guard let track = model.snapshot?.track,
+              case .synced(let lyrics) = await services.lyricsFinder.find(LyricsQuery(track: track)).response.result, !lyrics.isEmpty
+        else { throw SmokeFailure("No lyrics for the playing demo song") }
         // The demo beat plays through the audio engine's analysis.
         environment.audio.start(hub: services.hub, settings: environment.settings)
         guard let source = model.featureSource, source === environment.audio.store else {
@@ -227,7 +231,7 @@ final class SmokeRunner {
         }
         let title = model.snapshot?.track.title ?? "?"
         guard services.state.activeID?.source == .demo else { throw SmokeFailure("the hub does not follow the demo") }
-        return "\u{201C}\(title)\u{201D} through the hub, with cover, \(model.lyrics?.lines.count ?? 0) lyric lines and live features from the analyzed demo beat"
+        return "\u{201C}\(title)\u{201D} through the hub, with cover, \(lyrics.lines.count) lyric lines and live features from the analyzed demo beat"
     }
 
     /// Decodes, crops and colours generated covers through the real

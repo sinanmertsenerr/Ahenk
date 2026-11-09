@@ -363,7 +363,32 @@
 "Align lyrics on this Mac (Beta)" = "Sözleri bu Mac'te hizala (Beta)";
 "For songs without synced lyrics. Everything runs on this Mac." = "Eşzamanlı sözü olmayan şarkılar için. Her şey bu Mac'te yapılır.";
 
+"Show the lines earlier" = "Satırları daha erken göster";
+"Show the lines later" = "Satırları daha geç göster";
+"Above the Player" = "Oynatıcının Üstünde";
+"Middle of the Screen" = "Ekranın Ortasında";
+"Top of the Screen" = "Ekranın Üstünde";
+"Instrumental" = "Enstrümantal";
+"No lyrics for this song" = "Bu şarkının sözleri bulunamadı";
+"The lyrics could not be loaded" = "Sözler yüklenemedi";
+"These lyrics could not be loaded." = "Bu sözler yüklenemedi.";
 "Not synced" = "Eşzamanlı değil";
+"Other Lyrics" = "Diğer Sözler";
+"Search Lyrics" = "Söz Ara";
+"Looking for other versions…" = "Diğer sürümler aranıyor…";
+"No other versions were found. Try searching with other words." = "Başka sürüm bulunamadı. Başka sözcüklerle aramayı deneyin.";
+"Type the song and the artist, then press Return." = "Şarkıyı ve sanatçıyı yazıp Return tuşuna basın.";
+"No lyrics were found. Check the spelling or try fewer words." = "Söz bulunamadı. Yazımı kontrol edin ya da daha az sözcükle deneyin.";
+"Song" = "Şarkı";
+"Synced" = "Eşzamanlı";
+"Synced, %d lines" = "Eşzamanlı, %d satır";
+"Words only" = "Yalnızca sözler";
+"Timing of this song's lyrics" = "Bu şarkının söz zamanlaması";
+"Reset the Timing" = "Zamanlamayı Sıfırla";
+"Use the Lyrics Ahenk Found" = "Ahenk'in Bulduğu Sözleri Kullan";
+"Lyrics Settings…" = "Şarkı Sözü Ayarları…";
+"Show the Album Cover" = "Albüm Kapağını Göster";
+"Hide the Album Cover" = "Albüm Kapağını Gizle";
 
 /* MARK: Lyric styles */
 "Fisheye" = "Balıkgözü";

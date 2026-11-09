@@ -94,6 +94,17 @@ extension LyricStyle {
     }
 }
 
+extension LyricsPosition {
+    @MainActor
+    var title: String {
+        switch self {
+        case .abovePlayer: "Above the Player".l10n
+        case .middle: "Middle of the Screen".l10n
+        case .top: "Top of the Screen".l10n
+        }
+    }
+}
+
 extension SoundPreset {
     @MainActor
     var title: String {

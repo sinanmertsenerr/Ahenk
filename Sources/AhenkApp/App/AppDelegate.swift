@@ -55,9 +55,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let services = environment.services
         services.start(settings: settings)
-        environment.nowPlaying.attach(
-            provider: services.hub, artwork: services.artwork, lyrics: services.lyrics, features: services.features
-        )
+        environment.nowPlaying.attach(provider: services.hub, artwork: services.artwork, features: services.features)
+        // The lyrics of the song that plays.
+        environment.lyrics.start()
         // Listens to the followed player's app while music plays.
         environment.audio.start(hub: services.hub, settings: settings)
         // Battery, Low Power Mode and heat make drawing lighter.
@@ -147,6 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Later steps restore the user's desktop here (wallpaper, hidden apps).
         environment.desktopPlayer.stop()
+        environment.lyrics.stop()
         environment.light.stop()
         environment.power.stop()
         // Removes the process tap and its private aggregate device.

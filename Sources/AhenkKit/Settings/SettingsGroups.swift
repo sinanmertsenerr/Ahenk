@@ -193,12 +193,15 @@ public struct PlayerSettings: Codable, Equatable, Sendable {
 
 public struct LyricsSettings: Codable, Equatable, Sendable {
     public static let textScaleRange: ClosedRange<Double> = 0.6...1.6
-    /// Global timing offset in seconds (per-song nudges live in Step 6's
-    /// offset store).
+    /// Global timing offset in seconds, positive shows the lines earlier
+    /// (per-song nudges live in `LyricsSongStore`).
     public static let offsetRange: ClosedRange<Double> = -5...5
 
     public var enabled = true
     public var style: LyricStyle = .fisheye
+    /// Where the lyrics sit until they are dragged (choosing one forgets
+    /// the dragged place).
+    public var position: LyricsPosition = .abovePlayer
     /// Show the album cover beside the lyrics.
     public var showAlbumArt = true
     public var textScale = 1.0
@@ -225,6 +228,7 @@ public struct LyricsSettings: Codable, Equatable, Sendable {
         let d = Self()
         enabled = c.lenient(.enabled, d.enabled)
         style = c.lenient(.style, d.style)
+        position = c.lenient(.position, d.position)
         showAlbumArt = c.lenient(.showAlbumArt, d.showAlbumArt)
         textScale = c.lenient(.textScale, d.textScale, in: Self.textScaleRange)
         useAlbumColors = c.lenient(.useAlbumColors, d.useAlbumColors)

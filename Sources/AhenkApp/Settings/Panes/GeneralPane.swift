@@ -11,7 +11,7 @@ struct GeneralPane: View {
             if environment.options.usesDemoContent {
                 // Outside the Form on purpose: live content inside a grouped
                 // Form makes AppKit re-lay out the whole table on every tick.
-                DemoBanner(model: environment.nowPlaying)
+                DemoBanner(model: environment.nowPlaying, lyrics: environment.lyrics)
                 Divider()
             }
             form
@@ -80,12 +80,13 @@ struct GeneralPane: View {
 /// "Demo Mode" header with the playing demo song, above the General form.
 struct DemoBanner: View {
     let model: NowPlayingModel
+    let lyrics: LyricsController
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Demo Mode".l10n)
                 .font(.headline)
-            DemoNowPlayingCard(model: model)
+            DemoNowPlayingCard(model: model, lyrics: lyrics)
                 .padding(12)
                 .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             Text("Invented songs, generated covers and a steady 120 BPM beat. No music or permissions needed.".l10n)
@@ -104,6 +105,7 @@ struct DemoBanner: View {
 /// plays and not at all while it is paused.
 struct DemoNowPlayingCard: View {
     let model: NowPlayingModel
+    let lyrics: LyricsController
 
     var body: some View {
         if let snapshot = model.snapshot {
@@ -139,7 +141,7 @@ struct DemoNowPlayingCard: View {
         VStack(alignment: .leading, spacing: 4) {
             ProgressView(value: snapshot.progress(at: date))
                 .progressViewStyle(.linear)
-            Text(model.lyricLine(at: date)?.text ?? "\u{266A}")
+            Text(lyrics.lyricLine(at: date)?.text ?? "\u{266A}")
                 .font(.callout.italic())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)

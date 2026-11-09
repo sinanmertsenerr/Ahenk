@@ -26,10 +26,20 @@ final class AppEnvironment {
     private(set) lazy var light = EdgeLightController(
         settings: settings, nowPlaying: nowPlaying, features: audio.store, power: power
     )
+    /// The lyrics of the song that plays (started with the services).
+    private(set) lazy var lyrics: LyricsController = {
+        let controller = LyricsController(
+            settings: settings, nowPlaying: nowPlaying, finder: services.lyricsFinder, makeChain: services.makeLyricsChain
+        )
+        controller.onOpenSettings = { [weak self] in self?.showSettings(.lyrics) }
+        return controller
+    }()
     /// The desktop widgets: clock, Continue Playing, the player and its
     /// queue (started with the services).
     private(set) lazy var desktopPlayer: DesktopPlayerController = {
-        let controller = DesktopPlayerController(settings: settings, nowPlaying: nowPlaying, services: services, demo: demo)
+        let controller = DesktopPlayerController(
+            settings: settings, nowPlaying: nowPlaying, services: services, lyrics: lyrics, power: power, demo: demo
+        )
         controller.model.onOpenSettings = { [weak self] in self?.showSettings(.player) }
         controller.model.clearDesk = { [weak self] in self?.clearDesk ?? UnavailableDeskClearing() }
         return controller

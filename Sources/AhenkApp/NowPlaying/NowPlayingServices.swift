@@ -50,7 +50,11 @@ final class NowPlayingServices {
 
     @ObservationIgnored let hub: NowPlayingHub
     @ObservationIgnored let artwork: any ArtworkProvider
-    @ObservationIgnored let lyrics: (any LyricsProvider)?
+    /// Lyrics: the user's pick, the cache, then the providers (LRCLIB,
+    /// Musixmatch, NetEase), or the demo's invented lines.
+    @ObservationIgnored let lyricsFinder: LyricsFinder
+    /// The chain without the providers turned off in Settings › Lyrics.
+    @ObservationIgnored let makeLyricsChain: @Sendable (Set<String>) -> LyricsChain
     @ObservationIgnored let features: (any AudioFeatureSource)?
     @ObservationIgnored let recentlyPlayed: RecentlyPlayedStore
     @ObservationIgnored let apps = AppDirectory()
@@ -87,7 +91,8 @@ final class NowPlayingServices {
     static let automationSettingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!
 
     private init(
-        hub: NowPlayingHub, artwork: any ArtworkProvider, lyrics: (any LyricsProvider)?, features: (any AudioFeatureSource)?,
+        hub: NowPlayingHub, artwork: any ArtworkProvider, lyricsFinder: LyricsFinder,
+        makeLyricsChain: @escaping @Sendable (Set<String>) -> LyricsChain, features: (any AudioFeatureSource)?,
         recentlyPlayed: RecentlyPlayedStore, isDemo: Bool, mediaRemote: MediaRemoteProvider?, appleMusic: AppleMusicProvider?,
         spotify: SpotifyProvider?, resolver: ResolverBox, storefront: StorefrontBox, diskCache: ArtworkDiskCache?,
         catalog: any MusicCatalog, catalogCache: CatalogCache?, spotifyFinder: (any SpotifyTrackFinding)?,
@@ -95,7 +100,8 @@ final class NowPlayingServices {
     ) {
         self.hub = hub
         self.artwork = artwork
-        self.lyrics = lyrics
+        self.lyricsFinder = lyricsFinder
+        self.makeLyricsChain = makeLyricsChain
         self.features = features
         self.recentlyPlayed = recentlyPlayed
         self.isDemo = isDemo
@@ -146,10 +152,20 @@ final class NowPlayingServices {
         let catalog = ITunesSearch(fetcher: fetcher, storefront: { storefront.code })
         let pipeline = ArtworkPipeline(disk: disk, fetcher: fetcher, catalog: catalog)
         let catalogCache = CatalogCache(directory: CatalogCache.standardDirectory)
+        // Lyrics get their own session: their providers can be slow, and a
+        // lookup must never hold up covers or the catalog.
+        let lyricsFetcher = URLSessionFetcher(timeout: 10)
+        let makeChain: @Sendable (Set<String>) -> LyricsChain = { disabled in
+            LyricsChain.standard(http: lyricsFetcher, disabled: disabled)
+        }
+        let lyricsFinder = LyricsFinder(
+            chain: makeChain(settings.lyrics.disabledProviders), cache: LyricsCache(),
+            songs: LyricsSongStore(fileURL: LyricsSongStore.standardURL)
+        )
 
         return NowPlayingServices(
             hub: NowPlayingHub(inputs: inputs, configuration: configuration(settings)),
-            artwork: pipeline, lyrics: nil, features: features,
+            artwork: pipeline, lyricsFinder: lyricsFinder, makeLyricsChain: makeChain, features: features,
             recentlyPlayed: RecentlyPlayedStore(fileURL: RecentlyPlayedStore.standardURL),
             isDemo: false, mediaRemote: mediaRemote, appleMusic: appleMusic, spotify: spotify,
             resolver: resolver, storefront: storefront, diskCache: disk,
@@ -166,10 +182,12 @@ final class NowPlayingServices {
     static func demo(_ demo: DemoProvider, second: DemoProvider?, settings: AppSettings, features: any AudioFeatureSource) -> NowPlayingServices {
         var inputs: [HubInput] = [.provider(demo, priority: HubInput.dedicatedPriority)]
         if let second { inputs.append(.provider(second, id: "demo-b", priority: HubInput.dedicatedPriority)) }
+        let makeChain: @Sendable (Set<String>) -> LyricsChain = { _ in LyricsChain(providers: [demo]) }
         return NowPlayingServices(
             hub: NowPlayingHub(inputs: inputs, configuration: configuration(settings)),
             artwork: RoutingArtworkProvider(routes: [.demo: demo], fallback: nil),
-            lyrics: demo, features: features,
+            lyricsFinder: LyricsFinder(chain: makeChain([]), cache: nil, songs: LyricsSongStore(fileURL: nil)),
+            makeLyricsChain: makeChain, features: features,
             recentlyPlayed: demoRecentlyPlayed(demo.library),
             isDemo: true, mediaRemote: nil, appleMusic: nil, spotify: nil,
             resolver: ResolverBox(), storefront: StorefrontBox(nil), diskCache: nil,

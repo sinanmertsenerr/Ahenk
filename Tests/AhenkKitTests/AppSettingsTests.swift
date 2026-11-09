@@ -67,6 +67,7 @@ struct AppSettingsTests {
             var l = LyricsSettings()
             l.enabled = false
             l.style = .glitch
+            l.position = .top
             l.showAlbumArt = false
             l.textScale = 1.3
             l.useAlbumColors = false

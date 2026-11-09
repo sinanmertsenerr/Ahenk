@@ -139,6 +139,16 @@ public enum LyricStyle: String, CaseIterable, Codable, Sendable, Identifiable {
     public var id: String { rawValue }
 }
 
+/// Where the lyrics sit on the desktop until the user drags them.
+public enum LyricsPosition: String, CaseIterable, Codable, Sendable, Identifiable {
+    /// Above the player, at its middle.
+    case abovePlayer
+    case middle
+    case top
+
+    public var id: String { rawValue }
+}
+
 /// Sound effect presets (Step 10). `custom` uses the manual speed, pitch,
 /// reverb and equalizer values as they are.
 public enum SoundPreset: String, CaseIterable, Codable, Sendable, Identifiable {

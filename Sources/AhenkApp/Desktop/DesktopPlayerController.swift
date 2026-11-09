@@ -3,8 +3,10 @@ import AppKit
 import SwiftUI
 
 /// Puts the desktop widgets on the chosen display: the clock, Continue
-/// Playing and the player, each in its own desktop-level window, plus the
-/// queue panel beside the player when it is open.
+/// Playing, the player and the lyrics, each in its own desktop-level
+/// window, plus the queue panel beside the player when it is open. The
+/// lyrics show while a song with lyrics to look for plays, also when the
+/// rest of the player is turned off.
 ///
 /// - Positions are saved per display (`settings.layout`), relative to the
 ///   display's visible frame, when a drag ends; widgets without a saved
@@ -21,8 +23,10 @@ import SwiftUI
 final class DesktopPlayerController {
     let model: DesktopPlayerModel
     let clock: ClockModel
+    let lyrics: LyricsController
 
     private let settings: AppSettings
+    private let power: PowerMonitor
     private var windows: [DesktopWidget: DesktopWidgetWindow] = [:]
     private var movers: [DesktopWidget: WidgetMover] = [:]
     /// Where each widget's anchor sits (saved or default), so a widget that
@@ -46,12 +50,16 @@ final class DesktopPlayerController {
     /// Content fades out before its window shrinks.
     static let shrinkDelay: TimeInterval = 0.32
 
-    init(settings: AppSettings, nowPlaying: NowPlayingModel, services: NowPlayingServices, demo: DemoProvider?) {
+    init(settings: AppSettings, nowPlaying: NowPlayingModel, services: NowPlayingServices, lyrics: LyricsController, power: PowerMonitor, demo: DemoProvider?) {
         self.settings = settings
+        self.lyrics = lyrics
+        self.power = power
         model = DesktopPlayerModel(settings: settings, nowPlaying: nowPlaying, services: services, demo: demo)
         clock = ClockModel(settings: settings)
         model.onResetLayout = { [weak self] in self?.resetLayout() }
         model.onReleaseKeyboard = { [weak self] in self?.windows[.player]?.releaseKeyboard() }
+        lyrics.onReleaseKeyboard = { [weak self] in self?.windows[.lyrics]?.releaseKeyboard() }
+        lyrics.onFocusSearch = { [weak self] in self?.windows[.lyrics]?.makeKey() }
     }
 
     var isShowing: Bool { !windows.isEmpty }
@@ -68,6 +76,10 @@ final class DesktopPlayerController {
         let settings = self.settings
         let model = self.model
         observers.append(ChangeObserver({ settings.player }) { [weak self] _ in self?.apply() })
+        let lyrics = self.lyrics
+        observers.append(ChangeObserver({ LyricsWindowState(settings: settings.lyrics, hasSong: lyrics.hasSong) }) { [weak self] state in
+            self?.lyricsChanged(state)
+        })
         observers.append(ChangeObserver({ settings.general.language }) { [weak self] _ in self?.apply() })
         observers.append(ChangeObserver({ model.layoutState }) { [weak self] _ in self?.resizePlayer() })
         observers.append(ChangeObserver({ model.isQueueOpen }) { [weak self] _ in self?.updateQueue() })
@@ -103,7 +115,7 @@ final class DesktopPlayerController {
 
     private func apply() {
         let player = settings.player
-        guard player.enabled, let screen = targetScreen(), let id = DisplayIdentity.stableID(of: screen) else {
+        guard player.enabled || settings.lyrics.enabled, let screen = targetScreen(), let id = DisplayIdentity.stableID(of: screen) else {
             hideAll()
             return
         }
@@ -123,7 +135,7 @@ final class DesktopPlayerController {
         for widget in created {
             windows[widget]?.orderFrontRegardless()
         }
-        model.setPresented(!windows.isEmpty)
+        model.setPresented(windows.keys.contains { $0 != .lyrics })
         clockVisibilityChanged()
         updateQueue()
     }
@@ -131,11 +143,31 @@ final class DesktopPlayerController {
     private func shouldShow(_ widget: DesktopWidget) -> Bool {
         let player = settings.player
         switch widget {
-        case .clock: return player.showClock
-        case .continuePlaying: return player.showContinuePlaying
-        case .player: return !model.layoutState.isEmpty
-        case .lyrics: return false // Step 6
+        case .clock: return player.enabled && player.showClock
+        case .continuePlaying: return player.enabled && player.showContinuePlaying
+        case .player: return player.enabled && !model.layoutState.isEmpty
+        case .lyrics: return settings.lyrics.enabled && lyrics.hasSong
         }
+    }
+
+    /// What the lyrics window depends on.
+    private struct LyricsWindowState: Equatable {
+        var settings: LyricsSettings
+        var hasSong: Bool
+    }
+
+    private var lastLyricsState: LyricsWindowState?
+
+    private func lyricsChanged(_ state: LyricsWindowState) {
+        defer { lastLyricsState = state }
+        if let last = lastLyricsState, last.settings.position != state.settings.position, let screenID {
+            // A position picked in Settings replaces the dragged place.
+            settings.layout.setPosition(nil, of: DesktopWidget.lyrics.rawValue, on: screenID)
+            anchors[.lyrics] = nil
+        }
+        let sizeChanged = lastLyricsState.map { $0.settings.textScale != state.settings.textScale || $0.settings.showAlbumArt != state.settings.showAlbumArt } ?? false
+        apply()
+        if sizeChanged { placeAll(resizePlayer: false) }
     }
 
     private func hideAll() {
@@ -166,7 +198,8 @@ final class DesktopPlayerController {
         }
         mover.onMoved = { [weak self] frame in self?.moved(widget, to: frame) }
         movers[widget] = mover
-        window.allowsKeyboard = widget == .player
+        // The player's search and the lyrics search take the keyboard.
+        window.allowsKeyboard = widget == .player || widget == .lyrics
         window.contentView = DesktopHostingView(rootView: AnyView(
             WidgetRoot(settings: settings) { self.root(for: widget) }.environment(\.widgetMover, mover)
         ))
@@ -190,7 +223,7 @@ final class DesktopPlayerController {
         case .clock: ClockRoot(clock: clock, model: model, settings: settings)
         case .continuePlaying: ContinuePlayingWidget(model: model)
         case .player: PlayerWidget(model: model)
-        case .lyrics: EmptyView()
+        case .lyrics: LyricsWidget(lyrics: lyrics, player: model, power: power, settings: settings)
         }
     }
 
@@ -239,7 +272,8 @@ final class DesktopPlayerController {
             if let window = windows[.player], window.frame.width > 20 { return window.frame.size }
             return PlayerLayout.size(model.layoutState)
         case .lyrics:
-            return .zero
+            let lyrics = settings.lyrics
+            return LyricsLayout.widgetSize(textScale: lyrics.textScale, showsCover: lyrics.showAlbumArt)
         }
     }
 
@@ -250,7 +284,7 @@ final class DesktopPlayerController {
         for widget in windows.keys {
             sizes[widget] = widget == .player && resizePlayer ? PlayerLayout.size(model.layoutState) : size(of: widget)
         }
-        let defaults = WidgetPlacement.defaultFrames(sizes: sizes, in: visibleFrame)
+        let defaults = WidgetPlacement.defaultFrames(sizes: sizes, in: visibleFrame, lyrics: settings.lyrics.position)
         for (widget, window) in windows {
             guard let base = defaults[widget] else { continue }
             let anchor = settings.layout.position(of: widget.rawValue, on: screenID)

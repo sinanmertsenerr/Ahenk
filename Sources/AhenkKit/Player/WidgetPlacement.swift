@@ -86,8 +86,9 @@ public enum WidgetPlacement {
 
     /// The default layout: the clock at the top left, Continue Playing
     /// under it, the player in the lower middle (moved right if it would
-    /// cover the list), the lyrics (Step 6) right of the middle.
-    public static func defaultFrames(sizes: [DesktopWidget: CGSize], in visible: CGRect) -> [DesktopWidget: CGRect] {
+    /// cover the list), the lyrics where `lyrics` says (above the player by
+    /// default), clear of the list.
+    public static func defaultFrames(sizes: [DesktopWidget: CGSize], in visible: CGRect, lyrics position: LyricsPosition = .abovePlayer) -> [DesktopWidget: CGRect] {
         let left = visible.minX + max(40, visible.width * 0.06)
         let top = visible.maxY - max(20, visible.height * 0.03)
         var frames: [DesktopWidget: CGRect] = [:]
@@ -109,9 +110,33 @@ public enum WidgetPlacement {
             frames[.player] = clamp(frame, into: visible)
         }
         if let lyrics = sizes[.lyrics] {
-            let center = CGPoint(x: visible.minX + visible.width * 0.62, y: visible.minY + visible.height * 0.58)
-            frames[.lyrics] = clamp(CGRect(x: center.x - lyrics.width / 2, y: center.y - lyrics.height / 2, width: lyrics.width, height: lyrics.height), into: visible)
+            frames[.lyrics] = lyricsFrame(size: lyrics, position: position, player: frames[.player], list: frames[.continuePlaying], in: visible)
         }
         return frames
+    }
+
+    /// The lyrics' default frame: above the player at its middle (when
+    /// there is room, else right of the screen's middle), the middle of the
+    /// screen, or under its top; moved right of the list if they would
+    /// cover it.
+    public static func lyricsFrame(size: CGSize, position: LyricsPosition, player: CGRect?, list: CGRect?, in visible: CGRect) -> CGRect {
+        var center: CGPoint
+        switch position {
+        case .abovePlayer:
+            if let player, player.maxY + 16 + size.height <= visible.maxY - 20 {
+                center = CGPoint(x: player.midX, y: player.maxY + 16 + size.height / 2)
+            } else {
+                center = CGPoint(x: visible.minX + visible.width * 0.62, y: visible.minY + visible.height * 0.58)
+            }
+        case .middle:
+            center = CGPoint(x: visible.midX, y: visible.minY + visible.height * 0.55)
+        case .top:
+            center = CGPoint(x: visible.midX, y: visible.maxY - max(20, visible.height * 0.04) - size.height / 2)
+        }
+        var frame = CGRect(x: center.x - size.width / 2, y: center.y - size.height / 2, width: size.width, height: size.height)
+        if let list, frame.intersects(list) {
+            frame.origin.x = list.maxX + 16
+        }
+        return clamp(frame, into: visible)
     }
 }
