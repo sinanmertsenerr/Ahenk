@@ -18,7 +18,9 @@ import Observation
 /// Whatever happens, no app is left muted: the effects are switched off
 /// when another player is followed than the one they were switched on for,
 /// the capture mutes only while Ahenk's output plays, and `stop()` (on
-/// quit) takes everything back.
+/// quit) takes everything back. The switch itself does not outlive a run:
+/// it is off when Ahenk quits and off when Ahenk starts (the presets and
+/// sliders stay), so no app is ever muted without a click in this run.
 @MainActor
 @Observable
 final class SoundEffectsController {
@@ -62,6 +64,11 @@ final class SoundEffectsController {
         let settings = self.settings
         let nowPlaying = self.nowPlaying
         let audio = self.audio
+        if settings.effects.enabled {
+            // Left on by a run that did not quit cleanly.
+            log.notice("The sound effects were left switched on; a new run starts with them off")
+            settings.effects.enabled = false
+        }
         external.onInterrupted = { [audio] in audio.effectsInterrupted() }
         observers.append(ChangeObserver({
             Inputs(
@@ -89,6 +96,7 @@ final class SoundEffectsController {
         route = .off
         isApplied = false
         updateDelay(.neutral)
+        if settings.effects.enabled { settings.effects.enabled = false }
     }
 
     private struct Inputs: Equatable {

@@ -234,3 +234,55 @@ struct SoundEffectTests {
         #expect(SoundEffectTapRule.wantsMute(request: .app(spotify), tapsProcesses: true, effectsFor: spotify))
     }
 }
+
+@Suite("Real-time helpers for the effects")
+struct EffectsRealTimeTests {
+    @Test("Atomic slots hold numbers, doubles and pointers, and one slot works as a try-lock")
+    func slots() {
+        let storage = AtomicSlotStorage(count: 4)
+        let slots = storage.slots
+        #expect(slots.count == 4 && slots.load(0) == 0 && slots.pointer(2) == nil)
+        slots.store(42, at: 0)
+        slots.storeDouble(0.85, at: 1)
+        #expect(slots.load(0) == 42 && slots.double(1) == 0.85)
+        #expect(slots.add(3, at: 0) == 42 && slots.load(0) == 45)
+        let memory = UnsafeMutableRawPointer.allocate(byteCount: 8, alignment: 8)
+        defer { memory.deallocate() }
+        slots.storePointer(memory, at: 2)
+        #expect(slots.pointer(2) == memory)
+        slots.storePointer(nil, at: 2)
+        #expect(slots.pointer(2) == nil)
+        #expect(slots.tryLock(3) && !slots.tryLock(3), "held once")
+        slots.unlock(3)
+        #expect(slots.tryLock(3))
+    }
+
+    @Test("A ring says how much fits and can drop its oldest samples")
+    func ring() {
+        let ring = AudioRingBuffer(capacity: 8)
+        let writer = ring.writer
+        let reader = ring.reader
+        #expect(writer.free == 8)
+        writer.write([1, 2, 3, 4, 5, 6], count: 6)
+        #expect(writer.free == 2 && reader.available == 6)
+        #expect(reader.skip(4) == 4 && reader.available == 2 && writer.free == 6)
+        var rest = [Float](repeating: 0, count: 4)
+        #expect(reader.read(into: &rest, maxCount: 4) == 2 && rest[0] == 5 && rest[1] == 6)
+        #expect(reader.skip(9) == 0 && reader.skip(-1) == 0)
+    }
+
+    @Test("Ahenk's own tap tells the analysis how fast the player plays")
+    func ownTapSpeed() {
+        let tap = OwnAudioTap()
+        #expect(tap.playbackSpeed == 1 && tap.analysisRate == 0, "nothing prepared yet")
+        tap.context.pointee.prepare(sampleRate: 44_100, maxFrames: 4096)
+        #expect(tap.analysisRate == 44_100 && tap.context.pointee.sampleRate == 44_100)
+        tap.playbackSpeed = 1.25
+        #expect(tap.analysisRate == 55_125)
+        tap.playbackSpeed = 99
+        #expect(tap.playbackSpeed == 4)
+        tap.playbackSpeed = .nan
+        #expect(tap.playbackSpeed == 1)
+        #expect(tap.effectsHook.pointer(0) == nil, "no effects until they are switched on")
+    }
+}

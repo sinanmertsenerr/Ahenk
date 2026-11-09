@@ -521,9 +521,9 @@ final class SmokeRunner {
                 if panel == .effects {
                     // As a listener would have it: a preset chosen, switched
                     // on, and the controller following the (demo) player.
+                    environment.effects.start()
                     settings.effects.select(.slowedReverb)
                     settings.effects.enabled = true
-                    environment.effects.start()
                     try await wait("the effects did not follow the demo player") { environment.effects.route == .demo }
                 }
                 if panel == .align {
