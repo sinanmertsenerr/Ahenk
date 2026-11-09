@@ -48,6 +48,16 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
+## Lyrics
+
+- The lyrics providers, the chain, the timeline vote, the cache, the LRC
+  parser and the automatic sync measurement (`Sources/AhenkKit/Lyrics`) were
+  ported from DynamicIsland by the same author, under the same MIT License.
+- The lyric styles use fonts that come with macOS; Ahenk bundles no fonts.
+- No lyrics ship with Ahenk. While lyrics are on, they are fetched from
+  LRCLIB, Musixmatch and NetEase for the song that plays and kept only in the
+  user's cache (`~/Library/Caches/Ahenk/Lyrics`).
+
 ## Demo content
 
 The songs, artists, albums and lyric lines used by `--demo` and in the tests

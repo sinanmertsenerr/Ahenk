@@ -14,8 +14,11 @@ shows what is playing, and your own files.
 > and any app that shows what is playing, the analysis that hears the beat,
 > the edge light around every screen in 22 styles, and the glass desktop
 > player: a big clock, Continue Playing, the artist's albums as a cover flow,
-> search, the player bar and a play queue. The features arrive step by step;
-> see [docs/PROGRESS.md](docs/PROGRESS.md).
+> search, the player bar and a play queue; synced lyrics beside the album
+> cover in eight styles (Fisheye, Spread, Karaoke, Typewriter, Neon, Echo,
+> Glitch, Cinema), with a countdown in instrumental parts, other versions,
+> search and timing. The features arrive step by step; see
+> [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ### Requirements
 
@@ -46,7 +49,10 @@ find covers, albums and search results, Ahenk sends a song's title and artist,
 or what you type into the search, to Apple's public catalog and asks
 Spotify's public page for a track's cover; to play a pick in Spotify, it asks
 ListenBrainz (MetaBrainz) for the song's Spotify ID by its title, artist and
-album. Nothing else leaves your Mac.
+album. While lyrics are on, it sends the playing song's title, artist, album
+and length to LRCLIB, Musixmatch and NetEase to find its lyrics (each can be
+turned off in Settings › Lyrics) and keeps what it finds on your Mac.
+Nothing else leaves your Mac.
 
 ### License
 
@@ -69,7 +75,10 @@ sitelerini, çalan şarkıyı gösteren her uygulamayı ve kendi dosyalarınız�
 > duyan ses analizi, her ekranın kenarında 22 farklı stille parlayan kenar
 > ışığı ve masaüstündeki cam oynatıcı: büyük bir saat, Çalmaya Devam Et
 > listesi, sanatçının albümlerini dizen kapak akışı, arama, oynatıcı çubuğu ve
-> çalma sırası. Özellikler adım adım geliyor; ayrıntılar
+> çalma sırası; albüm kapağının yanında sekiz stilde (Balıkgözü, Yayılma,
+> Karaoke, Daktilo, Neon, Yankı, Bozulma, Sinema) eşzamanlı şarkı sözleri,
+> enstrümantal bölümlerde geri sayım, sözlerin diğer sürümleri, söz arama ve
+> zamanlama ayarı. Özellikler adım adım geliyor; ayrıntılar
 > [docs/PROGRESS.md](docs/PROGRESS.md) dosyasında.
 
 ### Gereksinimler
@@ -102,8 +111,11 @@ albümleri ve arama sonuçlarını bulmak için şarkının adını ve sanatçı
 aramaya yazdıklarınızı Apple'ın herkese açık kataloğuna gönderir, bir parçanın
 kapağını Spotify'ın herkese açık sayfasından ister; seçtiğiniz bir şarkıyı
 Spotify'da çalmak için şarkının adını, sanatçısını ve albümünü ListenBrainz'e
-(MetaBrainz) göndererek Spotify kimliğini bulur. Mac'inizden başka hiçbir şey
-çıkmaz.
+(MetaBrainz) göndererek Spotify kimliğini bulur. Şarkı sözleri açıkken, çalan
+şarkının sözlerini bulmak için adını, sanatçısını, albümünü ve süresini
+LRCLIB, Musixmatch ve NetEase hizmetlerine gönderir (her biri Ayarlar › Şarkı
+Sözleri'nden kapatılabilir) ve bulduklarını Mac'inizde saklar. Mac'inizden
+başka hiçbir şey çıkmaz.
 
 ### Lisans
 

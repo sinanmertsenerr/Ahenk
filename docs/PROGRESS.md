@@ -961,3 +961,171 @@ out, widgets on screen) **0.05 %**. Footprint 97 MB with both running.
 - Once the search field exists, macOS's text input services keep two hidden windows in Ahenk (`TUINSWindow`,
   `SPRoundedWindow`); they are never on screen.
 - Covers in the cover flow come from Apple's catalog at the shown size; a different edition's artwork is possible.
+
+## Step 6 — Lyrics (done, 2026-11-09)
+
+### What exists
+
+```
+Sources/AhenkKit/Lyrics/
+  LyricsProvider      LyricsQuery (+ Spotify recording ID, cache key, cleaned variant, match text), LyricsResult,
+                      LyricsTimingAuthority, LyricsResponse, LyricsVersion; LyricsProvider (+ versions, search, lyrics(of:))
+  LRCParser           LRC and enhanced LRC; blank or symbol-only timed lines stay as pause markers
+  LRCLIBProvider, MusixmatchProvider, NetEaseProvider   ported from DynamicIsland; versions and search added
+  LyricsChain         providers asked together: synced wins, a cleaned title only after the original missed,
+                      Spotify waits for the provider that proves the recording; versions/search merged; "all failed"
+  LyricsConsensus     timeline vote between three or more uploads (ported)
+  LyricsCache         ~/Library/Caches/Ahenk/Lyrics, one JSON per song, 600 files, memory LRU (ported)
+  LyricsSongStore     ~/Library/Application Support/Ahenk/LyricsSongs.json: per song the user's nudge, the measured
+                      offset (bound to the lyrics' timing fingerprint) and the picked version; 2000 songs
+  LyricsFinder        the pick, then the cache, then the providers; misses remembered 30 min
+  LyricsTimeline      sung ends, instrumental parts (intro, interlude, outro), LyricsScene: what is on screen at a time
+  LyricsStyleMath     wrapping, fisheye lens, karaoke fill, typewriter, spread, neon, echo, glitch, cinema, countdown,
+                      LyricsColors (light ink from the cover), LyricsLayout (widget size)
+  AutoSync/           OnsetNovelty + LyricOffsetEstimator (ported) with a tracked-beat alias guard; LyricsSyncCapture
+                      (a window of analysed audio at 16 kHz), LyricsSyncPlan, LyricsSyncSession (two windows must agree)
+Sources/AhenkApp/Lyrics/
+  LyricsController    the playing song's lyrics: phase, source, offsets, versions, search, pick, nudge
+  LyricsWidget        the desktop widget (SwiftUI shell): the stage, the hover bar, Other Lyrics and Search Lyrics panels
+  LyricsStageView     AppKit/Core Animation: cover, scrim, the style, the countdown, the states, the display link
+  LyricStyleRenderer  render context, line visuals (one sprite layer per word or letter), the scrolling stack
+  LyricStyles         the eight styles
+  LyricsTypesetter    CoreText into balanced rows; LyricSpriteCache (each unit drawn once, glow and shadow baked in)
+  LyricsFonts         each style's macOS font; LyricsPreview: Settings gallery + one shared 30 fps clock
+  LyricsAutoSync      listens for windows, applies the measured offset; LyricsCheck: the smoke check's renders
+Tests/AhenkKitTests/  385 tests in 61 suites (was 315/51): LRC parsing, timeline (lookup, sung ends, pauses, countdown,
+                      glides), provider decoding with invented fixtures, chain policy, finder, consensus, stores, style
+                      math, colours, layout, placement, launch options, auto-sync
+```
+
+The lyrics sit in their own desktop widget window, above the player by default, the album cover on the left and the lines
+beside it, in the cover's colours with a soft shadow and a faint dark scrim (readable on any wallpaper). A line glides in a
+little before it is sung, the previous one leaves above, the next waits below (styles differ). Before the first line the
+song's title and artist show with a countdown; an instrumental part of at least 6 s shows a music note in a ring that empties
+until the next line, the seconds left under it; after the last line the note stays. Loading shows the title with pulsing
+dots; "no lyrics", "instrumental" and "could not be loaded" show the title with a caption; words without timing scroll with
+the song ("Not synced"). Under the pointer a bar offers: earlier/later (0.2 s steps, kept per song), Other Lyrics, Search
+Lyrics, the cover on/off and a menu (style, reset timing, back to Ahenk's pick, Lyrics Settings…, Hide Lyrics). Other Lyrics
+lists every provider's versions (synced first, line count, length, album; the one shown is ticked); Search Lyrics searches
+by song and artist; a pick is kept for the song. The player bar's lyrics button and the menu bar's Lyrics item switch them.
+
+| Style | Font (macOS) | Motion |
+|---|---|---|
+| Fisheye | Superclarendon Black | a lens travels along the line as it is sung: words under it grow, the rest shrink and make room, all bob with the beat |
+| Spread | SF Pro Expanded Heavy | letters fly in from twice as far, settle, drift apart while sung, fly out |
+| Karaoke | SF Pro Rounded Heavy | the line lights up from its first letter to its last (a glowing edge leads), glows with the beat when sung; the next line waits |
+| Typewriter | American Typewriter Semibold | letters strike one by one, a caret blinks, the page feeds up with the two lines before |
+| Neon | SignPainter HouseScript Semibold | each word's tube flickers on in turn and hums, the halo swells with the beat, every line in the next cover colour |
+| Echo | Futura Condensed ExtraBold | three copies in the cover's colours trail every move, each beat sends a ripple |
+| Glitch | SF Mono Heavy | the line decodes out of random characters, a colour split widens with onsets, strong beats tear it |
+| Cinema | Didot Bold | a film title: slow dissolve on a soft dark ellipse, a settling zoom, a hairline that grows as it is sung |
+
+### Build, run, verify
+
+```sh
+swift build && swift test             # 385 tests, no warnings
+./Scripts/make-app.sh && ./Scripts/smoke.sh --snapshots    # lyrics-*.png, desktop-lyrics-*.png, settings-lyrics-*.png
+open -n dist/Ahenk.app --args --demo-scene albums --demo-backdrop --draw-covered --lyrics-style neon --language tr
+open -n dist/Ahenk.app --args --demo-scene lyrics-versions --demo-backdrop --draw-covered   # or lyrics-search
+open -n dist/Ahenk.app --args --demo --settings lyrics     # the live style gallery
+swift Scripts/widget-shot.swift /tmp/lyrics.png
+pkill -x Ahenk
+```
+
+New launch arguments: `--lyrics-style <style|off>`, `--demo-position <s>` (the demo song starts there), `--draw-covered` (demo:
+the lyrics keep moving while app windows cover them, for captures and measurements), `--smoke-only <a,b>`; scenes
+`lyrics-versions`, `lyrics-search`.
+
+Smoke check `lyrics` (all `ok`): every style drawn offscreen at four moments of a demo song (the intro, a line gliding in,
+the line being sung, an instrumental part; the English song in the English pass, the Turkish one in the Turkish pass), each
+scene, line and countdown checked against the timeline; loading/none/instrumental/failed/plain states; the widget with its
+bar and both panels in both languages; the controller finds, lists three versions, picks the late one (its timing shows),
+returns to the automatic pick, nudges and searches; one 32 s auto-sync window of the demo beat is measured (92 ms) and
+changes nothing; every style font has the Turkish letters and no two share a typeface. `resources` checks the new symbols.
+
+Endpoints (2026-11-09, invented queries only, no lyric text looked at): LRCLIB search 200 with no results and get 404,
+Musixmatch token 200 with a token, NetEase search 200 with no songs, the shapes the decoders expect.
+
+Measured on the M5 (release build, demo, Soft Glow, one 1512 × 982 display, `--draw-covered` because app windows cover the
+desktop here): light + player without lyrics 4.4 % CPU, 99 MB; with lyrics Fisheye 5.8 % (**+1.4 %**, every word moves each
+frame), Karaoke 5.4 %, Neon 5.3 %, Glitch 5.1 %, Echo 5.1 %, Cinema 4.9 %, Spread 4.8 %, Typewriter 4.8 % (**+0.4–1.0 %**);
+footprint 104–143 MB (Echo keeps the most sprites); paused **0.07 %**. Settings › Lyrics' gallery draws 8 tiles at 30 fps
+only while visible.
+
+### Decisions
+
+- **Sprites, then only transforms.** A line is laid out with CoreText into balanced rows; each word (or letter) is drawn once
+  into an image with its glow and shadow baked in; frames only move, scale and fade those layers, in one transaction, with
+  unchanged values skipped. No masks, filters or live shadows on moving layers (offscreen passes; `render(in:)` would drop
+  them in the smoke renders): Karaoke's wipe crops with `contentsRect`.
+- **Drawing only while it shows.** The stage's display link (`NSView.displayLink`) runs while its window is visible (occlusion),
+  the song plays and there are lines: 60 fps while lines glide, 30 or 20 fps in between, 30 at most on battery, in Low Power,
+  Optimized Mode or when hot; a pause draws one last frame and stops. SwiftUI updates the widget only on song, clock and
+  settings changes. On this Mac the widgets sit under app windows, so the lyrics stop until the desktop shows (as the clock
+  does); `--draw-covered` is for captures.
+- **Timing.** Lyric time = the song's interpolated position + Settings' offset + the song's offset (the user's nudge replaces
+  the measured one); positive shows lines earlier. Lines glide in 0.18 s early (Cinema 0.35 s) so they are in place when sung.
+  Sung ends come from word timing or are estimated (lines close together are sung almost to the next; a line before a pause
+  lasts as long as its words); a pause of 6 s or more, or after a timed blank line, is instrumental; an intro of 3 s or more
+  shows the title. No output-latency compensation: with Bluetooth, lines may come a little early (the offset covers it).
+- **Lookups.** Only while lyrics are on, only for music (or unlabelled players), never videos, podcasts or adverts. LRCLIB
+  first, then Musixmatch and NetEase, asked together (DynamicIsland's chain and policy); each can be turned off. The cache key
+  is the Spotify recording ID or title/artist/album/length. A pick is stored in the song store (without lyrics) and its lyrics
+  in the cache under a pick key; choosing another version forgets the song's nudge.
+- **Placement.** Settings › Lyrics › Position: Above the Player (default; right of the list when they would overlap), Middle
+  or Top of the Screen. A drag overrides it (saved per display); picking a position forgets the drag. Lyrics show even when
+  the rest of the player is off. Only painted parts take clicks (cover, text, scrim); they also drag the widget.
+- **Fonts.** macOS fonts only (nothing bundled), each with the Turkish letters; no all-capital faces (small capitals draw the
+  Turkish "i" without its dot) and no style upper-cases lyrics (the lyrics' language is unknown).
+- **Auto-sync, evaluated.** DynamicIsland's measurement core is ported: the vocal-band onset novelty (HPSS) and the offset
+  estimator with its strict two-window consensus. Its large controller (affine and piecewise timing profiles, retry ledgers
+  across runs, capture provenance machinery) is not: Ahenk keeps a constant offset per song and lyrics fingerprint, at most four
+  windows per song and run, and takes the audio from Step 3's analysis pump (no second tap; only on a tap of the followed
+  player, never on the fallback that hears every app; never for lyrics a provider proved for the recording; never over a
+  nudge). Testing it on the demo beat showed a real danger: the estimator locked onto the backbeat (lead −1.536 s, three beats
+  at 120 BPM) in both windows and they "agreed", which would have moved correct lyrics. Its own alias guard missed it because
+  novelty autocorrelation found the two-beat backbeat (0.992 s). Ahenk adds the beat Step 3's tracker locked to: a lead on a
+  whole number of beats is refused. With that, the bare beat never moves anything (tested).
+
+### Deviations from PLAN.md
+
+- Auto-sync is a constant per-song offset with two-window consensus (see Decisions); no drift models.
+- The lyrics widget has its own cover (the option hides it); "position" in Settings is a placement preset.
+- Words without timing scroll with the song's progress until Step 10 aligns them.
+- Extra launch arguments `--lyrics-style`, `--demo-position`, `--draw-covered`, `--smoke-only`; scenes `lyrics-versions`,
+  `lyrics-search`.
+- **Shared API changes** (call sites and tests updated): `NowPlayingModel` lost `lyrics`, `lyricLine(at:)` and `attach(lyrics:)`
+  (`LyricsController` owns lyrics; the General pane's demo card reads it); `NowPlayingServices.lyrics` became `lyricsFinder` +
+  `makeLyricsChain`; `HTTPFetching.send(_:)` (default: `get`); `LyricsProvider` gained `reliability`,
+  `supportsCanonicalSpotifyLookup`, `fetchResponse`, `versions(for:)`, `search(_:)`, `lyrics(of:)` with defaults; `LyricsQuery`
+  gained `spotifyTrackID`, `cacheKey`, `sanitized`; `SyncedLyrics.timingFingerprint`, `shifted(by:)`; `LyricsSettings.position`;
+  `WidgetPlacement.defaultFrames(…, lyrics:)`, `lyricsFrame`; `DesktopPlayerController.init(…, lyrics:, power:, …)`;
+  `AudioAnalysisPipeline.lyricsCapture`; `AudioTapEngine.listen(forLyrics:)`, `hearsFollowedPlayer`; `DemoProvider` versions and
+  search; `DemoCatalog.previewLyrics`; `LaunchOptions` new fields; `AppEnvironment.lyrics`, `lyricsSync`.
+
+### For Step 7 (browser bridge)
+
+- **When lyrics load:** `LyricsController` looks up lyrics for `.music` and `.unknown` content only. Report music sites as
+  `.music`; plain YouTube videos (`.video`) get none.
+- **Sites' own lyrics:** Amazon Music, Spotify Web, YouTube Music, Deezer and TIDAL show synced lyrics for the exact recording
+  they play. Let the extension send them for the tab's song (lines with start times, words when the site has them) and add a
+  `BrowserLyricsProvider: LyricsProvider` (AhenkKit/Bridge) that answers for that song with `.synced` and
+  `timingAuthority = .canonicalRecording` (their timing belongs to the recording, which also keeps auto-sync away), and
+  `.notFound` at once otherwise. Put it first: in `NowPlayingServices.live`, `makeChain` becomes
+  `LyricsChain(providers: [siteLyrics] + LyricsChain.standard(http:disabled:).providers)`. Give it a name for the source line
+  (`LyricsController.displayName(ofProvider:)`). Never log site lyrics (the controller logs counts only).
+- **Spotify Web:** report `Track.id` as `spotify:track:<id>` so `LyricsQuery` carries the recording ID (Musixmatch proves it).
+- **Position:** lines follow the snapshot's `elapsedTime`, `timestamp` and `playbackRate`; report them precisely (a stale
+  timestamp shows as late lyrics).
+
+### Known gaps and risks
+
+- No real lyrics were looked at here: providers are tested with invented fixtures and the endpoints with invented queries.
+  Musixmatch's desktop API is unofficial and may change or refuse; NetEase can be slow or unreachable from some places.
+- Auto-sync has not heard real music (no system audio permission on this Mac). The ported novelty (HPSS) does not pick up
+  synthetic sung tones (its 0.72 s median smears held notes and drops short ones), so its hit rate on real vocals is unknown;
+  it is built to do nothing when in doubt.
+- The hover bar appears only while the pointer is over painted parts of the widget (text, scrim, cover).
+- Lines longer than three rows shrink to fit; right-to-left scripts were not tried (CoreText shapes them, rows run left to right).
+- `CALayer.render(in:)` in the smoke check draws the layer tree without some window-server effects; the live captures were
+  checked by eye in both languages.
