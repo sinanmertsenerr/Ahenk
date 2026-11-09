@@ -23,8 +23,11 @@ shows what is playing, and your own files.
 > artist, or the cover itself, melting in over your wallpaper while the song
 > plays, chosen with the dots above the player; and the desktop extras: the
 > Dock icon as the cover with a ring that beats along, Clear Desk, stickers
-> cut out of your photos, and your own song files played by Ahenk itself. The
-> features arrive step by step; see [docs/PROGRESS.md](docs/PROGRESS.md).
+> cut out of your photos, and your own song files played by Ahenk itself; and
+> sound effects (Nightcore, Slowed + Reverb, 8D Audio, Bass Boost, Echo and
+> more, with reverb, pitch and a ten-band equalizer) and plain lyrics timed
+> to the song on your Mac. The features arrive step by step; see
+> [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ### Requirements
 
@@ -121,6 +124,44 @@ shows only the cover in Low Power Mode.
   repeat work as with any other source. The light needs no permission for these songs. The
   folders are remembered in Settings › Sources; the files are never copied.
 
+### Sound effects
+
+The slider button beside the lyrics (or **Sound Effects…** in the player's
+menu, or Settings › Sound) opens the effects: the presets Nightcore, Slowed +
+Reverb, 8D Audio, Bass Boost, Echo, Vaporwave, Lo-fi, Concert Hall and
+Underwater, and your own speed, pitch, reverb and ten-band equalizer.
+Everything changes the sound at once, while the song plays.
+
+- **Your own song files** are changed inside Ahenk's player, speed included.
+- **Another app** (Apple Music, Spotify, a browser): Ahenk mutes that app's
+  own sound and plays it again with the effects. This needs the system audio
+  permission, the same one the light uses. A browser tab with the Ahenk
+  extension also takes the speed; Apple Music and Spotify cannot change speed,
+  so there Nightcore and Slowed move the pitch only, and the panel says so.
+- The light and the beat keep following the song as it was recorded, not the
+  echo.
+- The effects are switched off when another player takes over and when Ahenk
+  quits, and an app gets its own sound back the moment Ahenk stops playing it.
+
+### Lyrics timed on your Mac (Beta)
+
+When a song has only plain words, or none (search for them with **Search
+Lyrics** and pick the right song, or paste them), the wand button beside the
+lyrics times them to the song: whisper.cpp recognises the sung words on your
+Mac, Ahenk gives every line (and word) its time, and the result is kept like
+any other lyrics. For your own song files Ahenk reads the file; for another
+app it listens to the rest of the song first, so start the song over to time
+every line. Nothing leaves your Mac.
+
+It needs two things Ahenk does not ship: `whisper-cli` (`brew install
+whisper-cpp`) and a speech model (`ggml-….bin`). Ahenk looks for them in
+`/opt/homebrew/bin`, `/usr/local/bin`, `~/Developer/whisper-models`,
+`~/Library/Application Support/Ahenk/Models` and the other usual folders, and
+tells you what is missing; **Download the Model** (574 MB, once) fetches the
+suggested model only when you press it, or choose your own files in Settings ›
+Lyrics. Singing is harder to recognise than speech: lines the model did not
+hear are placed between the ones it did.
+
 ### License
 
 MIT. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
@@ -152,8 +193,11 @@ sitelerini, çalan şarkıyı gösteren her uygulamayı ve kendi dosyalarınız�
 > gelir; hangisinin gösterileceği oynatıcının üstündeki noktalarla seçilir;
 > ve masaüstü ekleri: ritimle atan bir halkayla albüm kapağına dönüşen Dock
 > simgesi, Masayı Temizle, fotoğraflarınızdan kesilen çıkartmalar ve Ahenk'in
-> kendisinin çaldığı şarkı dosyalarınız. Özellikler adım adım geliyor;
-> ayrıntılar [docs/PROGRESS.md](docs/PROGRESS.md) dosyasında.
+> kendisinin çaldığı şarkı dosyalarınız; ayrıca ses efektleri (Nightcore,
+> Slowed + Reverb, 8D Ses, Bas Güçlendirme, Yankı ve daha fazlası; yankılanma,
+> perde ve on bantlı ekolayzır) ve Mac'inizde şarkıya hizalanan şarkı sözleri.
+> Özellikler adım adım geliyor; ayrıntılar
+> [docs/PROGRESS.md](docs/PROGRESS.md) dosyasında.
 
 ### Gereksinimler
 
@@ -261,6 +305,47 @@ dosyalarınızı ve adreslerinizi ekleyebilirsiniz. Pencereler masaüstünü
   kâğıdı, çalma sırası, karıştırma ve tekrar diğer kaynaklardaki gibi çalışır.
   Bu şarkılarda ışık için izin gerekmez. Klasörler Ayarlar › Kaynaklar'da
   durur; dosyalar hiçbir yere kopyalanmaz.
+
+### Ses efektleri
+
+Şarkı sözlerinin yanındaki kaydırıcı düğmesi (ya da oynatıcı menüsündeki
+**Ses Efektleri…**, veya Ayarlar › Ses) efektleri açar: Nightcore, Slowed +
+Reverb, 8D Ses, Bas Güçlendirme, Yankı, Vaporwave, Lo-fi, Konser Salonu ve Su
+Altı hazır ayarları ile kendi hız, perde, yankılanma ve on bantlı ekolayzır
+ayarlarınız. Her değişiklik şarkı çalarken anında duyulur.
+
+- **Kendi şarkı dosyalarınızın** sesi, hız dahil, Ahenk'in oynatıcısının içinde
+  değiştirilir.
+- **Başka bir uygulamada** (Apple Music, Spotify, tarayıcı) Ahenk o uygulamanın
+  kendi sesini susturur ve sesi efektlerle yeniden çalar. Bunun için ışığın da
+  kullandığı sistem sesi izni gerekir. Ahenk eklentisi kurulu bir tarayıcı
+  sekmesinde hız da değişir; Apple Music ve Spotify'da hız değiştirilemediği
+  için orada Nightcore ve Slowed yalnızca perdeyi kaydırır, panel de bunu
+  söyler.
+- Işık ve ritim, yankıyı değil şarkının kaydedildiği hâlini izlemeyi sürdürür.
+- Başka bir oynatıcı devreye girdiğinde ve Ahenk kapandığında efektler kapanır;
+  Ahenk bir uygulamanın sesini çalmayı bıraktığı anda o uygulama kendi sesine
+  kavuşur.
+
+### Mac'inizde zamanlanan şarkı sözleri (Beta)
+
+Bir şarkının yalnızca zamansız sözleri varsa ya da hiç sözü yoksa (**Söz Ara**
+ile bulup doğru şarkıyı seçin veya sözleri yapıştırın), sözlerin yanındaki
+sihirli değnek düğmesi sözleri şarkıya hizalar: whisper.cpp söylenen sözleri
+Mac'inizde tanır, Ahenk her satıra (ve sözcüğe) zamanını verir, sonuç da diğer
+sözler gibi saklanır. Kendi şarkı dosyalarınızda Ahenk dosyayı okur; başka bir
+uygulamada ise önce şarkının kalanını dinler, bu yüzden bütün satırların
+zamanlanması için şarkıyı baştan başlatın. Hiçbir şey Mac'inizden çıkmaz.
+
+Bunun için Ahenk'le birlikte gelmeyen iki şey gerekir: `whisper-cli` (`brew
+install whisper-cpp`) ve bir konuşma modeli (`ggml-….bin`). Ahenk bunları
+`/opt/homebrew/bin`, `/usr/local/bin`, `~/Developer/whisper-models`,
+`~/Library/Application Support/Ahenk/Models` ve alışılmış diğer klasörlerde
+arar, eksik olanı söyler; **Modeli İndir** (574 MB, bir kereliğine) önerilen
+modeli yalnızca siz bastığınızda indirir. Dilerseniz Ayarlar › Şarkı Sözleri
+bölümünden kendi dosyalarınızı seçebilirsiniz. Şarkıyı tanımak konuşmayı
+tanımaktan zordur: modelin duyamadığı satırlar, duyduklarının arasına
+yerleştirilir.
 
 ### Lisans
 
