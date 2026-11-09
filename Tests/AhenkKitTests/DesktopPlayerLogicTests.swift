@@ -185,3 +185,131 @@ struct ClockTextTests {
         #expect(ClockText.secondsToNextMinute(after: exact, timeZone: utc) == 60)
     }
 }
+
+@Suite("Player window layout")
+struct PlayerLayoutTests {
+    @Test("The large player stacks albums, search and bar; a page replaces the albums")
+    func large() {
+        let state = PlayerLayoutState(size: .large)
+        #expect(PlayerLayout.rows(state) == [PlayerLayout.albumsHeight, PlayerLayout.searchHeight, PlayerLayout.barHeight])
+        let size = PlayerLayout.size(state)
+        #expect(Double(size.width) == PlayerLayout.largeWidth + 2 * PlayerLayout.margin)
+        let content = PlayerLayout.albumsHeight + PlayerLayout.searchHeight + PlayerLayout.barHeight + 2 * PlayerLayout.spacing
+        #expect(Double(size.height) == content + 2 * PlayerLayout.margin)
+        var page = state
+        page.showsPage = true
+        #expect(PlayerLayout.rows(page).first == PlayerLayout.pageHeight)
+        #expect(PlayerLayout.size(page).height > size.height, "a page grows the window upwards")
+        var plain = state
+        plain.showsAlbums = false
+        #expect(PlayerLayout.rows(plain).first == PlayerLayout.accessoryHeight, "messages keep a row when the albums are off")
+        let nothing = PlayerLayoutState(size: .large, showsAlbums: false, showsSearch: false, showsBar: false)
+        #expect(nothing.isEmpty)
+        #expect(!PlayerLayoutState(size: .small, showsAlbums: false, showsSearch: false, showsBar: false).isEmpty)
+    }
+
+    @Test("The small player is its bar and buttons; search opens on request and pages grow it")
+    func small() {
+        let closed = PlayerLayoutState(size: .small)
+        #expect(PlayerLayout.rows(closed) == [PlayerLayout.accessoryHeight, PlayerLayout.barHeight])
+        #expect(Double(PlayerLayout.size(closed).width) == PlayerLayout.smallWidth + 2 * PlayerLayout.margin)
+        var open = closed
+        open.isSearchOpen = true
+        #expect(PlayerLayout.rows(open) == [PlayerLayout.accessoryHeight, PlayerLayout.searchHeight, PlayerLayout.barHeight])
+        open.showsPage = true
+        #expect(PlayerLayout.rows(open).first == PlayerLayout.pageHeight)
+        var hiddenSearch = open
+        hiddenSearch.showsSearch = false
+        #expect(!hiddenSearch.hasSearch, "the search setting wins")
+        var noBar = closed
+        noBar.showsBar = false
+        #expect(noBar.hasBar, "the small player always has its bar")
+        // The bar stays in place: both sizes share the bottom anchor.
+        let screen = CGRect(x: 0, y: 70, width: 1512, height: 912)
+        let point = NormalizedPoint(x: 0.5, y: 0.05)
+        let large = WidgetPlacement.frame(size: PlayerLayout.size(PlayerLayoutState(size: .large)), anchor: .bottomCenter, at: point, in: screen)
+        let small = WidgetPlacement.frame(size: PlayerLayout.size(closed), anchor: .bottomCenter, at: point, in: screen)
+        #expect(large.minY == small.minY && large.midX == small.midX)
+    }
+
+    @Test("The queue panel sits beside the player where it fits, else it becomes a page")
+    func queuePanel() throws {
+        let screen = CGRect(x: 0, y: 0, width: 1512, height: 900)
+        let player = CGRect(x: 200, y: 40, width: 788, height: 420)
+        let right = try #require(PlayerLayout.queueFrame(besides: player, height: 440, in: screen))
+        #expect(right.minX > player.midX && right.minY == player.minY)
+        // The two glass surfaces (inside their margins) are one spacing apart.
+        let playerGlassRight = player.maxX - PlayerLayout.margin
+        let queueGlassLeft = right.minX + PlayerLayout.margin
+        #expect(Double(queueGlassLeft - playerGlassRight) == PlayerLayout.spacing)
+        let atEdge = CGRect(x: 700, y: 40, width: 788, height: 420)
+        let left = try #require(PlayerLayout.queueFrame(besides: atEdge, height: 440, in: screen))
+        #expect(left.maxX < atEdge.midX, "no room on the right: the left side")
+        #expect(screen.contains(left))
+        let list = CGRect(x: 90, y: 100, width: 328, height: 528)
+        #expect(PlayerLayout.queueFrame(besides: atEdge, height: 440, in: screen, avoiding: [list]) == nil,
+                "never over another widget: the queue becomes a page")
+        let marginsOnly = CGRect(x: left.minX - list.width + 2 * PlayerLayout.margin - 1, y: 100, width: list.width, height: 528)
+        #expect(PlayerLayout.queueFrame(besides: atEdge, height: 440, in: screen, avoiding: [marginsOnly]) != nil,
+                "clear margins may overlap")
+        #expect(PlayerLayout.queueFrame(besides: player, height: 2_000, in: screen) == nil, "too tall for the screen")
+    }
+}
+
+@Suite("Progress schedule")
+struct ProgressScheduleTests {
+    @Test("About one pixel per step, between four steps a second and one")
+    func interval() {
+        #expect(ProgressSchedule.interval(duration: 200, pixels: 400) == 0.5)
+        #expect(ProgressSchedule.interval(duration: 30, pixels: 600) == ProgressSchedule.fastest, "short songs on wide lines")
+        #expect(ProgressSchedule.interval(duration: 3_600, pixels: 300) == ProgressSchedule.slowest, "long songs on short lines")
+        #expect(ProgressSchedule.interval(duration: 200, pixels: 400, rate: 2) == 0.25)
+        #expect(ProgressSchedule.interval(duration: 0, pixels: 400) == ProgressSchedule.slowest)
+        #expect(ProgressSchedule.interval(duration: .nan, pixels: 400) == ProgressSchedule.slowest)
+        #expect(ProgressSchedule.interval(duration: 200, pixels: 0) == ProgressSchedule.slowest)
+    }
+
+    @Test("The played part follows the anchor and the rate, clamped to the song")
+    func fraction() {
+        let anchor = Date(timeIntervalSinceReferenceDate: 1_000)
+        let later = anchor.addingTimeInterval(10)
+        #expect(ProgressSchedule.fraction(elapsed: 50, anchor: anchor, rate: 1, duration: 200, at: later) == 0.3)
+        #expect(ProgressSchedule.fraction(elapsed: 50, anchor: anchor, rate: 0, duration: 200, at: later) == 0.25, "paused")
+        #expect(ProgressSchedule.fraction(elapsed: 195, anchor: anchor, rate: 1, duration: 200, at: later) == 1)
+        #expect(ProgressSchedule.fraction(elapsed: -5, anchor: anchor, rate: 0, duration: 200, at: later) == 0)
+        #expect(ProgressSchedule.fraction(elapsed: 50, anchor: anchor, rate: 1, duration: 0, at: later) == 0)
+    }
+}
+
+@Suite("Listening source")
+struct ListeningSourceChoiceTests {
+    @Test("The chosen source, else the playing one, else the first that can play")
+    func resolve() {
+        let all: (MusicSource) -> Bool = { _ in true }
+        #expect(ListeningSourceChoice.resolve(chosen: .spotify, playing: .appleMusic, isAvailable: all) == .spotify)
+        #expect(ListeningSourceChoice.resolve(chosen: nil, playing: .youtubeMusic, isAvailable: all) == .youtubeMusic)
+        #expect(ListeningSourceChoice.resolve(chosen: nil, playing: .otherApp, isAvailable: all) == .appleMusic, "a source that cannot play picks")
+        let noSpotify: (MusicSource) -> Bool = { $0 != .spotify }
+        #expect(ListeningSourceChoice.resolve(chosen: .spotify, playing: .soundCloud, isAvailable: noSpotify) == .soundCloud)
+        #expect(ListeningSourceChoice.resolve(chosen: .demo, playing: nil, isAvailable: all) == .appleMusic, "never the demo or other apps")
+        #expect(ListeningSourceChoice.resolve(chosen: nil, playing: nil, isAvailable: { _ in false }) == nil)
+    }
+
+    @Test("A song the source only shows may wait longer for the user")
+    func userStart() {
+        var queue = PlayQueue()
+        let song = CatalogSong(id: "itunes:song:1", title: "Harbor Bells", artistName: "Juniper Coast", duration: 180)
+        queue.start([song], at: 0, context: .search)
+        let start = Date(timeIntervalSinceReferenceDate: 50_000)
+        let attempt = PlaybackAttempt(
+            entryID: queue.current!.id, song: song, source: .appleMusic, requestedAt: start,
+            startTimeout: QueueConductorPolicy.userStartTimeout
+        )
+        let other = NowPlayingSnapshot(
+            track: Track(id: "x", source: .appleMusic, title: "Something Else", artist: "Someone"),
+            elapsedTime: 10, playbackRate: 1, timestamp: start
+        )
+        #expect(QueueConductorPolicy.decide(attempt: attempt, queue: queue, snapshot: other, lastOwn: nil, now: start.addingTimeInterval(30)) == .none)
+        #expect(QueueConductorPolicy.decide(attempt: attempt, queue: queue, snapshot: other, lastOwn: nil, now: start.addingTimeInterval(91)) == .startFailed)
+    }
+}

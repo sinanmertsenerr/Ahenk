@@ -8,13 +8,20 @@ public struct PlaybackAttempt: Hashable, Sendable {
     public var requestedAt: Date
     /// When the source was first seen playing it.
     public var confirmedAt: Date?
+    /// How long the source may take to start it (longer when the source
+    /// only shows the song and the user starts it there).
+    public var startTimeout: TimeInterval
 
-    public init(entryID: UUID, song: CatalogSong, source: MusicSource, requestedAt: Date, confirmedAt: Date? = nil) {
+    public init(
+        entryID: UUID, song: CatalogSong, source: MusicSource, requestedAt: Date, confirmedAt: Date? = nil,
+        startTimeout: TimeInterval = QueueConductorPolicy.startTimeout
+    ) {
         self.entryID = entryID
         self.song = song
         self.source = source
         self.requestedAt = requestedAt
         self.confirmedAt = confirmedAt
+        self.startTimeout = max(0, startTimeout)
     }
 
     public var isConfirmed: Bool { confirmedAt != nil }
@@ -43,6 +50,9 @@ public enum ConductorDecision: Hashable, Sendable {
 public enum QueueConductorPolicy {
     /// A started song that is not playing after this long has failed.
     public static let startTimeout: TimeInterval = 12
+    /// The same when the source only showed the song and waits for the
+    /// user to press Play there (Apple Music's catalog pages).
+    public static let userStartTimeout: TimeInterval = 90
     /// The next song is started this long before the current one ends, so
     /// the source never moves on to a song of its own choosing.
     public static let endLead: TimeInterval = 0.35
@@ -62,7 +72,7 @@ public enum QueueConductorPolicy {
         guard let attempt else { return .none }
         guard attempt.isConfirmed else {
             if let snapshot, snapshot.isPlaying, SongMatching.matches(attempt.song, snapshot.track) { return .confirmed }
-            return now.timeIntervalSince(attempt.requestedAt) > startTimeout ? .startFailed : .none
+            return now.timeIntervalSince(attempt.requestedAt) > attempt.startTimeout ? .startFailed : .none
         }
         guard let snapshot else { return .none }
         if SongMatching.matches(attempt.song, snapshot.track) {
@@ -87,7 +97,7 @@ public enum QueueConductorPolicy {
     public static func wakeTime(attempt: PlaybackAttempt?, snapshot: NowPlayingSnapshot?, now: Date) -> Date? {
         guard let attempt else { return nil }
         guard attempt.isConfirmed else {
-            return attempt.requestedAt.addingTimeInterval(startTimeout + 0.05)
+            return attempt.requestedAt.addingTimeInterval(attempt.startTimeout + 0.05)
         }
         guard let snapshot, snapshot.isPlaying, snapshot.isPositionKnown,
               SongMatching.matches(attempt.song, snapshot.track)

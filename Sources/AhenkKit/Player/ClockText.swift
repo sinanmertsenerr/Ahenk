@@ -9,6 +9,11 @@ public enum ClockText {
         public var digits: String
         /// "PM", "ÖS"…, only in 12-hour time.
         public var dayPeriod: String?
+
+        public init(digits: String, dayPeriod: String? = nil) {
+            self.digits = digits
+            self.dayPeriod = dayPeriod
+        }
     }
 
     /// Whether `format` means a 24-hour clock; `.system` asks
