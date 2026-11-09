@@ -363,6 +363,8 @@
 "Align lyrics on this Mac (Beta)" = "Sözleri bu Mac'te hizala (Beta)";
 "For songs without synced lyrics. Everything runs on this Mac." = "Eşzamanlı sözü olmayan şarkılar için. Her şey bu Mac'te yapılır.";
 
+"Not synced" = "Eşzamanlı değil";
+
 /* MARK: Lyric styles */
 "Fisheye" = "Balıkgözü";
 "Spread" = "Yayılma";

@@ -15,3 +15,15 @@ extension SRGBColor {
         self.init(red: Double(ns.redComponent), green: Double(ns.greenComponent), blue: Double(ns.blueComponent))
     }
 }
+
+extension NSColor {
+    convenience init(_ rgb: SRGBColor) {
+        self.init(srgbRed: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1)
+    }
+}
+
+extension SRGBColor {
+    var cgColor: CGColor { CGColor(srgbRed: red, green: green, blue: blue, alpha: 1) }
+
+    func cgColor(alpha: Double) -> CGColor { CGColor(srgbRed: red, green: green, blue: blue, alpha: alpha) }
+}
