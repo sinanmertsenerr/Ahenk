@@ -517,6 +517,39 @@ struct WallpaperRequestTests {
     }
 }
 
+@Suite("Wallpaper: video IDs")
+struct WallpaperVideoIDTests {
+    @Test("Every form of a YouTube address gives the 11-character ID; anything else none")
+    func parsing() {
+        let forms = [
+            "ahenkVid001",
+            "https://www.youtube.com/watch?v=ahenkVid001",
+            "https://www.youtube.com/watch?feature=share&v=ahenkVid001&t=42s",
+            "https://m.youtube.com/watch?v=ahenkVid001",
+            "https://music.youtube.com/watch?v=ahenkVid001&list=RDAMVM",
+            "https://youtu.be/ahenkVid001?si=invented",
+            "https://www.youtube.com/embed/ahenkVid001?start=10",
+            "https://www.youtube-nocookie.com/embed/ahenkVid001",
+            "https://www.youtube.com/live/ahenkVid001",
+            "https://www.youtube.com/shorts/ahenkVid001",
+            "  https://www.youtube.com/watch?v=ahenkVid001  ",
+        ]
+        for form in forms {
+            #expect(BrowserSite.youtubeVideoID(form) == "ahenkVid001", "\(form)")
+        }
+        for bad in ["ahenkVid00", "ahenkVid0011", "ahenk Vid01", "ahenk/id001", "https://vimeo.com/ahenkVid001",
+                    "https://www.youtube.com/channel/ahenkVid001", "https://www.youtube.com/watch?v=short", ""] {
+            #expect(BrowserSite.youtubeVideoID(bad) == nil, "\(bad)")
+        }
+        // The tab's watch URL, as the hub carries it.
+        let request = WallpaperRequest(snapshot: NowPlayingSnapshot(
+            track: Track(id: "https://www.youtube.com/watch?v=ahenkVid001", source: .youtube, title: "Glass Harbor", artist: "Nova Atlas"),
+            elapsedTime: 0, playbackRate: 1, timestamp: Date(), contentKind: .music
+        ))
+        #expect(request.tabVideoID == "ahenkVid001" && request.tabVideo?.id == "youtube:ahenkVid001")
+    }
+}
+
 @Suite("Wallpaper: the user's videos")
 struct WallpaperVideoListTests {
     @Test("Links, addresses and files become list entries; other text does not")

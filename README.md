@@ -17,9 +17,12 @@ shows what is playing, and your own files.
 > search, the player bar and a play queue; synced lyrics beside the album
 > cover in eight styles (Fisheye, Spread, Karaoke, Typewriter, Neon, Echo,
 > Glitch, Cinema), with a countdown in instrumental parts, other versions,
-> search and timing; and the browser extension for YouTube Music, YouTube,
-> Spotify, SoundCloud, Amazon Music, Deezer and TIDAL. The features arrive
-> step by step; see [docs/PROGRESS.md](docs/PROGRESS.md).
+> search and timing; the browser extension for YouTube Music, YouTube,
+> Spotify, SoundCloud, Amazon Music, Deezer and TIDAL; and the live wallpaper:
+> the album's motion artwork, the song's music video or another by the
+> artist, or the cover itself, melting in over your wallpaper while the song
+> plays, chosen with the dots above the player. The features arrive step by
+> step; see [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ### Requirements
 
@@ -78,6 +81,17 @@ nothing but the extension): it reads what the music site's own page shows
 (the song, its position, and the site's own synced lyrics when its lyrics view
 loads them) and carries out your commands there. Nothing else leaves your Mac.
 
+### Live wallpaper
+
+While a song plays, a layer just above your desktop picture shows the album's
+motion artwork (from Apple's catalog), the song's music video or another one
+by the same artist (YouTube's embedded player, privacy-enhanced and muted),
+or the cover, blurred and slowly moving; your own wallpaper setting is never
+changed. Videos stream while they show and are never downloaded. The dots
+above the player choose among them; Settings › Live Wallpaper adds your own
+video files and addresses. It pauses while windows cover the desktop and
+shows only the cover in Low Power Mode.
+
 ### License
 
 MIT. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
@@ -103,8 +117,12 @@ sitelerini, çalan şarkıyı gösteren her uygulamayı ve kendi dosyalarınız�
 > Karaoke, Daktilo, Neon, Yankı, Bozulma, Sinema) eşzamanlı şarkı sözleri,
 > enstrümantal bölümlerde geri sayım, sözlerin diğer sürümleri, söz arama ve
 > zamanlama ayarı; YouTube Music, YouTube, Spotify, SoundCloud, Amazon Music,
-> Deezer ve TIDAL için tarayıcı eklentisi. Özellikler adım adım geliyor;
-> ayrıntılar [docs/PROGRESS.md](docs/PROGRESS.md) dosyasında.
+> Deezer ve TIDAL için tarayıcı eklentisi; ve canlı duvar kâğıdı: şarkı
+> çalarken albümün hareketli kapağı, şarkının müzik videosu ya da sanatçının
+> başka bir videosu veya kapağın kendisi duvar kâğıdınızın üzerine yavaşça
+> gelir; hangisinin gösterileceği oynatıcının üstündeki noktalarla seçilir.
+> Özellikler adım adım geliyor; ayrıntılar [docs/PROGRESS.md](docs/PROGRESS.md)
+> dosyasında.
 
 ### Gereksinimler
 
@@ -167,6 +185,18 @@ başkasını kabul etmez): müzik sitesinin kendi sayfasında görünenleri (şa
 konumunu ve sitenin sözler görünümü yüklediğinde sitenin kendi eşzamanlı
 sözlerini) okur ve komutlarınızı orada yerine getirir. Mac'inizden başka hiçbir
 şey çıkmaz.
+
+### Canlı duvar kâğıdı
+
+Şarkı çalarken masaüstü resminizin hemen üstündeki bir katman albümün
+hareketli kapağını (Apple'ın kataloğundan), şarkının müzik videosunu ya da
+aynı sanatçının başka bir videosunu (YouTube'un gizlilik odaklı, sessiz
+yerleştirilmiş oynatıcısında) veya bulanık ve yavaşça hareket eden kapağı
+gösterir; kendi duvar kâğıdı ayarınız hiç değişmez. Videolar gösterildikleri
+sırada akış olarak oynatılır, asla indirilmez. Oynatıcının üstündeki noktalar
+bunlar arasında seçim yapar; Ayarlar › Canlı Duvar Kâğıdı'ndan kendi video
+dosyalarınızı ve adreslerinizi ekleyebilirsiniz. Pencereler masaüstünü
+örttüğünde duraklar, Düşük Güç Modunda yalnızca kapağı gösterir.
 
 ### Lisans
 

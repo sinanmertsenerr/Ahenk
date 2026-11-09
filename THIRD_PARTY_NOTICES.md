@@ -63,3 +63,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 The songs, artists, albums and lyric lines used by `--demo` and in the tests
 were written for Ahenk, and the demo covers are generated in code. They are
 part of Ahenk and covered by its MIT License.
+
+## Live wallpaper
+
+- The motion artwork lookup (`Sources/AhenkKit/Wallpaper/MotionArtwork.swift`)
+  was ported from DynamicIsland by the same author, under the same MIT
+  License.
+- No videos, motion artwork or covers ship with Ahenk, and none are
+  downloaded or stored. While the live wallpaper shows them, motion artwork is
+  streamed from Apple's catalog, music videos play in YouTube's own embedded
+  player (privacy-enhanced mode, `www.youtube-nocookie.com`, loaded at run
+  time and subject to YouTube's terms), and the user's own videos play from
+  where they are. Searches and catalog answers (titles, IDs, lengths) are
+  cached in `~/Library/Caches/Ahenk/Catalog`.
