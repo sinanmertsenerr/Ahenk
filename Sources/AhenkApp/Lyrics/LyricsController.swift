@@ -32,6 +32,8 @@ final class LyricsController {
         case search
         /// The sound effects (the button beside the lyrics).
         case effects
+        /// Timing plain lyrics against the song on this Mac (Beta).
+        case align
     }
 
     private(set) var phase: Phase = .idle
@@ -54,6 +56,7 @@ final class LyricsController {
         didSet {
             if panel == .versions, oldValue != .versions { loadVersions() }
             if panel == .search, oldValue != .search { prepareSearch() }
+            if panel == .align, oldValue != .align { onFocusSearch?() }
             if panel == nil { onReleaseKeyboard?() }
         }
     }
@@ -376,13 +379,33 @@ final class LyricsController {
                 let isSite = BrowserLyricsProvider.site(ofSource: response.source) != nil
                 self.apply(response, choice: isSite ? nil : version.withoutLyrics, for: query, origin: isSite ? .playingSource : nil)
                 self.choosing = nil
-                self.panel = nil
+                // Words without timing: offer to time them on this Mac.
+                self.panel = self.phase == .plain && self.settings.lyrics.localAlignment ? .align : nil
             } catch {
                 guard let self else { return }
                 self.choosing = nil
                 self.show("These lyrics could not be loaded.".l10n)
             }
         }
+    }
+
+    /// Makes lyrics that were timed on this Mac the song's lyrics (kept
+    /// like a picked version). They are shown at once when `query` is
+    /// still the song that plays.
+    func adoptAligned(_ aligned: SyncedLyrics, for query: LyricsQuery) async {
+        let adopted = await finder.adopt(aligned, for: query)
+        guard self.query == query else { return }
+        // Their own timing: an old nudge does not belong to them.
+        manualOffset = nil
+        finder.songs.setManualOffset(nil, for: query.cacheKey)
+        apply(adopted.response, choice: adopted.version, for: query, origin: .choice)
+    }
+
+    /// The words to time for the song that plays: the plain lyrics that
+    /// were found, or the lines of the lyrics shown.
+    var wordsToAlign: [String] {
+        if !plainLines.isEmpty { return plainLines }
+        return lyrics?.lines.map(\.text).filter { LyricsTimeline.isSung($0) } ?? []
     }
 
     /// Forgets the pick: the providers choose again.
@@ -437,6 +460,7 @@ final class LyricsController {
     static func displayName(ofProvider name: String) -> String {
         if let site = BrowserLyricsProvider.site(ofSource: name) { return site.source.title }
         if name == BrowserLyricsProvider.providerName { return "Music Site".l10n }
+        if name == LyricsFinder.alignedSource { return "Timed on This Mac".l10n }
         return name == "demo" ? "Demo".l10n : name
     }
 }

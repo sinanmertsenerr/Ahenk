@@ -63,6 +63,9 @@ final class SmokeRunner {
         if selected("localPlayback") {
             await report.check("localPlayback") { try await LocalCheck.run() }
         }
+        if selected("lyricAlignment") {
+            await report.check("lyricAlignment") { try await LyricsAlignmentCheck.run(environment: self.environment) }
+        }
         if selected("soundEffects") {
             await report.check("soundEffects") { try await EffectsCheck.run(environment: self.environment) }
         }
@@ -505,7 +508,9 @@ final class SmokeRunner {
             states += try LyricsCheck.renderStates(song: song, cover: cover, language: language, directory: directory)
             let size = LyricsLayout.widgetSize(textScale: 1, showsCover: true)
             let model = environment.desktopPlayer.model
-            let panels: [(String, LyricsController.Panel?)] = [("bar", nil), ("versions", .versions), ("search", .search), ("effects", .effects)]
+            let panels: [(String, LyricsController.Panel?)] = [
+                ("bar", nil), ("versions", .versions), ("search", .search), ("effects", .effects), ("align", .align), ("align-working", .align),
+            ]
             for (name, panel) in panels {
                 controller.panel = panel
                 if panel == .versions { try await wait("no versions to show") { controller.versions.value != nil } }
@@ -521,15 +526,20 @@ final class SmokeRunner {
                     environment.effects.start()
                     try await wait("the effects did not follow the demo player") { environment.effects.route == .demo }
                 }
+                if panel == .align {
+                    environment.aligner.prepare()
+                    environment.aligner.show(name == "align-working" ? .recognizing(0.4) : .idle)
+                }
                 let widget = LyricsWidget(
                     lyrics: controller, player: model, power: environment.power, settings: settings,
-                    effects: environment.effects, audio: environment.audio, showsBar: true
+                    effects: environment.effects, audio: environment.audio, aligner: environment.aligner, showsBar: true
                 )
                 let bitmap = try await renderWidget(widget, size: size, model: model, language: language)
                 try saveWidget(bitmap, name: "lyrics-\(name)", language: language, in: directory)
                 widgets += 1
             }
             controller.panel = nil
+            environment.aligner.show(.idle)
             environment.effects.stop()
             settings.effects = SoundEffectSettings()
         }

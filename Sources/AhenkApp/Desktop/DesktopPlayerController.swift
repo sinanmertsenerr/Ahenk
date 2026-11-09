@@ -28,6 +28,8 @@ final class DesktopPlayerController {
     /// the widgets are made).
     var effects: SoundEffectsController?
     var audio: AudioTapEngine?
+    /// "Align Lyrics" beside the lyrics.
+    var aligner: LyricsAlignmentController?
 
     private let settings: AppSettings
     private let power: PowerMonitor
@@ -234,7 +236,7 @@ final class DesktopPlayerController {
         case .clock: ClockRoot(clock: clock, model: model, settings: settings)
         case .continuePlaying: ContinuePlayingWidget(model: model)
         case .player: PlayerWidget(model: model)
-        case .lyrics: LyricsWidget(lyrics: lyrics, player: model, power: power, settings: settings, effects: effects, audio: audio)
+        case .lyrics: LyricsWidget(lyrics: lyrics, player: model, power: power, settings: settings, effects: effects, audio: audio, aligner: aligner)
         }
     }
 

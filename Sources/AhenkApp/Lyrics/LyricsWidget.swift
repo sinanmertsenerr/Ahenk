@@ -17,6 +17,9 @@ struct LyricsWidget: View {
     /// them the bar has no effects button.
     var effects: SoundEffectsController?
     var audio: AudioTapEngine?
+    /// Times plain lyrics on this Mac (Beta); without it there is no
+    /// "Align Lyrics".
+    var aligner: LyricsAlignmentController?
     /// Shows the bar without the pointer (offscreen checks).
     var showsBar = false
     @State private var isHovering = false
@@ -28,13 +31,13 @@ struct LyricsWidget: View {
                 .opacity(lyrics.panel == nil ? 1 : 0)
                 .accessibilityLabel("Lyrics".l10n)
             if let panel = lyrics.panel {
-                LyricsPanel(lyrics: lyrics, panel: panel, theme: theme, effects: effects, audio: audio, settings: settings)
+                LyricsPanel(lyrics: lyrics, panel: panel, theme: theme, effects: effects, audio: audio, aligner: aligner, settings: settings)
                     .padding(10)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
             if lyrics.panel == nil {
                 // Bottom right: clear of the cover and of the line being sung.
-                LyricsBar(lyrics: lyrics, settings: settings, theme: theme, effects: effects)
+                LyricsBar(lyrics: lyrics, settings: settings, theme: theme, effects: effects, canAlign: aligner != nil)
                     .padding([.bottom, .trailing], 10)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .opacity(isHovering || showsBar ? 1 : 0)
@@ -120,6 +123,12 @@ private struct LyricsBar: View {
     @Bindable var settings: AppSettings
     let theme: PlayerTheme
     var effects: SoundEffectsController?
+    var canAlign = false
+
+    /// Words without timing (or none yet): timing them is what is missing.
+    private var offersAlignment: Bool {
+        canAlign && settings.lyrics.localAlignment && [.plain, .notFound, .failed].contains(lyrics.phase)
+    }
 
     var body: some View {
         HStack(spacing: 2) {
@@ -145,6 +154,11 @@ private struct LyricsBar: View {
             WidgetIconButton(symbol: "magnifyingglass", pointSize: 13, side: 30, help: "Search Lyrics".l10n) {
                 lyrics.panel = .search
             }
+            if offersAlignment {
+                WidgetIconButton(symbol: "wand.and.stars", pointSize: 13, side: 30, accent: theme.accent, help: "Align Lyrics to the Song (Beta)".l10n) {
+                    lyrics.panel = .align
+                }
+            }
             if effects != nil {
                 // Lit while the effects are switched on.
                 WidgetIconButton(
@@ -160,7 +174,7 @@ private struct LyricsBar: View {
             ) {
                 settings.lyrics.showAlbumArt.toggle()
             }
-            LyricsMoreMenu(lyrics: lyrics, settings: settings)
+            LyricsMoreMenu(lyrics: lyrics, settings: settings, canAlign: canAlign)
         }
         .padding(.horizontal, 6)
         .frame(height: 40)
@@ -176,6 +190,7 @@ private struct LyricsBar: View {
 private struct LyricsMoreMenu: View {
     let lyrics: LyricsController
     @Bindable var settings: AppSettings
+    var canAlign = false
 
     var body: some View {
         Menu {
@@ -189,6 +204,9 @@ private struct LyricsMoreMenu: View {
                 .disabled(lyrics.songOffset == 0)
             if lyrics.choice != nil {
                 Button("Use the Lyrics Ahenk Found".l10n, systemImage: "sparkles") { lyrics.useAutomatic() }
+            }
+            if canAlign, settings.lyrics.localAlignment, lyrics.phase != .loading {
+                Button("Align Lyrics to the Song (Beta)".l10n, systemImage: "wand.and.stars") { lyrics.panel = .align }
             }
             Divider()
             Button("Lyrics Settings…".l10n, systemImage: "gearshape") { lyrics.onOpenSettings?() }
@@ -218,6 +236,7 @@ private struct LyricsPanel: View {
     let theme: PlayerTheme
     var effects: SoundEffectsController?
     var audio: AudioTapEngine?
+    var aligner: LyricsAlignmentController?
     @Bindable var settings: AppSettings
 
     private var title: String {
@@ -225,6 +244,7 @@ private struct LyricsPanel: View {
         case .versions: "Other Lyrics".l10n
         case .search: "Search Lyrics".l10n
         case .effects: "Sound Effects".l10n
+        case .align: "Align Lyrics".l10n
         }
     }
 
@@ -241,8 +261,9 @@ private struct LyricsPanel: View {
                     .foregroundStyle(.white.opacity(0.6))
                     .textCase(.uppercase)
                     .kerning(0.5)
+                if panel == .align { BetaBadge() }
                 Spacer(minLength: 8)
-                if panel == .versions {
+                if panel == .versions || panel == .align {
                     Button {
                         lyrics.panel = .search
                     } label: {
@@ -267,6 +288,10 @@ private struct LyricsPanel: View {
             case .effects:
                 if let effects, let audio {
                     SoundEffectsPanel(effects: effects, audio: audio, settings: settings, theme: theme)
+                }
+            case .align:
+                if let aligner {
+                    LyricsAlignPanel(aligner: aligner, lyrics: lyrics, theme: theme)
                 }
             }
         }

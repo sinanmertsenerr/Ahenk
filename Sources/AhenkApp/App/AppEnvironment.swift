@@ -54,8 +54,17 @@ final class AppEnvironment {
     private(set) lazy var effects = SoundEffectsController(
         settings: settings, nowPlaying: nowPlaying, audio: audio, localPlayer: localPlayer, bridge: services.bridgeServer
     )
+    /// Times plain lyrics against the song on this Mac (Beta).
+    private(set) lazy var aligner = LyricsAlignmentController(
+        lyrics: lyrics, nowPlaying: nowPlaying, audio: audio, settings: settings, isDemo: demo != nil
+    )
     /// Keeps the lyrics on time by listening (Settings › Lyrics).
-    private(set) lazy var lyricsSync = LyricsAutoSync(lyrics: lyrics, nowPlaying: nowPlaying, audio: audio, settings: settings)
+    private(set) lazy var lyricsSync: LyricsAutoSync = {
+        let sync = LyricsAutoSync(lyrics: lyrics, nowPlaying: nowPlaying, audio: audio, settings: settings)
+        // One listener at a time: alignment has the audio while it works.
+        sync.isSuspended = { [weak self] in self?.aligner.isBusy ?? false }
+        return sync
+    }()
     /// The live wallpaper on every display (started with the services).
     private(set) lazy var wallpaper: WallpaperController = {
         let lookups: WallpaperLookups
@@ -89,6 +98,7 @@ final class AppEnvironment {
         controller.model.library = localLibrary
         controller.effects = effects
         controller.audio = audio
+        controller.aligner = aligner
         // Beside the lyrics when they show; in Settings otherwise.
         controller.model.onOpenSoundEffects = { [weak self] in
             guard let self else { return }

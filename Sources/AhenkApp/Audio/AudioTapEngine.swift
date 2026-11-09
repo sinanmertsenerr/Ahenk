@@ -134,6 +134,14 @@ final class AudioTapEngine {
         controller.setLyricsCapture(capture)
     }
 
+    /// Ends a lyrics capture early; `completion` runs on the main thread
+    /// once the analysis no longer writes to it.
+    func stopListening(forLyrics completion: @escaping @MainActor () -> Void) {
+        controller.endLyricsCapture {
+            DispatchQueue.main.async { MainActor.assumeIsolated { completion() } }
+        }
+    }
+
     /// Sound effects for another app's sound (`nil` ends them); see
     /// `AudioCaptureController.setEffects`.
     func setEffects(_ sink: EffectsTapSink?, for target: AudioTapTarget?) {

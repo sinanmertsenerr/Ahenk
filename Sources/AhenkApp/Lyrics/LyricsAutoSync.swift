@@ -25,6 +25,8 @@ final class LyricsAutoSync {
     private var watchdog: DispatchWorkItem?
     private var observers: [AnyObject] = []
     private var isStarted = false
+    /// True while something else has the audio (lyric alignment).
+    var isSuspended: () -> Bool = { false }
     private let work = DispatchQueue(label: "com.sinanmertsener.Ahenk.lyrics-sync", qos: .utility)
     private let log = AhenkLogger(category: "lyrics-sync")
 
@@ -88,7 +90,7 @@ final class LyricsAutoSync {
         guard settings.lyrics.autoSync, lyrics.phase == .synced, let synced = lyrics.lyrics, let query = lyrics.query,
               lyrics.timingAuthority.allowsAutomaticCorrection, lyrics.manualOffset == nil, lyrics.autoOffset == nil,
               let snapshot = nowPlaying.snapshot, snapshot.isPlaying, abs(snapshot.playbackRate - 1) < 0.01,
-              audio.hearsFollowedPlayer
+              audio.hearsFollowedPlayer, !isSuspended()
         else {
             cancel()
             return

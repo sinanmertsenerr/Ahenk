@@ -181,6 +181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment.stickers.stop()
         environment.desktopPlayer.stop()
         environment.lyricsSync.stop()
+        environment.aligner.stop()
         environment.lyrics.stop()
         environment.light.stop()
         environment.power.stop()

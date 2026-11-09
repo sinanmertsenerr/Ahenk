@@ -5,6 +5,7 @@ struct LyricsPane: View {
     @Bindable var settings: AppSettings
     let lyrics: LyricsController
     let nowPlaying: NowPlayingModel
+    let aligner: LyricsAlignmentController
 
     var body: some View {
         PaneForm(
@@ -109,7 +110,41 @@ struct LyricsPane: View {
                     detail: "For songs without synced lyrics. Everything runs on this Mac.".l10n,
                     isOn: $settings.lyrics.localAlignment
                 )
+                if settings.lyrics.localAlignment {
+                    LabeledContent {
+                        HStack(spacing: 10) {
+                            Text(aligner.tools.executable?.path ?? "Not found".l10n)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Button("Choose…".l10n) { aligner.chooseExecutable() }
+                        }
+                    } label: {
+                        Text(verbatim: "whisper-cli")
+                    }
+                    LabeledContent("Speech model".l10n) {
+                        HStack(spacing: 10) {
+                            switch aligner.download {
+                            case .running(let done):
+                                ProgressView(value: done).frame(width: 90)
+                                Button("Cancel".l10n) { aligner.cancelDownload() }
+                            case .none, .failed:
+                                Text(aligner.tools.model?.lastPathComponent ?? (aligner.download == .failed ? "The model could not be downloaded.".l10n : "Not found".l10n))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                if aligner.tools.model == nil {
+                                    Button("Download the Model".l10n) { aligner.downloadModel() }
+                                }
+                                Button("Choose…".l10n) { aligner.chooseModel() }
+                            }
+                        }
+                    }
+                }
+            } footer: {
+                Text("Ahenk uses whisper.cpp and a speech model that are already on this Mac; it looks in the usual places (Homebrew, your whisper model folders, its own Models folder). Nothing is downloaded unless you press Download the Model.".l10n)
             }
+            .onAppear { aligner.refreshTools() }
         }
     }
 

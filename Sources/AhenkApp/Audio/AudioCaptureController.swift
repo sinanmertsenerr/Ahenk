@@ -170,6 +170,15 @@ final class AudioCaptureController: @unchecked Sendable {
         return SoundEffectTapRule.wantsMute(request: built.request, tapsProcesses: true, effectsFor: effects?.target)
     }
 
+    /// Takes the lyrics capture back before it is full and says when the
+    /// analysis has let go of it (only then may its samples be read).
+    func endLyricsCapture(then completion: @escaping @Sendable () -> Void) {
+        analysis.async { [pipeline] in
+            pipeline.lyricsCapture = nil
+            completion()
+        }
+    }
+
     /// Tears everything down and waits for it (on quit).
     func stop() {
         control.sync {

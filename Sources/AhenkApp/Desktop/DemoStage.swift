@@ -109,6 +109,12 @@ extension DesktopPlayerController {
                 model.settings.effects.select(.slowedReverb)
                 model.settings.effects.enabled = true
                 self.lyrics.panel = .effects
+            case "align":
+                self.lyrics.panel = .align
+            case "align-working":
+                self.lyrics.panel = .align
+                try? await Task.sleep(for: .milliseconds(400))
+                self.aligner?.show(.recognizing(0.4))
             case "status":
                 model.show(PlayerStatus(text: "Playing in the browser needs the Ahenk browser extension.".l10n, kind: .problem))
             case "loading":
