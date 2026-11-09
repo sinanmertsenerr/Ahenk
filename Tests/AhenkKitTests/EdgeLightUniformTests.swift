@@ -60,7 +60,8 @@ struct EdgeLightUniformTests {
     func atlasSlot() {
         let metrics = EdgeMetrics(shape: EdgeShape(width: 800, height: 600), band: 40)
         let atlas = EdgeAtlas(strips: EdgeLayout.strips(for: metrics, position: .allEdges), scale: 2)
-        let side = try? #require(atlas.slots.first { $0.isRotated })
+        let side = atlas.slots.first { $0.isRotated }
+        #expect(side != nil, "an atlas of every edge has a turned slot")
         guard let side else { return }
         let u = EdgeLightUniforms(
             metrics: metrics, strip: side.strip, pixelScale: 2, look: LightLook(), colors: [.white], isRainbow: false,

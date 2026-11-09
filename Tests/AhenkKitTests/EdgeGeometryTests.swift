@@ -15,7 +15,8 @@ struct EdgeGeometryTests {
         #expect(mac.corners.topLeft == EdgeShape.notchedPanelTopRadius)
         #expect(mac.corners.topRight == EdgeShape.notchedPanelTopRadius)
         #expect(mac.corners.bottomLeft == EdgeShape.minimumCornerRadius)
-        let notch = try? #require(mac.notch)
+        let notch = mac.notch
+        #expect(notch != nil)
         #expect(notch?.minX == 665 && notch?.width == 185 && notch?.height == 32)
         #expect(notch.map { abs($0.radius - 32 * EdgeShape.notchCornerShare) < 1e-9 } == true)
         #expect(Self.external.notch == nil)
