@@ -196,6 +196,12 @@
 "Continue Playing" = "Çalmaya Devam Et";
 "The artist's albums" = "Sanatçının albümleri";
 "Search bar" = "Arama çubuğu";
+"Player bar" = "Oynatıcı çubuğu";
+"Clock size" = "Saat boyutu";
+"Play picked songs in" = "Seçilen şarkıların çalacağı yer";
+"Layout" = "Yerleşim";
+"Places" = "Konumlar";
+"Drag the clock, the list or the player by an empty spot to move it. Each display keeps its own places." = "Saati, listeyi ya da oynatıcıyı taşımak için boş bir yerinden tutup sürükleyin. Her ekran kendi konumlarını saklar.";
 "Playback" = "Çalma";
 "Start every song at 0:15" = "Her şarkıyı 0:15'ten başlat";
 "Skips the intro of each new song." = "Her yeni şarkının girişini atlar.";

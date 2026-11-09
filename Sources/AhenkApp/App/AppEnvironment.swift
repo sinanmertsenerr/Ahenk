@@ -26,6 +26,14 @@ final class AppEnvironment {
     private(set) lazy var light = EdgeLightController(
         settings: settings, nowPlaying: nowPlaying, features: audio.store, power: power
     )
+    /// The desktop widgets: clock, Continue Playing, the player and its
+    /// queue (started with the services).
+    private(set) lazy var desktopPlayer: DesktopPlayerController = {
+        let controller = DesktopPlayerController(settings: settings, nowPlaying: nowPlaying, services: services, demo: demo)
+        controller.model.onOpenSettings = { [weak self] in self?.showSettings(.player) }
+        controller.model.clearDesk = { [weak self] in self?.clearDesk ?? UnavailableDeskClearing() }
+        return controller
+    }()
 
     private init(options: LaunchOptions, settings: AppSettings, demo: DemoProvider?) {
         self.options = options

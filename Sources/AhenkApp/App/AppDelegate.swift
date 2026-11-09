@@ -62,6 +62,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment.power.start()
         // The edge light follows the music, the cover and the settings.
         environment.light.start()
+        // Clock, Continue Playing and the player on the desktop.
+        environment.desktopPlayer.start()
         scheduleDemoCommands()
 
         observers.append(ChangeObserver({ settings.general.language }) { [weak self] language in
@@ -134,6 +136,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         // Later steps restore the user's desktop here (wallpaper, hidden apps).
+        environment.desktopPlayer.stop()
         environment.light.stop()
         environment.power.stop()
         // Removes the process tap and its private aggregate device.
