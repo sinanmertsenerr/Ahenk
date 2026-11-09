@@ -1,0 +1,16 @@
+{
+  "type": "hello",
+  "protocol": 1,
+  "minProtocol": 1,
+  "extensionVersion": "1.0.0",
+  "extensionOrigin": "chrome-extension://goajefoldohohgnmcfkpkembdpjbpfde",
+  "browser": {
+    "name": "Microsoft Edge",
+    "version": "142.0.0.0",
+    "brands": [
+      "Microsoft Edge",
+      "Chromium"
+    ]
+  },
+  "profile": "0f3a9c1e5b7d2a4c6e8f0a1b"
+}

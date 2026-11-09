@@ -1,0 +1,33 @@
+{
+  "type": "lyrics",
+  "lyrics": {
+    "tabId": 412,
+    "site": "spotify",
+    "song": {
+      "title": "Lanterns Under Ice",
+      "artist": "Mirela Stoica",
+      "album": "Northbound Postcards",
+      "duration": 223.4,
+      "trackId": "AhenkMockTrackSpotify1"
+    },
+    "lines": [
+      {
+        "start": 4.2,
+        "text": "Frost on the ferry rails"
+      },
+      {
+        "start": 8.9,
+        "end": 12.5,
+        "text": "We counted every light"
+      },
+      {
+        "start": 13,
+        "text": ""
+      },
+      {
+        "start": 17.75,
+        "text": "Northbound, northbound"
+      }
+    ]
+  }
+}

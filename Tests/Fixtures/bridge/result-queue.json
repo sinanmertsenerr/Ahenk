@@ -1,0 +1,27 @@
+{
+  "type": "result",
+  "id": "r8",
+  "ok": true,
+  "queue": [
+    {
+      "index": 0,
+      "song": {
+        "title": "Velvet Harbor Lights",
+        "artist": "Orchid Telemetry",
+        "duration": 214
+      },
+      "current": true
+    },
+    {
+      "index": 1,
+      "song": {
+        "title": "Quiet Engines",
+        "artist": "Nadia Ferro",
+        "album": "Low Orbit Letters",
+        "duration": 187,
+        "trackId": "ahenkMock02"
+      },
+      "current": false
+    }
+  ]
+}

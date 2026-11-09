@@ -1,0 +1,40 @@
+{
+  "type": "tab",
+  "tab": {
+    "tabId": 412,
+    "site": "spotify",
+    "url": "https://open.spotify.com/album/AhenkMockAlbumSpotify1",
+    "title": "Lanterns Under Ice",
+    "artist": "Mirela Stoica",
+    "album": "Northbound Postcards",
+    "artwork": "https://i.scdn.example/image/mock-cover-640",
+    "duration": 223.4,
+    "position": 75.5,
+    "sampledAt": 1762700014000,
+    "rate": 1,
+    "state": "paused",
+    "liked": true,
+    "shuffle": false,
+    "repeat": "all",
+    "trackId": "AhenkMockTrackSpotify1",
+    "trackUrl": "https://open.spotify.com/track/AhenkMockTrackSpotify1",
+    "kind": "music",
+    "can": [
+      "like",
+      "next",
+      "playPause",
+      "playlists",
+      "previous",
+      "repeat",
+      "repeatOne",
+      "search",
+      "seek",
+      "shuffle",
+      "unlike",
+      "volume"
+    ],
+    "volume": 0.8,
+    "active": true,
+    "lastActive": 1762699990000
+  }
+}

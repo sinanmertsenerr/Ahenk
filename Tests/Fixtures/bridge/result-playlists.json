@@ -1,0 +1,18 @@
+{
+  "type": "result",
+  "id": "r7",
+  "ok": true,
+  "tabId": 412,
+  "playlists": [
+    {
+      "id": "37i9mockPlaylist01",
+      "name": "Night Shift Mix",
+      "url": "https://open.spotify.com/playlist/37i9mockPlaylist01",
+      "count": 3
+    },
+    {
+      "id": "37i9mockPlaylist02",
+      "name": "Kıyıdan Sesler"
+    }
+  ]
+}
