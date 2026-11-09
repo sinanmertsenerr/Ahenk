@@ -579,3 +579,10 @@
 
 /* MARK: Ahenk's own player */
 "Listening to Ahenk's own player" = "Ahenk'in kendi oynatıcısı dinleniyor";
+
+/* MARK: Dock */
+"Dock" = "Dock";
+"Show the playing song's cover in the Dock" = "Çalan şarkının kapağını Dock'ta göster";
+"Ahenk's own icon comes back when nothing plays." = "Hiçbir şey çalmadığında Ahenk'in kendi simgesi geri gelir.";
+"A ring that beats along" = "Ritimle atan bir halka";
+"The ring changes a few times a second and stays still while Low Power Mode is on." = "Halka saniyede birkaç kez değişir; Düşük Güç Modu açıkken durgun kalır.";

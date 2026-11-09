@@ -65,6 +65,20 @@ struct PlayerPane: View {
                 )
             }
 
+            Section {
+                ToggleRow(
+                    title: "Show the playing song's cover in the Dock".l10n,
+                    detail: "Ahenk's own icon comes back when nothing plays.".l10n,
+                    isOn: $settings.dock.albumArtIcon
+                )
+                ToggleRow(title: "A ring that beats along".l10n, isOn: $settings.dock.beatRing)
+                    .disabled(!settings.dock.albumArtIcon)
+            } header: {
+                Text("Dock".l10n)
+            } footer: {
+                Text("The ring changes a few times a second and stays still while Low Power Mode is on.".l10n)
+            }
+
             Section("Layout".l10n) {
                 LabeledContent {
                     Button("Reset Layout".l10n, action: resetLayout)

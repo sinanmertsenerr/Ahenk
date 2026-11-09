@@ -49,6 +49,11 @@ final class SmokeRunner {
         if selected("wallpaperSwitch") {
             await report.check("wallpaperSwitch") { try await WallpaperCheck.runSwitch(environment: self.environment, snapshots: self.snapshotDirectory()) }
         }
+        if selected("dockArt") {
+            await report.check("dockArt") {
+                try DockArtCheck.run(palette: self.environment.demo?.songs.first?.palette ?? .neutral, snapshots: self.snapshotDirectory())
+            }
+        }
         if selected("settingsWindow") { await report.check("settingsWindow") { try await self.checkSettingsWindow() } }
         if selected("bridge") {
             await report.check("bridge") { try await BridgeCheck.run(settings: self.environment.settings, snapshots: self.snapshotDirectory()) }

@@ -28,6 +28,8 @@ final class AppEnvironment {
     private(set) lazy var light = EdgeLightController(
         settings: settings, nowPlaying: nowPlaying, features: audio.store, power: power
     )
+    /// The Dock icon as the playing song's cover with a beating ring.
+    private(set) lazy var dockArt = DockArtController(settings: settings, nowPlaying: nowPlaying, features: audio.store, power: power)
     /// The lyrics of the song that plays (started with the services).
     private(set) lazy var lyrics: LyricsController = {
         let controller = LyricsController(

@@ -73,6 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment.light.start()
         // The song's motion artwork or video over the desktop picture.
         environment.wallpaper.start()
+        // The Dock icon becomes the cover with a ring that beats along.
+        environment.dockArt.start()
         // Clock, Continue Playing and the player on the desktop.
         if environment.demo != nil, environment.options.demoBackdrop, let screen = NSScreen.screens.first {
             let backdrop = DemoStage.makeBackdrop(on: screen)
@@ -160,6 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // its own windows: the user's wallpaper setting was never changed.
         environment.deskController.restoreOnQuit()
         environment.wallpaper.stop()
+        environment.dockArt.stop()
         environment.desktopPlayer.stop()
         environment.lyricsSync.stop()
         environment.lyrics.stop()
