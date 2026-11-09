@@ -6,9 +6,11 @@ import Observation
 /// (Settings › Dock Art; the menu's quick toggle).
 ///
 /// Every new tile is a bitmap the Dock process redraws, so the ring runs at
-/// a few frames a second (`DockArtPolicy`), a frame that would look like
-/// the one shown is never sent, a pause leaves one still tile, and with
-/// nothing playing (or the setting off) the Dock shows Ahenk's own icon.
+/// a few frames a second (`DockArtPolicy`), changes in a few steps that are
+/// each drawn once (`DockTileLook`), a frame that would look like the one
+/// shown is never sent, a pause leaves one still tile, and with nothing
+/// playing (or the setting off) the Dock shows Ahenk's own icon. Only music
+/// takes the icon over; a video, a podcast or an advert never does.
 /// Without the system audio permission the ring swells softly every ~2 s
 /// while music plays (like the edge light).
 @MainActor
@@ -23,6 +25,10 @@ final class DockArtController {
     private var motion = DockRingMotion()
     private var shown: DockArtFrame?
     private var coverIdentity: String?
+    /// When the followed song's cover went missing (a new song), and the
+    /// look that follows once the grace has run out.
+    private var coverLostAt: Double?
+    private var coverGrace: DispatchWorkItem?
     private(set) var mode: DockArtMode = .appIcon
     /// Tiles sent to the Dock since launch (measurements, the smoke check).
     private(set) var tilesSent = 0
@@ -59,6 +65,9 @@ final class DockArtController {
         guard isStarted else { return }
         isStarted = false
         observers = []
+        coverGrace?.cancel()
+        coverGrace = nil
+        coverLostAt = nil
         stopTimer()
         removeTile()
     }
@@ -66,18 +75,41 @@ final class DockArtController {
     // MARK: Mode
 
     static func inputs(settings: AppSettings, nowPlaying: NowPlayingModel, power: PowerMonitor) -> DockArtInputs {
-        let snapshot = nowPlaying.snapshot
-        let playing = snapshot.map { $0.isPlaying && AudioCapturePolicy.reactsTo($0) } ?? false
+        // Music only (the light's rule): a video's thumbnail, a podcast or
+        // an advert never takes over the Dock icon, playing or paused.
+        let song = nowPlaying.snapshot.flatMap { AudioCapturePolicy.reactsTo($0) ? $0 : nil }
         return DockArtInputs(
             enabled: settings.dock.albumArtIcon, beatRing: settings.dock.beatRing,
-            hasCover: snapshot != nil && nowPlaying.artwork != nil, isPlaying: playing,
+            hasCover: song != nil && nowPlaying.artwork != nil, isPlaying: song?.isPlaying ?? false,
             optimizedMode: settings.general.optimizedMode, lighterOnBattery: settings.general.lighterOnBattery,
             isOnBattery: power.isOnBattery, isLowPowerMode: power.isLowPowerMode, isThermallyConstrained: power.isThermallyConstrained
         )
     }
 
     private func apply() {
-        let next = DockArtPolicy.mode(Self.inputs(settings: settings, nowPlaying: nowPlaying, power: power))
+        var inputs = Self.inputs(settings: settings, nowPlaying: nowPlaying, power: power)
+        // A new song's cover is on its way: the last cover stays a moment
+        // instead of Ahenk's icon flashing between songs.
+        let now = AudioClock.now()
+        let hasSong = nowPlaying.snapshot.map(AudioCapturePolicy.reactsTo) ?? false
+        if hasSong, !inputs.hasCover, view?.hasCover == true {
+            if coverLostAt == nil {
+                coverLostAt = now
+                let work = DispatchWorkItem { [weak self] in self?.apply() }
+                coverGrace = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + DockArtPolicy.coverGrace + 0.05, execute: work)
+            }
+        } else {
+            coverLostAt = nil
+            coverGrace?.cancel()
+            coverGrace = nil
+        }
+        if DockArtPolicy.holdsLastCover(
+            hasSong: hasSong, hasCover: inputs.hasCover, showsCover: view?.hasCover == true, sinceLost: now - (coverLostAt ?? now)
+        ) {
+            inputs.hasCover = true
+        }
+        let next = DockArtPolicy.mode(inputs)
         let changed = next != mode
         mode = next
         switch next {
@@ -87,7 +119,7 @@ final class DockArtController {
         case .still:
             stopTimer()
             showTile()
-            send(.still(progress: progress(), turn: shown?.turn ?? 0), force: changed)
+            send(.still(progress: progress()), force: changed)
         case .animated(let fps):
             showTile()
             startTimer(framesPerSecond: fps)
@@ -108,15 +140,14 @@ final class DockArtController {
 
     private func coverChanged() {
         guard let artwork = nowPlaying.artwork else {
+            // The tile keeps its cover until the next one arrives or the
+            // grace runs out (`apply`).
             coverIdentity = nil
-            view?.cover = nil
             return
         }
         guard artwork.identifier != coverIdentity else { return }
         coverIdentity = artwork.identifier
-        let side = Int(NSApp.dockTile.size.width * 2)
-        view?.cover = DockTileRenderer.roundCover(artwork.image, pixelSide: side)
-        view?.colors = DockTileRenderer.ringColors(artwork.palette)
+        view?.setArtwork(artwork.image, colors: DockTileRenderer.ringColors(artwork.palette))
         shown = nil
         if mode != .appIcon { apply() }
     }
@@ -126,8 +157,7 @@ final class DockArtController {
         let tile = NSApp.dockTile
         let view = DockTileView(frame: NSRect(origin: .zero, size: tile.size))
         if let artwork = nowPlaying.artwork {
-            view.cover = DockTileRenderer.roundCover(artwork.image, pixelSide: Int(tile.size.width * 2))
-            view.colors = DockTileRenderer.ringColors(artwork.palette)
+            view.setArtwork(artwork.image, colors: DockTileRenderer.ringColors(artwork.palette))
             coverIdentity = artwork.identifier
         }
         self.view = view

@@ -27,6 +27,16 @@ struct DockArtTests {
         #expect(DockArtPolicy.normalFramesPerSecond <= 12 && DockArtPolicy.lighterFramesPerSecond < DockArtPolicy.normalFramesPerSecond)
     }
 
+    @Test("A new song's cover gets a moment to arrive before Ahenk's icon comes back")
+    func coverGrace() {
+        #expect(DockArtPolicy.holdsLastCover(hasSong: true, hasCover: false, showsCover: true, sinceLost: 0))
+        #expect(DockArtPolicy.holdsLastCover(hasSong: true, hasCover: false, showsCover: true, sinceLost: DockArtPolicy.coverGrace - 0.1))
+        #expect(!DockArtPolicy.holdsLastCover(hasSong: true, hasCover: false, showsCover: true, sinceLost: DockArtPolicy.coverGrace), "a song without a cover: the icon")
+        #expect(!DockArtPolicy.holdsLastCover(hasSong: false, hasCover: false, showsCover: true, sinceLost: 0), "nothing plays: the icon at once")
+        #expect(!DockArtPolicy.holdsLastCover(hasSong: true, hasCover: false, showsCover: false, sinceLost: 0), "no cover to keep")
+        #expect(!DockArtPolicy.holdsLastCover(hasSong: true, hasCover: true, showsCover: true, sinceLost: 0), "the cover is there")
+    }
+
     @Test("A beat swells the ring at once and it fades within the beat, also when frames are far apart")
     func beatSwell() {
         var motion = DockRingMotion()
@@ -68,23 +78,41 @@ struct DockArtTests {
         }
     }
 
-    @Test("Silence and pauses give a still ring; the colours step on with every beat")
-    func stillAndTurning() {
+    @Test("Silence and pauses give a still ring")
+    func still() {
         var motion = DockRingMotion()
         let quiet = motion.frame(features: features(beatIndex: 3, silent: true), at: 0, progress: 0.5, isPlaying: true)
         #expect(!quiet.isPlaying && quiet.pulse == 0 && quiet.progress == 0.5)
         _ = motion.frame(features: features(beatIndex: 3), at: 1, progress: 0.5, isPlaying: true)
-        let first = motion.frame(features: features(beatIndex: 4), at: 2, progress: 0.5, isPlaying: true)
-        let settled = motion.frame(features: features(beatIndex: 4, beatPhase: 0.9), at: 2.45, progress: 0.5, isPlaying: true)
-        #expect(abs(settled.turn - DockRingMotion.turnPerBeat) < 1e-9)
-        #expect(first.turn < settled.turn)
+        let beat = motion.frame(features: features(beatIndex: 4), at: 2, progress: 0.5, isPlaying: true)
+        #expect(beat.isPlaying && beat.pulse > 0.8)
         let paused = motion.frame(features: features(beatIndex: 4), at: 3, progress: 0.6, isPlaying: false)
-        #expect(paused == .still(progress: 0.6, turn: settled.turn), "a pause keeps the colours where they were")
+        #expect(paused == .still(progress: 0.6))
+    }
+
+    @Test("The tile changes in a few steps, so each look is drawn once and copied afterwards")
+    func looks() {
+        let calm = DockTileLook(DockArtFrame(pulse: 0.02, level: 0.7, progress: 0.3, isPlaying: true))
+        #expect(calm.pulseStep == 0 && calm.isLoud && calm.isPlaying)
+        #expect(DockTileLook(DockArtFrame(pulse: 1, level: 0.2, progress: 0, isPlaying: true)) == DockTileLook(DockArtFrame(pulse: 0.97, level: 0.4, progress: 0.9, isPlaying: true)))
+        #expect(DockTileLook(.still(progress: 0.4)) == DockTileLook(.still(progress: 0.9)), "the progress arc is not part of the look")
+        #expect(DockTileLook(DockArtFrame(pulse: 0.8, level: 0.9, progress: 0, isPlaying: false)).pulseStep == 0, "paused: one look")
+        // Every look a song can take, and the frame drawn for each.
+        var seen: Set<DockTileLook> = [DockTileLook(.still(progress: 0))]
+        for pulse in stride(from: 0.0, through: 1.0, by: 0.01) {
+            for level in [0.0, 0.49, 0.5, 1.0] {
+                let look = DockTileLook(DockArtFrame(pulse: pulse, level: level, progress: 0, isPlaying: true))
+                seen.insert(look)
+                #expect(DockTileLook(look.frame(progress: 0.5)) == look, "drawing a look's frame gives that look")
+                #expect(abs(look.frame().pulse - pulse) <= 0.5 / Double(DockTileLook.pulseSteps) + 1e-9)
+            }
+        }
+        #expect(seen.count == DockTileLook.count && DockTileLook.count <= 32, "few enough to keep as pictures")
     }
 
     @Test("Frames that would look the same are not sent to the Dock")
     func differs() {
-        let base = DockArtFrame(pulse: 0.5, level: 0.6, progress: 0.25, turn: 0.1, isPlaying: true)
+        let base = DockArtFrame(pulse: 0.5, level: 0.6, progress: 0.25, isPlaying: true)
         #expect(DockRingMotion.differs(base, from: nil))
         #expect(!DockRingMotion.differs(base, from: base))
         var tiny = base
@@ -93,22 +121,37 @@ struct DockArtTests {
         tiny.progress += 0.001
         #expect(!DockRingMotion.differs(tiny, from: base))
         var pulse = base
-        pulse.pulse += 0.08
+        pulse.pulse += 0.1
         #expect(DockRingMotion.differs(pulse, from: base))
+        var louder = base
+        louder.level = 0.95
+        #expect(!DockRingMotion.differs(louder, from: base), "loudness alone changes the tile only between quiet and loud")
+        louder.level = 0.2
+        #expect(DockRingMotion.differs(louder, from: base))
         var progress = base
         progress.progress += 2.0 / 360
         #expect(DockRingMotion.differs(progress, from: base))
-        // Across the colours' seam: 0.999 and 0.001 are 0.72° apart.
-        let a = DockArtFrame(pulse: 0, level: 0, progress: 0, turn: 0.999, isPlaying: true)
-        let b = DockArtFrame(pulse: 0, level: 0, progress: 0, turn: 0.001, isPlaying: true)
-        #expect(!DockRingMotion.differs(a, from: b))
-        #expect(DockRingMotion.differs(DockArtFrame.still(progress: 0.25, turn: 0.1), from: base))
+        #expect(DockRingMotion.differs(DockArtFrame.still(progress: 0.25), from: base))
+        // A beat at 120 BPM seen at 10 fps: the swell, its fading, then nothing new until the next beat.
+        var motion = DockRingMotion()
+        var shown: DockArtFrame?
+        var sent = 0
+        for index in 0..<40 {
+            let time = Double(index) / 10
+            let beats = Int(time / 0.5)
+            let frame = motion.frame(features: features(beatIndex: beats, beatPhase: Float((time - Double(beats) * 0.5) / 0.5)), at: time, progress: 0.3, isPlaying: true)
+            if DockRingMotion.differs(frame, from: shown) {
+                shown = frame
+                sent += 1
+            }
+        }
+        #expect(sent >= 16 && sent <= 40, "\(sent) tiles in 4 s")
     }
 
     @Test("The ring grows with the swell and always fits in the tile")
     func geometry() {
-        let calm = DockRingGeometry.of(DockArtFrame(pulse: 0, level: 0.5, progress: 0, turn: 0, isPlaying: true))
-        let full = DockRingGeometry.of(DockArtFrame(pulse: 1, level: 1, progress: 0, turn: 0, isPlaying: true))
+        let calm = DockRingGeometry.of(DockArtFrame(pulse: 0, level: 0.5, progress: 0, isPlaying: true))
+        let full = DockRingGeometry.of(DockArtFrame(pulse: 1, level: 1, progress: 0, isPlaying: true))
         let paused = DockRingGeometry.of(.still(progress: 0))
         #expect(full.ringWidth > calm.ringWidth && full.glowOpacity > calm.glowOpacity && full.ringRadius > calm.ringRadius)
         #expect(paused.glowRadius == 0 && paused.ringWidth < calm.ringWidth)
@@ -116,7 +159,7 @@ struct DockArtTests {
             #expect(geometry.outerReach <= 0.5, "the ring stays inside the tile")
             #expect(geometry.ringRadius - geometry.ringWidth / 2 > geometry.coverRadius, "the ring never covers the cover")
         }
-        let clamped = DockArtFrame(pulse: 4, level: -1, progress: 2, turn: -0.25, isPlaying: true)
-        #expect(clamped.pulse == 1 && clamped.level == 0 && clamped.progress == 1 && abs(clamped.turn - 0.75) < 1e-12)
+        let clamped = DockArtFrame(pulse: 4, level: -1, progress: 2, isPlaying: true)
+        #expect(clamped.pulse == 1 && clamped.level == 0 && clamped.progress == 1)
     }
 }
