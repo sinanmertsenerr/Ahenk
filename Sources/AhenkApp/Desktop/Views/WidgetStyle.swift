@@ -56,9 +56,11 @@ private struct WidgetGlass<S: InsettableShape>: ViewModifier {
 
     func body(content: Content) -> some View {
         if snapshot {
+            // Translucent, as the glass looks over a calm wallpaper (the
+            // snapshots' backdrops are smooth, so no blur is missed).
             content
-                .background(shape.fill(Color(white: 0.11)).overlay(shape.fill(tint.opacity(0.55))))
-                .overlay(shape.strokeBorder(.white.opacity(0.12), lineWidth: 0.5))
+                .background(shape.fill(Color(white: 0.07).opacity(0.62)).overlay(shape.fill(tint.opacity(0.42))))
+                .overlay(shape.strokeBorder(.white.opacity(0.14), lineWidth: 0.5))
         } else if #available(macOS 26, *) {
             // A faint shade under the content keeps white text readable on
             // bright wallpapers, where small glass turns almost clear.
