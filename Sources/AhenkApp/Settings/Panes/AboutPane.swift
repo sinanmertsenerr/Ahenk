@@ -27,6 +27,8 @@ struct AboutPane: View {
                 }
             }
             .padding(.top, 6)
+            Acknowledgements()
+                .padding(.top, 10)
             Spacer(minLength: 0)
             Text("© 2026 Sinan Mert Sener · MIT License".l10n)
                 .font(.footnote)
@@ -74,6 +76,43 @@ struct AppMark: View {
                 )
         }
         .accessibilityHidden(true)
+    }
+}
+
+/// Who Ahenk builds on: the code it carries, the tool it can use, and the
+/// public services it asks for song details.
+struct Acknowledgements: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Acknowledgements".l10n)
+                .font(.headline)
+            row(
+                name: "mediaremote-adapter",
+                detail: "Reads what plays on macOS 15.4 and later. BSD 3-Clause License, included in Ahenk.".l10n
+            )
+            row(
+                name: "whisper.cpp",
+                detail: "Times plain lyrics on this Mac. MIT License. Optional: you install it yourself (brew install whisper-cpp); Ahenk does not include it or any speech model.".l10n
+            )
+            row(
+                name: "Apple, LRCLIB, Musixmatch, NetEase, ListenBrainz, YouTube",
+                detail: "Covers, albums and search from Apple's public catalog; lyrics from LRCLIB, Musixmatch and NetEase; Spotify song IDs from ListenBrainz; music videos in YouTube's embedded player.".l10n
+            )
+        }
+        .frame(maxWidth: 520, alignment: .leading)
+        .padding(16)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func row(name: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(verbatim: name)
+                .font(.callout.weight(.semibold))
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 

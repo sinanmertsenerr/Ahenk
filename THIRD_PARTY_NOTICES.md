@@ -76,3 +76,18 @@ part of Ahenk and covered by its MIT License.
   time and subject to YouTube's terms), and the user's own videos play from
   where they are. Searches and catalog answers (titles, IDs, lengths) are
   cached in `~/Library/Caches/Ahenk/Catalog`.
+
+## whisper.cpp (optional, not included)
+
+- Upstream: https://github.com/ggml-org/whisper.cpp (MIT License)
+- Ahenk does not include whisper.cpp or any speech model. "Align Lyrics"
+  (Beta) runs a `whisper-cli` the user installed (for example with
+  `brew install whisper-cpp`) and a `ggml-*.bin` model already on the Mac.
+  **Download the Model** fetches the suggested model from the whisper.cpp
+  project's model page on Hugging Face only when the user presses it, into
+  `~/Library/Application Support/Ahenk/Models`.
+
+## App icon
+
+The app icon is drawn by `Scripts/make-icon.swift` for Ahenk and is covered
+by its MIT License.

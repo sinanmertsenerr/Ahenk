@@ -743,3 +743,7 @@
 "The menu bar icon holds quick switches, Clear Desk and Settings." = "Menü çubuğundaki simgede hızlı anahtarlar, Masayı Temizle ve Ayarlar bulunur.";
 "On battery and in Low Power Mode Ahenk runs lighter by itself; Optimized Mode in Settings › General makes it lighter always." = "Pilde ve Düşük Güç Modunda Ahenk kendiliğinden daha hafif çalışır; Ayarlar › Genel bölümündeki Optimize Edilmiş Mod onu her zaman hafifletir.";
 "Open this guide again from the menu bar menu or Settings › General." = "Bu rehberi menü çubuğu menüsünden ya da Ayarlar › Genel bölümünden yeniden açabilirsiniz.";
+"Acknowledgements" = "Teşekkürler";
+"Reads what plays on macOS 15.4 and later. BSD 3-Clause License, included in Ahenk." = "macOS 15.4 ve sonrasında neyin çaldığını okur. BSD 3 Maddeli Lisans; Ahenk'le birlikte gelir.";
+"Times plain lyrics on this Mac. MIT License. Optional: you install it yourself (brew install whisper-cpp); Ahenk does not include it or any speech model." = "Zamansız şarkı sözlerini bu Mac'te şarkıya hizalar. MIT Lisansı. İsteğe bağlıdır: kendiniz kurarsınız (brew install whisper-cpp); Ahenk onu da, herhangi bir konuşma modelini de içermez.";
+"Covers, albums and search from Apple's public catalog; lyrics from LRCLIB, Musixmatch and NetEase; Spotify song IDs from ListenBrainz; music videos in YouTube's embedded player." = "Kapaklar, albümler ve arama için Apple'ın herkese açık kataloğu; şarkı sözleri için LRCLIB, Musixmatch ve NetEase; Spotify şarkı kimlikleri için ListenBrainz; müzik videoları için YouTube'un yerleştirilmiş oynatıcısı kullanılır.";
