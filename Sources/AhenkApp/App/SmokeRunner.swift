@@ -759,7 +759,13 @@ final class SmokeRunner {
             model.setSize(.large)
             let clockSize = NSHostingView(rootView: ClockWidget(clock: clock, model: model, settings: settings.player, measuring: true)).fittingSize
             guard clockSize.width > 100, clockSize.height > 100 else { throw SmokeFailure("the clock measures \(clockSize)") }
+            // The question asked in the player while two sources play.
+            let players = [PlayerID(source: .demo), PlayerID(source: .demo, bundleIdentifier: "com.sinanmertsener.Ahenk.demo-b")]
+            let question = ConflictQuestion(
+                conflict: PlaybackConflict(players: players, since: Date()), services: environment.services, tint: model.theme.glass
+            )
             let others: [(String, AnyView, CGSize)] = [
+                ("conflict", AnyView(question.padding(10)), CGSize(width: 560, height: 56)),
                 ("clock", AnyView(ClockWidget(clock: clock, model: model, settings: settings.player)), clockSize),
                 ("list", AnyView(ContinuePlayingWidget(model: model)), CGSize(width: 328, height: 528)),
                 ("queue-panel", AnyView(QueuePanel(model: model)), CGSize(width: PlayerLayout.queueWidth + 2 * PlayerLayout.margin, height: 460)),

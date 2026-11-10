@@ -380,6 +380,49 @@ struct VolumeSlider: View {
 
 // MARK: - Status
 
+/// "Which one should Ahenk follow?" while two sources play at once, with a
+/// button per player (the newest start first); the answer is followed
+/// and, with "pause the previous source" on, the others pause.
+struct ConflictQuestion: View {
+    let conflict: PlaybackConflict
+    let services: NowPlayingServices
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "questionmark.circle.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.9))
+            Text("Which one should Ahenk follow?".l10n)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+            ForEach(conflict.players.prefix(3), id: \.self) { player in
+                Button {
+                    services.choose(player)
+                } label: {
+                    Text(services.displayName(for: player))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.white.opacity(0.16), in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 6)
+        .padding(.vertical, 5)
+        .widgetGlass(Capsule(), tint: tint)
+        .frame(maxWidth: 560)
+        .fixedSize(horizontal: true, vertical: true)
+        .accessibilityElement(children: .contain)
+    }
+}
+
 /// A short message: what happened after a click, or why it could not.
 struct StatusToast: View {
     let status: PlayerStatus

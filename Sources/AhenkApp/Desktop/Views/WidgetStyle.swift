@@ -391,7 +391,7 @@ enum DesktopSymbols {
         "arrow.clockwise", "arrow.down.right.and.arrow.up.left", "arrow.up.left.and.arrow.down.right", "backward.fill",
         "checkmark", "checkmark.circle.fill", "chevron.down", "chevron.left", "e.square.fill", "ellipsis",
         "exclamationmark.triangle.fill", "eye.slash", "forward.fill", "gearshape", "globe", "heart", "heart.fill",
-        "list.bullet", "magnifyingglass", "minus.circle", "minus.circle.fill", "moon", "moon.fill", "music.mic",
+        "list.bullet", "magnifyingglass", "minus.circle", "minus.circle.fill", "moon", "moon.fill", "music.mic", "questionmark.circle.fill",
         "music.note", "music.note.list", "pause.fill", "play.fill", "plus", "quote.bubble", "quote.bubble.fill",
         "rectangle.3.group", "repeat", "repeat.1", "shuffle", "sparkles", "speaker.slash.fill", "speaker.wave.1.fill",
         "speaker.wave.2.fill", "speaker.wave.3.fill", "square.stack", "text.append",

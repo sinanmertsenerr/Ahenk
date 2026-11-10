@@ -105,7 +105,12 @@ struct PlayerWidget: View {
 
     @ViewBuilder
     private func statusArea(theme: PlayerTheme) -> some View {
-        if let status = model.status {
+        if let conflict = model.services.state.conflict {
+            // Two sources play at once: the question is asked here, where
+            // the music is, as well as in the menu bar menu.
+            ConflictQuestion(conflict: conflict, services: model.services, tint: theme.glass)
+                .transition(.opacity.combined(with: .offset(y: 6)))
+        } else if let status = model.status {
             StatusToast(status: status, tint: theme.glass) { model.clearStatus() }
                 .id(status.id)
                 .transition(.opacity.combined(with: .offset(y: 6)))
