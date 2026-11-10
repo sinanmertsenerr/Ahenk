@@ -2207,8 +2207,8 @@ Settings                                General › Startup (open at login, Open
 Scripts/make-icon.swift                 draws the app icon → AppIcon.icns + AppIcon.png (make-app.sh runs it when it changes)
 Scripts/make-screenshots.sh             smoke run with snapshots + gallery → docs/screenshots (and the icon)
 docs/screenshots/                       the README's pictures (demo content only, drawn offscreen)
-Tests/AhenkKitTests/                    562 tests in 95 suites (was 555/94): OnboardingTests (pages, policy, versions, the
-                                        manifests' version), LaunchOptions (--welcome, --power); 25 node tests (unchanged)
+Tests/AhenkKitTests/                    563 tests in 95 suites (was 555/94): OnboardingTests (pages, policy, closing, versions,
+                                        the manifests' version), LaunchOptions (--welcome, --power); 25 node tests (unchanged)
 ```
 
 **The first-run guide.** A 640 × 560 window ("Welcome to Ahenk") that opens by itself on the first normal launch
@@ -2225,8 +2225,9 @@ Settings › General › **Open the Guide…**. Five pages with a dot indicator,
    "Reload it" below 1.2.0), and **reload it (1.2.0) for the speed of Nightcore and Slowed in a tab**.
 5. **Open Ahenk at login**, where the menu bar icon is, the lighter modes, how to open the guide again.
 
-Closing the window any way (including quitting Ahenk while it is open) counts as done, so it never nags. Demo runs show
-every page and ask for nothing ("Demo mode asks for nothing."; no permission button, the login switch disabled);
+Closing the window any way in a normal run (including quitting Ahenk while it is open) counts as done, so it never
+nags; in a demo run it does not (a plain `--demo` shares the user's stored settings). Demo runs show every page and ask
+for nothing ("Demo mode asks for nothing."; no permission button, the login switch disabled);
 `--welcome` opens it in a demo or normal run.
 
 **Open at login** is the system's state, never stored: `SMAppService.mainApp.status` (enabled → on, requiresApproval → on
@@ -2261,7 +2262,7 @@ the effects and alignment panels, the guide, and Settings › Edge Light / Sound
 ### Build, run, verify
 
 ```sh
-swift build && ./Scripts/test.sh      # 562 Swift tests + 25 node tests, no warnings
+swift build && ./Scripts/test.sh      # 563 Swift tests + 25 node tests, no warnings
 ./Scripts/make-app.sh && ./Scripts/smoke.sh --snapshots   # 31 checks; onboarding-<page>-<lang>.png, desktop-conflict-<lang>.png
 ./Scripts/make-screenshots.sh         # docs/screenshots (needs dist/Ahenk.app)
 open -n dist/Ahenk.app --args --demo --welcome            # the guide in the demo (asks for nothing)
@@ -2418,6 +2419,11 @@ Every item of the feature spec, checked against the code, the tests, the smoke r
 - The whisper.cpp/real-song, real-site, muted-tap, Clear Desk and Automation gaps of Steps 2–10 are unchanged (see
   their notes): this step did nothing audible and touched no music, app or browser.
 - The README pictures are offscreen renders: the window server's real glass, blur and shadows are not in them.
+- **A slip, undone:** one check run of `--demo --welcome` (a plain demo shares the stored settings) closed the guide on
+  quit and wrote `general.onboardingCompleted = true` into the user's real settings. It was set back to false with
+  `defaults export` / `plutil` / `defaults import` (only that key changed; Ahenk was not running), and closing the guide
+  in a demo run no longer counts (`OnboardingPolicy.closingCountsAsSeen`, tested), so the guide opens on the first
+  normal launch.
 - CPU numbers vary by ±0.5 point between runs; all were taken in one sitting on the power adapter (battery and Low Power
   Mode were simulated with `--power`, not real).
 - The test run's start-up standstill (Step 10's note) was not looked into further: both full runs passed (562/562,
