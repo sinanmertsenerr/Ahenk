@@ -2536,6 +2536,17 @@ Not a plan step: fixes and changes asked for while using 1.0.0, one commit each 
   codec line): here AV1 1920×1080 at 25 frames, shown at 960×540 points @2x. The count over the first 8 s reads 15 a
   second (it includes the seek to the song's position); not looked into. The player's title, logo, cards and end screen
   are also hidden by name; the text the user saw at a video's start was not reproduced in two recorded starts.
+- **A doubtful "official" video is looked at twice** (`YouTubeMusicMatcher`). Two songs got the wrong video because
+  YouTube Music's own filing was wrong. "Before I Die" (4:05): the result filed as official is a live cut of 4:53 on
+  the artists' channel, the real video (4:22) is on the label's channel and filed as an upload. "KHRBR" (3:49 on
+  Spotify, a shortened release): the result filed as official (4:45) is a lyric video whose real YouTube title says so,
+  the video itself only exists as re-uploads (4:44), and the label's own upload is a still cover. Now, when the official
+  video is more than 30 s from the song's length: an upload that YouTube ranks above it, named after the song and two
+  of its artists (not another take, not a lyric video), within 25 s of the song and at least 20 s closer, is the video
+  (`closerUpload`); else the official one's real title is read from YouTube's oEmbed, and if that says lyric video or
+  another take, the first named upload above it is taken, or the next official one (`uploadAbove`). A first version
+  without "ranked above" picked an 80-view cut-down copy for KHRBR. Seen in the log for both songs after the change.
+  Cache key `ytm-match:v4`. The KHRBR video is 55 s longer than the song, so it loops instead of following.
 Checks on the final tree: `./Scripts/test.sh` 570/570 with the node tests (twice), `./Scripts/smoke.sh` passed (31
 subsystems), `./Scripts/make-app.sh` signed with the Apple Development identity, installed to /Applications with
 `./Scripts/install.sh --no-build`. Every commit builds with its tests (`swift build --build-tests` in a worktree); the
