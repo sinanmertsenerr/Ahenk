@@ -51,7 +51,7 @@ struct LyricsPane: View {
             Section {
                 ToggleRow(
                     title: "Sync automatically".l10n,
-                    detail: "Listens to the song on this Mac to keep the lines on time. Nothing is recorded.".l10n,
+                    detail: "Listens to the song on this Mac to keep the lines on time. Nothing is kept or sent anywhere.".l10n,
                     isOn: $settings.lyrics.autoSync
                 )
                 SliderRow(

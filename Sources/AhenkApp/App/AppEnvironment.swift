@@ -68,6 +68,11 @@ final class AppEnvironment {
         let sync = LyricsAutoSync(lyrics: lyrics, nowPlaying: nowPlaying, audio: audio, settings: settings)
         // One listener at a time: alignment has the audio while it works.
         sync.isSuspended = { [weak self] in self?.aligner.isBusy ?? false }
+        // whisper is not for a Mac that should run lighter.
+        sync.mayRecognize = { [weak self] in
+            guard let power = self?.power else { return false }
+            return !power.isLowPowerMode && !power.isThermallyConstrained
+        }
         return sync
     }()
     /// The live wallpaper on every display (started with the services).

@@ -368,7 +368,7 @@
 "Count down to the next line in instrumental parts" = "Enstrümantal bölümlerde sıradaki satıra geri say";
 "Timing" = "Zamanlama";
 "Sync automatically" = "Otomatik eşzamanla";
-"Listens to the song on this Mac to keep the lines on time. Nothing is recorded." = "Satırlar zamanında gelsin diye şarkıyı bu Mac'te dinler. Hiçbir şey kaydedilmez.";
+"Listens to the song on this Mac to keep the lines on time. Nothing is kept or sent anywhere." = "Satırlar zamanında gelsin diye şarkıyı bu Mac'te dinler. Hiçbir şey saklanmaz, hiçbir yere gönderilmez.";
 "Align lyrics on this Mac (Beta)" = "Sözleri bu Mac'te hizala (Beta)";
 "For songs without synced lyrics. Everything runs on this Mac." = "Eşzamanlı sözü olmayan şarkılar için. Her şey bu Mac'te yapılır.";
 "Speech model" = "Konuşma modeli";

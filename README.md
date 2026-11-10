@@ -46,7 +46,9 @@ browser, any app that shows what is playing, and your own song files.
   them can be hidden.
 - **Lyrics timed on your Mac (Beta).** For a song with only plain words (or
   none: search for them or paste them), whisper.cpp hears the sung words on
-  your Mac and Ahenk gives every line and word its time.
+  your Mac and Ahenk gives every line and word its time. A music video on
+  YouTube or YouTube Music that runs apart from the album's recording (an
+  intro) gets its lyrics moved into step the same way, by itself.
 - **Live wallpaper.** While a song plays, the album's motion artwork (Apple's
   catalog), the song's music video or another one by the same artist
   (YouTube's embedded player, muted) or the moving cover melts in over your
@@ -257,7 +259,9 @@ uygulamayı ve kendi şarkı dosyalarınızı izler.
 - **Mac'inizde zamanlanan sözler (Beta).** Yalnızca zamansız sözleri olan
   (ya da hiç sözü olmayan: arayıp bulun veya yapıştırın) bir şarkıda
   whisper.cpp söylenen sözleri Mac'inizde duyar, Ahenk de her satıra ve
-  sözcüğe zamanını verir.
+  sözcüğe zamanını verir. YouTube veya YouTube Music'teki bir müzik videosu
+  albüm kaydından farklı ilerliyorsa (örneğin başında bir giriş sahnesi
+  varsa) Ahenk sözleri aynı yolla kendiliğinden videoya göre kaydırır.
 - **Canlı duvar kâğıdı.** Şarkı çalarken albümün hareketli kapağı (Apple'ın
   kataloğundan), şarkının müzik videosu ya da aynı sanatçının başka bir
   videosu (YouTube'un yerleştirilmiş oynatıcısında, sessiz) veya hareket eden
