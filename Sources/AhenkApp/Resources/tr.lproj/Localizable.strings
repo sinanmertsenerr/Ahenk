@@ -694,3 +694,14 @@
 "Choose folders of songs; Ahenk plays them itself." = "Şarkı klasörlerini seçin; Ahenk onları kendisi çalar.";
 "Drop a folder of songs on Continue Playing, or add one here." = "Bir şarkı klasörünü Çalmaya Devam Et listesine bırakın ya da buradan ekleyin.";
 "Ahenk plays these songs itself, with the light, lyrics and covers. It reads their tags and covers from the files; nothing is copied or uploaded." = "Ahenk bu şarkıları kendisi çalar; ışık, sözler ve kapaklar da onlarla çalışır. Etiketleri ve kapakları dosyalardan okur; hiçbir şey kopyalanmaz ya da yüklenmez.";
+
+/* MARK: Startup */
+"Startup" = "Başlangıç";
+"Open Ahenk at login" = "Oturum açıldığında Ahenk'i aç";
+"Ahenk is switched off in System Settings › General › Login Items." = "Ahenk, Sistem Ayarları › Genel › Oturum Açma Öğeleri bölümünde kapalı.";
+"Open Login Items…" = "Oturum Açma Öğelerini Aç…";
+"Not changed in demo mode." = "Demo modunda değiştirilmez.";
+"Ahenk starts in the menu bar when you log in, without opening a window." = "Oturum açtığınızda Ahenk, pencere açmadan menü çubuğunda başlar.";
+"Ahenk starts only when you open it." = "Ahenk yalnızca siz açtığınızda başlar.";
+"Waiting for your approval in System Settings." = "Sistem Ayarları'nda onayınızı bekliyor.";
+"Only the Ahenk app can open at login." = "Oturum açıldığında yalnızca Ahenk uygulaması açılabilir.";

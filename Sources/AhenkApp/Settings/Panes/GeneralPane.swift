@@ -38,6 +38,12 @@ struct GeneralPane: View {
                 Text("Ahenk keeps this language even when your Mac uses another one.".l10n)
             }
 
+            Section {
+                LoginItemToggle(loginItem: environment.loginItem)
+            } header: {
+                Text("Startup".l10n)
+            }
+
             Section("Performance".l10n) {
                 ToggleRow(
                     title: "Optimized Mode".l10n,

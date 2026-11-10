@@ -16,6 +16,9 @@ final class AppEnvironment {
     let audio: AudioTapEngine
     /// Battery, Low Power Mode and heat (lighter drawing).
     let power: PowerMonitor
+    /// "Open Ahenk at login" (the system's login item; never changed by
+    /// demo and smoke runs).
+    let loginItem: LoginItem
     /// Present in `--demo` and `--smoke`.
     let demo: DemoProvider?
     /// Ahenk plays song files itself (the Local source).
@@ -117,6 +120,7 @@ final class AppEnvironment {
         self.demo = demo
         self.nowPlaying = NowPlayingModel()
         power = PowerMonitor(simulated: options.mode == .demo ? options.simulatedPower : nil)
+        loginItem = LoginItem(canChange: options.mode == .normal)
         deskController = options.mode == .normal
             ? ClearDeskController(workspace: SystemDeskWorkspace(), store: ClearDeskStore(fileURL: ClearDeskStore.standardURL))
             : ClearDeskController(workspace: InventedDeskWorkspace.demo(), store: ClearDeskStore(fileURL: nil))
