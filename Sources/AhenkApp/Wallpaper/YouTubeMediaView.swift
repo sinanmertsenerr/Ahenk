@@ -62,6 +62,31 @@ final class YouTubeMediaView: WallpaperMediaView {
           ['play', 'playing', 'volumechange', 'loadedmetadata'].forEach(function (name) {
             document.addEventListener(name, hush, true);
           });
+          // The picture's size and how many frames a second really show.
+          var measured = false;
+          document.addEventListener('playing', function (event) {
+            var media = event.target;
+            if (measured || !media || media.tagName !== 'VIDEO') return;
+            measured = true;
+            var first = media.getVideoPlaybackQuality ? media.getVideoPlaybackQuality().totalVideoFrames : 0;
+            setTimeout(function () {
+              var q = media.getVideoPlaybackQuality ? media.getVideoPlaybackQuality() : null;
+              try {
+                window.webkit.messageHandlers.\(YouTubeEmbed.messageHandler).postMessage({
+                  type: 'stats', width: media.videoWidth, height: media.videoHeight,
+                  fps: q ? (q.totalVideoFrames - first) / 8 : 0, dropped: q ? q.droppedVideoFrames : 0,
+                  box: Math.round(media.clientWidth) + 'x' + Math.round(media.clientHeight) + '@' + window.devicePixelRatio,
+                  nerd: (function () {
+                    try {
+                      var p = document.getElementById('movie_player');
+                      var n = p && p.getStatsForNerds ? p.getStatsForNerds() : null;
+                      return n ? [n.codecs, n.resolution, n.color, n.optimal_res || ''].join(' | ') : 'none';
+                    } catch (e) { return 'error ' + e; }
+                  })()
+                });
+              } catch (e) {}
+            }, 8000);
+          }, true);
         })();
         """,
         injectionTime: .atDocumentStart, forMainFrameOnly: false
@@ -80,7 +105,15 @@ final class YouTubeMediaView: WallpaperMediaView {
           var style = document.createElement('style');
           style.textContent =
             'body *:not(video):not(:has(video)) { visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }' +
-            'html, body { background: #000 !important; }';
+            'html, body { background: #000 !important; }' +
+            // The player's own title, logo, cards and end screen by name
+            // as well: they are gone before the rule above is worked out
+            // for a player that is still building itself.
+            '.ytp-chrome-top, .ytp-chrome-bottom, .ytp-gradient-top, .ytp-gradient-bottom, .ytp-title, .ytp-watermark,' +
+            '.ytp-pause-overlay, .ytp-ce-element, .ytp-cards-teaser, .ytp-cards-button, .ytp-paid-content-overlay,' +
+            '.ytp-endscreen-content, .ytp-spinner, .ytp-bezel, .ytp-cued-thumbnail-overlay, .ytp-large-play-button,' +
+            '.iv-branding, .annotation, .ytp-impression-link, .ytp-overflow-button, .ytp-tooltip, .ytp-popup' +
+            '{ display: none !important; }';
           (document.head || document.documentElement).appendChild(style);
         })();
         """,
@@ -237,6 +270,10 @@ final class YouTubeMediaView: WallpaperMediaView {
                 Self.log.error("Wallpaper video element not silent (muted \(muted), volume \(volume)); muting again")
                 run("window.ahenk && window.ahenk.play()")
             }
+            return
+        }
+        if let message = body as? [String: Any], message["type"] as? String == "stats" {
+            Self.log.info("Wallpaper video: \(message["width"] ?? 0)x\(message["height"] ?? 0), \(message["fps"] ?? 0) frames a second, \(message["dropped"] ?? 0) dropped, shown at \(message["box"] ?? "?"); \(message["nerd"] ?? "")")
             return
         }
         guard let event = YouTubeEmbed.event(from: body) else { return }
