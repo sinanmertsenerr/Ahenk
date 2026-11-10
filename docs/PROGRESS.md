@@ -2589,3 +2589,26 @@ subsystems), `./Scripts/make-app.sh` signed with the Apple Development identity,
 `./Scripts/install.sh --no-build`. Every commit builds with its tests (`swift build --build-tests` in a worktree); the
 tests and the smoke check ran on the last one only. None of these changes was measured against the performance budget
 again.
+
+Later the same night (2026-11-11), after the user saw the song's video freeze for a moment every few seconds:
+
+- **A following video keeps its own speed** (`VideoSync.correction`; this replaces the catch-up above). Watching the
+  wallpaper window with ScreenCaptureKit for 200 s found 77 gaps of 0.2–0.4 s, 21 s in all, one at every change of
+  speed: at 1.25× and 0.75× the 2 s check overshot the 0.12 s target both ways and never settled (233 "catching up"
+  lines in one log, 23 "in step again"). Now the video always plays at 1×; only a gap over 1.5 s (a seek in the song, a
+  stall) moves it, 0.9 s ahead of the song, and at most once in 4 s. A smaller gap stays for the rest of the song.
+  `WallpaperMediaView.setRate`, the page's `setRate` and `VideoSync.step` are gone.
+- **The embedded player no longer pauses under app windows.** `WallpaperController.isVisible` had stopped pausing a
+  covered wallpaper, but WebKit did it by itself: a page in an occluded window counts as hidden and its silent video is
+  suspended (seen in WebKit's log: "window occluded 1", then the player's `pause`), so the video came back 1–3 s
+  behind after every switch of window or Space. The web view's occlusion detection is switched off
+  (`_setWindowOcclusionDetectionEnabled:`, WebKit's own setter but not in the public headers; without it the old
+  behaviour stays and the log says so). Tried outside the app first: a covered web view's video stood still for 5 s
+  with detection on and ran on with it off. The cost: a covered video goes on decoding, against rule 9's "stop
+  drawing what is hidden", as the user asked.
+
+Checks: `./Scripts/test.sh` 591/591, `./Scripts/smoke.sh` passed, `./Scripts/make-app.sh` signed, build 195 installed
+with `./Scripts/install.sh --no-build`. Live, `--demo --wallpaper-song` with a real 93 s song: 70 s watched, 0 gaps
+over 0.15 s, no sync line in the log until the demo song started again (one jump to its start), and the picture went on
+after the log's "Desktop covered by app windows". Not seen yet: a real switch to a full-screen Space with the user's
+own music, and a jump's landing after a seek in a real song. CPU and GPU were not measured again.
