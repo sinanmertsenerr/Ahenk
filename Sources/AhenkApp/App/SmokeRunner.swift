@@ -847,7 +847,10 @@ final class SmokeRunner {
     private func render(_ pane: SettingsPane, height: CGFloat? = nil) async throws -> NSBitmapImageRep {
         let navigation = SettingsNavigation()
         navigation.selection = pane
-        let hosting = NSHostingView(rootView: SettingsRootView(environment: environment, navigation: navigation))
+        // The window background a real window paints (the About pane and
+        // the demo banner sit on it, outside a Form).
+        let hosting = NSHostingView(rootView: SettingsRootView(environment: environment, navigation: navigation)
+            .background(Color(nsColor: .windowBackgroundColor)))
         var size = SettingsWindowController.defaultSize
         if let height { size.height = height }
         let window = NSWindow(
