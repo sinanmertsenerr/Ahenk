@@ -219,8 +219,8 @@ system state (SMAppService, Step 11), not a stored setting.
 
 ### Known gaps and risks
 
-- No app icon yet (generic icon in Finder/Dock; Step 11 generates one).
-- Launch at login and onboarding are not implemented (Step 11).
+- No app icon yet (generic icon in Finder/Dock; Step 11 generates one). Done in Step 11.
+- Launch at login and onboarding are not implemented (Step 11). Done in Step 11.
 - The Settings sidebar could not be checked visually from the shell (the
   glass sidebar is blank in snapshots, and screen capture would need a
   permission); the pane content was checked in both languages.
@@ -2186,3 +2186,258 @@ no timer and no processor exists; the tap's callback reads one atomic slot.
 - **Align Lyrics**: `whisper-cli` and a model are already on this Mac (`/opt/homebrew/bin/whisper-cli`,
   `~/Developer/whisper-models/ggml-large-v3-turbo-q5_0.bin`), so nothing is needed here. On another Mac: `brew install
   whisper-cpp`, then Download the Model in the panel or Choose… a model file.
+
+## Step 11 — Polish, performance, release (done, 2026-11-10)
+
+### What exists
+
+```
+Sources/AhenkKit/Support/Onboarding     OnboardingPage (welcome, listening, musicApps, browser, finish), OnboardingPolicy
+                                        (when the guide opens by itself), ExtensionVersion (parse, compare, `shipped` = 1.2.0,
+                                        needsReload)
+Sources/AhenkKit/Support/LaunchOptions  --welcome, --power <battery|low-power|hot> (demo only), --gallery <dir>
+Sources/AhenkApp/Onboarding/            OnboardingWindowController, OnboardingView (+ OnboardingModel), OnboardingCheck
+Sources/AhenkApp/Support/LoginItem      "Open Ahenk at login" = SMAppService.mainApp (+ Settings/LoginItemToggle)
+Sources/AhenkApp/Support/OffscreenRender  a SwiftUI view drawn into a bitmap offscreen (the guide's check, the gallery)
+Sources/AhenkApp/Support/PowerMonitor   acts as if on battery / in Low Power Mode / hot with --power (demo only)
+Sources/AhenkApp/App/ReadmeGallery      --gallery: the README's pictures from offscreen renders and snapshots
+Sources/AhenkApp/Desktop/Views/PlayerBar  ConflictQuestion: "Which one should Ahenk follow?" in the player itself
+Settings                                General › Startup (open at login, Open the Guide…); About: the icon, Acknowledgements;
+                                        Sources: "an older version: reload it" under a connected browser
+Scripts/make-icon.swift                 draws the app icon → AppIcon.icns + AppIcon.png (make-app.sh runs it when it changes)
+Scripts/make-screenshots.sh             smoke run with snapshots + gallery → docs/screenshots (and the icon)
+docs/screenshots/                       the README's pictures (demo content only, drawn offscreen)
+Tests/AhenkKitTests/                    562 tests in 95 suites (was 555/94): OnboardingTests (pages, policy, versions, the
+                                        manifests' version), LaunchOptions (--welcome, --power); 25 node tests (unchanged)
+```
+
+**The first-run guide.** A 640 × 560 window ("Welcome to Ahenk") that opens by itself on the first normal launch
+(`general.onboardingCompleted` is false) and again from the menu bar menu and the app menu (**Getting Started…**) and
+Settings › General › **Open the Guide…**. Five pages with a dot indicator, Back / Continue and **Start Using Ahenk**:
+
+1. What Ahenk does (four lines) and a language switch (English / Türkçe, live).
+2. System audio: the permission's state with **Allow Listening…** (`audio.requestPermission()`, the same call as Settings ›
+   Sound and the menu) or **Open System Settings…** when denied; why it is asked; never the microphone, nothing recorded;
+   **the sound effects for other apps use this same permission**; without it the light still glows with a made-up beat.
+3. Apple Music and Spotify: the Sources pane's rows (installed, running, playing, access) with **Allow Access…**
+   (`services.requestAccess(to:)`) while the app runs; macOS can ask only then; Ahenk never opens either by itself.
+4. The browser extension: **Install Browser Extension…**, every connected browser with its extension version (a check, or
+   "Reload it" below 1.2.0), and **reload it (1.2.0) for the speed of Nightcore and Slowed in a tab**.
+5. **Open Ahenk at login**, where the menu bar icon is, the lighter modes, how to open the guide again.
+
+Closing the window any way (including quitting Ahenk while it is open) counts as done, so it never nags. Demo runs show
+every page and ask for nothing ("Demo mode asks for nothing."; no permission button, the login switch disabled);
+`--welcome` opens it in a demo or normal run.
+
+**Open at login** is the system's state, never stored: `SMAppService.mainApp.status` (enabled → on, requiresApproval → on
+and "switched off in System Settings › General › Login Items" with **Open Login Items…**, notRegistered/notFound → off,
+not an app bundle → unavailable), read again whenever Ahenk becomes active; the switch calls `register()` /
+`unregister()`. Demo and smoke runs only read it.
+
+**The app icon** (`Scripts/make-icon.swift`, our own design): a night-blue tile with continuous corners whose inner
+edge glows in five colours (coral, amber, teal, blue, violet: the edge light around a screen), and a ring in the same
+colours around a warm disc (the Dock icon while a song plays: cover and beating ring). Core Graphics has no conic
+gradient on macOS, so the colour ring is drawn as 720 thin wedges; halos are Core Image blurs added with "screen".
+make-app.sh draws it into `dist/.icon` when the script is newer than the icon, copies `AppIcon.icns` into
+`Contents/Resources` and Info.plist names it (`CFBundleIconFile`). The About pane shows it (a stand-in outside the bundle).
+
+**About › Acknowledgements**: mediaremote-adapter (BSD 3-Clause, included), whisper.cpp (MIT; optional, the user installs
+it; Ahenk includes neither it nor a model), and the public services (Apple's catalog, LRCLIB, Musixmatch, NetEase,
+ListenBrainz, YouTube's embedded player). THIRD_PARTY_NOTICES.md says the same about whisper.cpp and the icon.
+
+**Lyrics with the pitch stage.** The effects' pitch stage holds the sound back by 4096 frames (93 ms at 44.1 kHz); the
+light already waited. `SoundEffectsController.soundDelay` is now observed and the lyrics stage subtracts it from its
+offset, in song time (`soundDelay × playbackRate`, so a sped-up file or tab waits the right amount).
+
+**The source question in the player.** While two sources play at once (automatic mode, "ask" on), the player shows "Which
+one should Ahenk follow?" with a button per player above the albums (or beside the small player's buttons), the same
+answer as the menu bar menu's (`services.choose`). Before, only the menu asked, with a dot on its icon.
+
+**README** rewritten for 1.0 in both languages (features, install, the guide and opening at login, the extension and its
+1.2.0 reload, the permissions and what leaves the Mac, demo mode, the measured numbers) with pictures in
+`docs/screenshots`: the desktop in English and Turkish, every light style, the eight lyric styles while a line is sung,
+the effects and alignment panels, the guide, and Settings › Edge Light / Sound.
+
+### Build, run, verify
+
+```sh
+swift build && ./Scripts/test.sh      # 562 Swift tests + 25 node tests, no warnings
+./Scripts/make-app.sh && ./Scripts/smoke.sh --snapshots   # 31 checks; onboarding-<page>-<lang>.png, desktop-conflict-<lang>.png
+./Scripts/make-screenshots.sh         # docs/screenshots (needs dist/Ahenk.app)
+open -n dist/Ahenk.app --args --demo --welcome            # the guide in the demo (asks for nothing)
+open -n dist/Ahenk.app --args --demo --power low-power    # the demo as if in Low Power Mode
+open -n dist/Ahenk.app --args --demo-conflict             # the source question in the player and the menu after 3 s
+pkill -x Ahenk
+```
+
+New smoke check `onboarding`: every page drawn offscreen in both languages (10 renders, each must draw something);
+the guide never opens by itself in a smoke run; **Getting Started…** is in the menu bar menu and the app menu in both
+languages; the login item's state is read and the smoke run cannot change it. `resources` now also requires
+`AppIcon.icns` (10 sizes) in the bundle and the guide's SF Symbols; `desktopPlayer` draws the source question. With
+`--gallery <dir>` the check `gallery` runs last and writes the README's pictures.
+
+### Performance pass
+
+Measured on the M5 MacBook Pro (release build 148, macOS 26.6.2, one 1512 × 982 display, on the power adapter, the Mac
+otherwise idle at night, load ~2.5). `Scripts`-style loop: `open -n dist/Ahenk.app --args <arguments>`, 12 s to settle,
+then `top -l 31 -s 1 -pid <Ahenk> -stats pid,cpu,mem`, the first sample dropped: CPU = mean of 30 one-second samples
+of Ahenk's own process, memory = the largest footprint (`top`'s MEM). The Dock's own CPU was read once at the end.
+`--draw-covered` keeps the lyrics and the wallpaper drawing although app windows cover the desktop here (the worst case);
+the demo's synthesizer and analysis (~1 %) do not exist with real music.
+
+| Run (demo unless noted) | CPU mean (median) | Memory | Dock process |
+|---|---|---|---|
+| light + player + lyrics (Fisheye) + Dock art, wallpaper off | **8.73 % (8.30)** | **169 MB** | 1.4 % |
+| all defaults, live wallpaper (generated motion) on | 9.09 % (8.70) | 168 MB | 1.5 % |
+| wallpaper off, Dock art off | 7.76 % (7.35) | 165 MB | 0.0 % |
+| Optimized Mode (`--optimized`), wallpaper off | 6.42 % (6.10) | 153 MB | 1.1 % |
+| as if on battery (`--power battery`) | 6.36 % (6.00) | 153 MB | 1.3 % |
+| as if in Low Power Mode (`--power low-power`) | 5.50 % (5.20) | 151 MB | 0.0 % |
+| all defaults, desktop covered by windows (no `--draw-covered`) | 7.57 % (7.30) | 144 MB | 1.7 % |
+| paused after 3 s (`--demo-pause-after 3`) | **0.00 %** | 96 MB | 0.0 % |
+| live, nothing playing (normal mode, `--language en` = in-memory settings) | **0.02 % (0.00)** | **44 MB** | 0.0 % |
+
+So the budget holds: playing with light + player + lyrics stays under 12 % (8.7 %, 9.1 % with the wallpaper) and under
+250 MB (169 MB); nothing playing is 0 %. Optimized Mode and the automatic modes do less work: −2.3 points on battery
+and in Optimized Mode (the light at 30 fps and half resolution, 6 Dock tiles a second, the lyrics at 30 fps; the
+wallpaper, off in these runs, would also drop to 720p) and −3.2 points in Low Power Mode (also a still Dock tile; the
+wallpaper would show only the cover). A covered desktop stops the lyrics and the
+wallpaper (−1.5 points against `--draw-covered`); a pause stops everything. `sample` of the playing demo for 8 s: the
+main thread idle 97.7 % of the time (the lyrics' display link ~1 %, some of it Core Animation converting new word
+sprites' colour space when they first show), the light's render thread mostly waiting for the GPU
+(`waitUntilCompleted`), the analysis queue ~1 %. Nothing missed the budget, so nothing was changed for speed.
+Single seconds peak at 13–16 %; probably song changes (a new cover, palette and word sprites), not traced.
+
+### QA against the feature list
+
+Every item of the feature spec, checked against the code, the tests, the smoke run and the demo (both languages).
+"Not tried live" means the code path exists and is checked offline, but needs the user's music, accounts or apps.
+
+| Feature | State | Notes |
+|---|---|---|
+| Each part switched on and off on its own | done | menu bar menu (5 quick switches), Dock menu, Settings |
+| macOS 14.2+, lives in the menu bar, Settings from the menu bar | done | also a Dock icon (for Dock art), by the plan |
+| Apple Music and Spotify apps | done | not tried live: Automation was never granted here |
+| YouTube Music, SoundCloud, Amazon Music in the browser (extension) | done | + YouTube, Spotify Web, Deezer, TIDAL; real sites not opened (mock site e2e) |
+| Your own files: drop a folder on the list | done | generated tones only |
+| "Where I listen" picker left of the player; the old source pauses | done | "pause the previous source" on by default |
+| Two sources at once → asks which one | done (fixed) | now also asked in the player, not only in the menu bar menu |
+| Only music moves the light, never video sound | done | `AudioCapturePolicy.reactsTo` |
+| Edge light in the cover's colours, moving with the beat | done | real beat needs the system audio permission (made-up beat without) |
+| Kicks bring the light forward, calm parts glide | done | |
+| Fades out on stop, then stops drawing; back with a new song | done | measured 0.00 % paused |
+| 22 styles with a preview before choosing | done | gallery tiles draw only while visible |
+| Position: all edges / bottom / top / corners | done | |
+| Colour, thickness, glow (and more) | done | + intensity, speed, album/custom/rainbow |
+| On/off per display | done | tried on one display only |
+| "Only on the desktop" mode | done | |
+| Steps aside for full-screen apps | done | not tried live |
+| Soft glow with small sparkling particles | done | Soft Glow (default) |
+| Desktop player on the desktop level, under windows | done | |
+| Giant thin clock top left, small date above | done | |
+| Continue Playing under the clock; playing row tinted | done | |
+| Cover flow of the artist's albums, "year · Album" | done | |
+| Click an album → its songs → the album continues from the pick | done | Ahenk's queue |
+| Search bar follows the source ("Search Apple Music"); the result plays there | done | an Apple Music catalog song outside the library opens in Music for one click (no MusicKit) |
+| Right-click: play next / add to queue | done | |
+| Player bar in the reference's order, with volume | done | + like, source picker |
+| Small round buttons: search, Clear Desk, shrink | done | |
+| Like; repeat in every source | partial | Spotify app: no like, repeat on/off only; the system reader has no unlike |
+| List title → playlists of YouTube Music, SoundCloud, Spotify | partial | YouTube Music, YouTube, Spotify Web, Apple Music and Spotify apps; SoundCloud playlists not supported (not possible to build without the real site) |
+| One button plays/pauses the whole list | done | |
+| Queue side panel: see, play, remove, add | done | site queues editable on YouTube Music only |
+| Player can shrink | done | |
+| Loading screen while a song starts | done | |
+| Start every song at 0:15 | done | |
+| Motion artwork or the video as the wallpaper while the song plays | done | checked live with `--wallpaper-song` in Step 8 |
+| Melts back to your wallpaper when the song ends | done | |
+| Dots above the player: the song's video or another by the artist | done | |
+| No video → the artist's other video; unknown artist → type the name | done | |
+| Your own desktop videos in a list (switch, remove) | done | |
+| Wallpaper full screen and muted; lyrics and player above it | done | |
+| Lyrics line by line, in sync, big, beside the cover | done | |
+| 8 styles with their own fonts (Fisheye … Cinema) | done | |
+| Extra pack: 28 more animations (optional) | not done | an optional add-on of the reference; out of scope for 1.0 |
+| Karaoke: the line lights up as it is sung | done | |
+| Instrumental: music note with a countdown | done | |
+| Other lyrics (another version) | done | |
+| No lyrics: Search Lyrics → pick → aligned on the Mac (one download, Beta) | done | whisper.cpp is the user's (`brew install whisper-cpp`); tried on a synthetic voice only |
+| Hide the album beside the lyrics | done | |
+| Bold serif, words swelling, old line fading, cover colours (Fisheye) | done | default style |
+| Dock icon becomes the cover with a beating ring | done | the Dock itself was never looked at (no full-screen capture) |
+| Clear Desk: one click hides every other window, another brings them back | done | hides apps; never tried on real apps (rules) |
+| Stickers: any photo, cut out, stuck on player/clock/list/desktop, movable | done | generated photos only |
+| Sound effects beside the lyrics: Nightcore, Slowed + Reverb, 8D, Bass Boost, Echo…; reverb, pitch, 10-band EQ; live | done | not heard: the muted tap on another app never ran (rules); Apple Music/Spotify have no speed, so Nightcore/Slowed shift the pitch only there |
+| Optimized mode in Settings › General | done | measured −2.3 points |
+| Lighter by itself on battery, Low Power Mode, Energy Saver | done | measured with `--power` (Energy Saver = Low Power Mode) |
+| Hidden parts rest and draw nothing | done | measured: covered desktop, pause |
+| Settings and recently played stay on the Mac | done | |
+| Two permissions: system audio, Automation; no microphone; memory only | done | now also explained in the first-run guide |
+| Public services: Apple's catalog, Spotify's public pages, LRCLIB | done | + Musixmatch, NetEase, ListenBrainz, YouTube search |
+| Update check | not done | personal build from the repository; no release feed is published |
+| Licence key | not needed | personal, MIT |
+| Windows version | not applicable | |
+
+### Decisions
+
+- **The guide asks nothing by itself.** Its buttons are the ones Settings already had (`audio.requestPermission()`,
+  `services.requestAccess(to:)`, the extension installer), so the rule "only a button the user pressed may make macOS
+  ask" still holds. Closing counts as done: an unwanted guide on every launch is worse than a missed one, and it is one
+  menu item away.
+- **Open at login is read, not remembered** (Step 1's plan): System Settings can change it behind Ahenk's back.
+- **The icon is generated at build time**, cached in `dist/.icon`; the icon itself is not committed, only the
+  README's 256 px copy (`docs/screenshots/icon.png`).
+- **README pictures are composed offscreen**, not captured: `Scripts/widget-shot.swift` needs screen recording for the
+  terminal, which was denied to this agent's shell (Step 10), and a capture could show the user's screen. The gallery
+  draws the real widget views (glass painted translucent, as in every snapshot), the real light shader around a
+  1512 × 982 picture and the generated backdrop, all with the demo's invented songs.
+- **`--power`** only exists in demo runs and only changes what the power monitor reports; the Mac's settings are never
+  touched (no `pmset`).
+- **dist/Ahenk.app stays the installed copy**, as in every earlier step; `/Applications` was not touched (install.sh is
+  the user's choice, see below).
+
+### Deviations from PLAN.md
+
+- No in-app update check (the reference has one; there is no release feed to check).
+- The optional 28-animation lyrics pack of the reference is not part of 1.0.
+- `general.storefront` (the catalog's store country) still has no control: an invalid country would quietly break the
+  catalog, so it follows the Mac's region (`defaults` can set it).
+- Extra launch arguments `--welcome`, `--power`, `--gallery`; extra scripts `make-icon.swift`, `make-screenshots.sh`.
+- **Shared API changes** (call sites and tests updated): `AppEnvironment.power` is created with the launch options,
+  `loginItem`, `onboarding`, `showOnboarding(_:)`; `PowerMonitor(simulated:)`; `LaunchOptions.showsWelcome`,
+  `simulatedPower`, `galleryDirectory`; `MusicAppRow` and `AppIcon` are no longer private; `DemoStage.backdropImage`;
+  `SoundEffectsController.soundDelay` (observed; was the private `appliedDelay`); `LyricsStage(… soundDelay:)`;
+  snapshot glass is translucent (`widgetSnapshot`).
+
+### Known gaps and risks
+
+- **Open at login was never switched on here**: registering would add a login item to the user's Mac. Only the read
+  path ran (state `off` for dist/Ahenk.app). macOS shows a "Login item added" notification when it is switched on.
+- **The guide's permission buttons were never pressed** (they would raise macOS prompts); the guide was checked by
+  drawing every page offscreen in both languages and by opening it once in a normal run with in-memory settings.
+- The whisper.cpp/real-song, real-site, muted-tap, Clear Desk and Automation gaps of Steps 2–10 are unchanged (see
+  their notes): this step did nothing audible and touched no music, app or browser.
+- The README pictures are offscreen renders: the window server's real glass, blur and shadows are not in them.
+- CPU numbers vary by ±0.5 point between runs; all were taken in one sitting on the power adapter (battery and Low Power
+  Mode were simulated with `--power`, not real).
+- The test run's start-up standstill (Step 10's note) was not looked into further: both full runs passed (562/562,
+  9.3 s and 9.4 s), no new flake was seen.
+
+### What the user must do once (morning checklist)
+
+1. **Open Ahenk**: `open ~/Desktop/Ahenk/dist/Ahenk.app` (or `./Scripts/install.sh` first to put it in /Applications
+   and open it from there; quit any running copy). The guide opens.
+2. **Guide › Let the light hear the music › Allow Listening…** and allow it in macOS's dialog. Then play a song in any
+   app: the light should pulse on the beat, and Settings › Sound should say "Listening to <the app>".
+3. **Guide › Apple Music and Spotify**: open the app you use, press **Allow Access…**, allow it. The song's cover,
+   shuffle, repeat and favourites then come from the app itself.
+4. **Guide › Music in the browser**: reload (or install) the extension from the folder the button shows, so it is 1.2.0;
+   open a music site; the guide and Settings › Sources list the browser with a check mark.
+5. **Guide › last page › Open Ahenk at login** if you want it; macOS shows a "Login item added" notice.
+6. **Sound effects by ear**: play a song in Apple Music or Spotify, open the slider button beside the lyrics, pick Bass
+   Boost, then Nightcore and Slowed + Reverb; listen for a clean switch and the level; switch them off; then quit Ahenk
+   once while they are on and check the app keeps its own sound. Say which presets are too strong or too quiet.
+7. **Speed in a tab**: with the 1.2.0 extension, Nightcore on YouTube Music should play faster (the tab's own speed).
+8. **Align Lyrics on a real song** (Beta): a song with plain or no lyrics, the wand button beside the lyrics, **Align to
+   the Song** (for another app it listens to the rest of the song). Say how far off the lines land.
+9. **Clear Desk** with a few apps open: the moon button hides them, a second click brings exactly those back.
