@@ -191,7 +191,12 @@ final class NowPlayingServices {
                 cache: catalogCache
             ),
             catalogCache: catalogCache,
-            spotifyFinder: ListenBrainzSpotifyFinder(fetcher: fetcher, cache: catalogCache),
+            // Spotify's own search first (it knows every song it has); the
+            // mapping service when its page cannot be read.
+            spotifyFinder: SpotifyFinderChain([
+                SpotifyPageFinder(reader: SpotifySearchWebReader(), cache: catalogCache),
+                ListenBrainzSpotifyFinder(fetcher: fetcher, cache: catalogCache),
+            ]),
             scripts: runner, presence: presence, fetcher: fetcher,
             bridgeServer: bridgeServer, siteLyrics: siteLyrics
         )

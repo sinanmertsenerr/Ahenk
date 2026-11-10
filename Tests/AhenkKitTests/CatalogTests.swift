@@ -321,6 +321,137 @@ struct SpotifyTrackFinderTests {
     }
 }
 
+/// Answers a search page's rows from a table (by a fragment of the
+/// address) and counts the pages it was asked for.
+final class TableSearchReader: SpotifySearchPageReading, Sendable {
+    private let state: OSAllocatedUnfairLock<(table: [String: [SpotifySearchRow]], asked: [String])>
+
+    init(_ table: [String: [SpotifySearchRow]] = [:]) {
+        state = OSAllocatedUnfairLock(initialState: (table, []))
+    }
+
+    func set(_ fragment: String, _ rows: [SpotifySearchRow]) {
+        state.withLock { $0.table[fragment] = rows }
+    }
+
+    var asked: [String] { state.withLock { $0.asked } }
+
+    func rows(for url: URL) async -> [SpotifySearchRow]? {
+        let text = url.absoluteString
+        return state.withLock { state in
+            state.asked.append(text)
+            return state.table.first { text.contains($0.key) }?.value
+        }
+    }
+}
+
+@Suite("Spotify search page")
+struct SpotifySearchPageTests {
+    static let harbor = "0AbCdEfGhIjKlMnOpQrStU"
+    static let harborLive = "1AbCdEfGhIjKlMnOpQrStU"
+    static let other = "2AbCdEfGhIjKlMnOpQrStU"
+
+    static func row(_ id: String, _ title: String, _ artists: [String]) -> SpotifySearchRow {
+        SpotifySearchRow(id: id, title: title, artists: artists)
+    }
+
+    @Test("The page's address asks for the artist and the title, without decorations")
+    func address() throws {
+        let url = try #require(SpotifySearchPage.url(for: SongQuery(title: "Harbor Bells (feat. Mira Sol)", artist: "Juniper Coast & Mira Sol", album: "Paper Lighthouse")))
+        #expect(url.absoluteString == "https://open.spotify.com/search/Juniper%20Coast%20%26%20Mira%20Sol%20Harbor%20Bells/tracks")
+        #expect(url.host == SpotifySearchPage.host)
+        let turkish = try #require(SpotifySearchPage.url(for: SongQuery(title: "Işık/Gölge", artist: "", album: "")))
+        #expect(turkish.absoluteString == "https://open.spotify.com/search/I%C5%9F%C4%B1k%2FG%C3%B6lge/tracks", "a slash in a title stays inside the search")
+        #expect(SpotifySearchPage.url(for: SongQuery(title: " ", artist: "", album: "")) == nil)
+    }
+
+    @Test("Rows are read from the script's answer; rows without an ID or a title are dropped")
+    func rows() {
+        let answer = #"""
+        {"rows": [{"id": "0AbCdEfGhIjKlMnOpQrStU", "title": " Harbor Bells ", "artists": ["Juniper Coast", " ", "Mira Sol"]},
+                  {"id": "not-an-id", "title": "Harbor Bells", "artists": []},
+                  {"id": "2AbCdEfGhIjKlMnOpQrStU", "title": "", "artists": ["Juniper Coast"]},
+                  {"id": "1AbCdEfGhIjKlMnOpQrStU", "title": "Lighthouse Static"}]}
+        """#
+        #expect(SpotifySearchPage.rows(fromJSON: answer) == [
+            Self.row(Self.harbor, "Harbor Bells", ["Juniper Coast", "Mira Sol"]),
+            Self.row(Self.harborLive, "Lighthouse Static", []),
+        ])
+        #expect(SpotifySearchPage.rows(fromJSON: #"{"rows": []}"#) == [])
+        #expect(SpotifySearchPage.rows(fromJSON: "<html>") == nil)
+        #expect(SpotifySearchPage.rows(fromJSON: #"{"error": 1}"#) == nil)
+    }
+
+    @Test("The song is the first row with its title by one of its artists")
+    func match() {
+        let query = SongQuery(title: "Harbor Bells", artist: "Juniper Coast & Mira Sol", album: "")
+        let rows = [
+            Self.row(Self.other, "Harbor Bells", ["Northern Porch"]),
+            Self.row(Self.harborLive, "Harbor Bells - Live Version", ["Juniper Coast"]),
+            Self.row(Self.harbor, "Harbor Bells", ["Mira Sol", "Juniper Coast"]),
+        ]
+        #expect(SpotifySearchPage.bestMatch(rows, for: query) == Self.harbor, "the very title wins over an earlier decorated one")
+        #expect(SpotifySearchPage.bestMatch(Array(rows.prefix(2)), for: query) == Self.harborLive, "without it, the same song in another edition")
+        #expect(SpotifySearchPage.bestMatch(Array(rows.prefix(1)), for: query) == nil, "another artist's song of the same name is not it")
+        #expect(SpotifySearchPage.bestMatch(rows, for: SongQuery(title: "HARBOR BELLS (feat. Mira Sol)", artist: "juniper coast", album: "")) == Self.harbor)
+        #expect(SpotifySearchPage.bestMatch(rows, for: SongQuery(title: "Lighthouse Static", artist: "Juniper Coast", album: "")) == nil)
+        #expect(SpotifySearchPage.bestMatch(rows, for: SongQuery(title: "Harbor Bells", artist: "Juniper", album: "")) == nil, "half a name is not the artist")
+        #expect(SpotifySearchPage.bestMatch([Self.row(Self.other, "Harbor Bells", [])], for: query) == Self.other, "a row that names nobody is taken on its title")
+        #expect(SpotifySearchPage.bestMatch(rows, for: SongQuery(title: "Harbor Bells", artist: "", album: "")) == Self.other, "no artist asked: the page's first")
+        #expect(SpotifySearchPage.bestMatch([], for: query) == nil)
+    }
+
+    @Test("A found song and a missing one are remembered; an unread page is asked again")
+    func finder() async {
+        let reader = TableSearchReader(["Harbor%20Bells": [Self.row(Self.harbor, "Harbor Bells", ["Juniper Coast"])],
+                                        "Lighthouse%20Static": [Self.row(Self.other, "Something Else", ["Juniper Coast"])]])
+        let finder = SpotifyPageFinder(reader: reader)
+        let found = SongQuery(title: "Harbor Bells (feat. Mira Sol)", artist: "Juniper Coast", album: "Paper Lighthouse")
+        let missing = SongQuery(title: "Lighthouse Static", artist: "Juniper Coast", album: "Paper Lighthouse")
+        let unread = SongQuery(title: "Northern Porch", artist: "Juniper Coast", album: "")
+        let first = await finder.spotifyTrackIDs(for: [found, missing, unread])
+        #expect(first == [found: Self.harbor])
+        #expect(reader.asked.count == 3)
+        let again = await finder.spotifyTrackIDs(for: [found, missing, unread])
+        #expect(again == first)
+        #expect(reader.asked.count == 4, "only the page that could not be read is asked again")
+        reader.set("Northern%20Porch", [Self.row(Self.harborLive, "Northern Porch", ["Juniper Coast"])])
+        #expect(await finder.spotifyTrackIDs(for: [unread]) == [unread: Self.harborLive])
+    }
+
+    @Test("A miss is asked again after a day, a hit kept for a month")
+    func lifetimes() async {
+        let now = OSAllocatedUnfairLock(initialState: Date(timeIntervalSinceReferenceDate: 0))
+        let reader = TableSearchReader(["Harbor%20Bells": [Self.row(Self.harbor, "Harbor Bells", ["Juniper Coast"])]])
+        let finder = SpotifyPageFinder(reader: reader, clock: { now.withLock { $0 } })
+        let hit = SongQuery(title: "Harbor Bells", artist: "Juniper Coast", album: "")
+        let miss = SongQuery(title: "Lighthouse Static", artist: "Juniper Coast", album: "")
+        reader.set("Lighthouse%20Static", [])
+        _ = await finder.spotifyTrackIDs(for: [hit, miss])
+        #expect(reader.asked.count == 2)
+        now.withLock { $0 += 2 * 86_400 }
+        reader.set("Lighthouse%20Static", [Self.row(Self.other, "Lighthouse Static", ["Juniper Coast"])])
+        #expect(await finder.spotifyTrackIDs(for: [hit, miss]) == [hit: Self.harbor, miss: Self.other])
+        #expect(reader.asked.count == 3, "the hit came from the cache, the miss was asked again")
+    }
+
+    @Test("A later finder is asked only for what the earlier ones did not find")
+    func chain() async {
+        let page = TableSearchReader(["Harbor%20Bells": [Self.row(Self.harbor, "Harbor Bells", ["Juniper Coast"])]])
+        let fetcher = TableFetcher(["spotify-id-from-metadata": (#"[{"artist_name": "Mira Sol", "release_name": "", "track_name": "Northern Porch", "spotify_track_ids": ["2AbCdEfGhIjKlMnOpQrStU"]}]"#, 200)])
+        let chain = SpotifyFinderChain([
+            SpotifyPageFinder(reader: page),
+            ListenBrainzSpotifyFinder(fetcher: fetcher, throttle: RequestThrottle(limit: 10, per: 1)),
+        ])
+        let first = SongQuery(title: "Harbor Bells", artist: "Juniper Coast", album: "")
+        let second = SongQuery(title: "Northern Porch", artist: "Mira Sol", album: "")
+        #expect(await chain.spotifyTrackIDs(for: [first, second]) == [first: Self.harbor, second: Self.other])
+        #expect(fetcher.posts.count == 1)
+        let body = try? JSONSerialization.jsonObject(with: fetcher.posts[0]) as? [[String: String]]
+        #expect(body?.map { $0["track_name"] } == ["Northern Porch"], "the mapping service hears only of the song the page did not list")
+    }
+}
+
 @Suite("Catalog artwork")
 struct CatalogArtworkTests {
     @Test("Remote covers resize through the URL; generated ones carry a palette")

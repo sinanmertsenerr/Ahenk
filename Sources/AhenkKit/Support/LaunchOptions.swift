@@ -25,7 +25,8 @@ import Foundation
 ///   `glitch`, `cinema`), or `off` for none.
 /// - `--demo-position <s>`: the demo song starts at this many seconds.
 /// - `--smoke-only <a,b>`: with `--smoke`, run only these checks (the
-///   others are left out of the report).
+///   others are left out of the report). `spotifySearch` (Spotify's search
+///   page is read as for a pick; needs the network) runs only when named.
 /// - `--draw-covered`: in demo mode, the lyrics keep moving while app
 ///   windows cover them (captures and CPU measurements).
 /// - `--bridge-port <port>`: with `--smoke`, the first port of the browser

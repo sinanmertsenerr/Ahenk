@@ -76,6 +76,10 @@ final class SmokeRunner {
         if selected("bridge") {
             await report.check("bridge") { try await BridgeCheck.run(settings: self.environment.settings, snapshots: self.snapshotDirectory()) }
         }
+        // Needs the network and Spotify's site: only when asked for by name.
+        if only?.contains("spotifySearch") == true {
+            await report.check("spotifySearch") { try await self.checkSpotifySearch() }
+        }
         if let wait = environment.options.bridgeWait, let port = environment.options.bridgePort, selected("bridgeLive") {
             await report.check("bridgeLive") { try await BridgeCheck.runLive(port: port, wait: wait) }
         }
@@ -253,6 +257,22 @@ final class SmokeRunner {
         core.choose(conflict.players[1], now: start.addingTimeInterval(5))
         guard core.state.conflict == nil, core.state.activeID?.source == .spotify else { throw SmokeFailure("the answer was not followed") }
         return "automatic selection, conflict after 3 s and the answer work"
+    }
+
+    /// Spotify's search page, read off screen as for a pick in the player:
+    /// it lists songs with their artists. Nothing is shown or played.
+    private func checkSpotifySearch() async throws -> String {
+        guard let url = SpotifySearchPage.url(for: SongQuery(title: "piano", artist: "", album: "")) else {
+            throw SmokeFailure("no address for the search")
+        }
+        let started = Date()
+        guard let rows = await SpotifySearchWebReader().rows(for: url), !rows.isEmpty else {
+            throw SmokeFailure("Spotify's search page listed no songs")
+        }
+        let named = rows.filter { !$0.artists.isEmpty }.count
+        guard named > 0 else { throw SmokeFailure("\(rows.count) songs read, none with its artists") }
+        let milliseconds = Int(Date().timeIntervalSince(started) * 1000)
+        return "\(rows.count) songs read from Spotify's search page in \(milliseconds) ms, \(named) with their artists; nothing shown, nothing played"
     }
 
     private func checkNowPlaying() async throws -> String {

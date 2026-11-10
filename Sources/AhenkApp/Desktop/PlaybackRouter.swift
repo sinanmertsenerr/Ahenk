@@ -10,8 +10,9 @@ import AppKit
 ///   access to the Apple Music catalog, so a song that is not in the library
 ///   is opened on its catalog page in Music, where one click plays it.
 /// - Spotify: `play track "spotify:track:…"`, with the track ID from the
-///   song's own ID (Continue Playing) or from `SpotifyTrackFinding`; an
-///   unmatched song opens Spotify's search instead.
+///   song's own ID (Continue Playing) or from `SpotifyTrackFinding`
+///   (Spotify's own search page, read off screen, then a mapping service);
+///   an unmatched song opens Spotify's search instead.
 /// - Music sites: through `BrowserPlaybackRouting` (the browser extension):
 ///   the site's tab searches for the pick and plays it (a tab of the site
 ///   opens when none is), its playlists play in the site's own order, its
@@ -146,6 +147,7 @@ final class PlaybackRouter {
             trackID = await finder.spotifyTrackIDs(for: [query])[query]
         }
         guard let trackID, let script = SpotifyAppScripts.playTrack(id: trackID) else {
+            log.notice("No Spotify ID for the song\(interactive ? "; Spotify shows its search" : "")")
             guard interactive else { return .needsUser }
             if let search = SpotifyAppScripts.searchURI(for: song) { NSWorkspace.shared.open(search) }
             return .shown("This song could not be found on Spotify. Spotify shows its search results instead.".l10n)

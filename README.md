@@ -141,7 +141,8 @@ guide or in Settings):
 What leaves your Mac: to find covers, albums and search results, a song's
 title and artist (or what you type into the search) go to Apple's public
 catalog, and Spotify's public page is asked for a track's cover; to play a
-pick in Spotify, ListenBrainz (MetaBrainz) is asked for the song's Spotify ID;
+pick in Spotify, the song's title and artist are searched on Spotify's public
+search page (and, if that cannot be read, sent to ListenBrainz) for its Spotify ID;
 while lyrics are on, the playing song's title, artist, album and length go
 to LRCLIB, Musixmatch and NetEase (each can be turned off in Settings ›
 Lyrics); the live wallpaper searches YouTube and Apple's catalog for videos
@@ -349,8 +350,9 @@ Ahenk iki izin ister; her birini yalnızca ilgili düğmeye bastığınızda
 Mac'inizden çıkanlar: kapakları, albümleri ve arama sonuçlarını bulmak için
 şarkının adı ve sanatçısı (ya da aramaya yazdıklarınız) Apple'ın herkese açık
 kataloğuna gider, bir parçanın kapağı Spotify'ın herkese açık sayfasından
-istenir; seçtiğiniz bir şarkıyı Spotify'da çalmak için şarkının Spotify
-kimliği ListenBrainz'e (MetaBrainz) sorulur; sözler açıkken çalan şarkının
+istenir; seçtiğiniz bir şarkıyı Spotify'da çalmak için şarkının adı ve
+sanatçısı Spotify'ın herkese açık arama sayfasında aranır (sayfa okunamazsa
+ListenBrainz'e sorulur) ve Spotify kimliği oradan alınır; sözler açıkken çalan şarkının
 adı, sanatçısı, albümü ve süresi LRCLIB, Musixmatch ve NetEase hizmetlerine
 gider (her biri Ayarlar › Şarkı Sözleri bölümünden kapatılabilir); canlı
 duvar kâğıdı videoları şarkının adı ve sanatçısıyla YouTube'da ve Apple'ın
