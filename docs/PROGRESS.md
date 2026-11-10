@@ -2547,6 +2547,18 @@ Not a plan step: fixes and changes asked for while using 1.0.0, one commit each 
   another take, the first named upload above it is taken, or the next official one (`uploadAbove`). A first version
   without "ranked above" picked an 80-view cut-down copy for KHRBR. Seen in the log for both songs after the change.
   Cache key `ytm-match:v4`. The KHRBR video is 55 s longer than the song, so it loops instead of following.
+- **Liked Songs for the Spotify app** (`SpotifyRemote.likedRequest`/`likeRequest`, `SpotifyRemoteSession.isLiked`/
+  `setLiked`, `DesktopPlayerModel.spotifyLikeID`). The app's AppleScript has no like; a signed-in user's heart now asks
+  and writes Spotify's own library the way the web player does (`collection/v2/contains` and `/write`, plain JSON, by
+  the account's user name, which the session hook reads from a request's address and the app keeps). The public Web
+  API answers 429 to the web player's token, so it is not used. Tried from a browser tab (a song taken out and put
+  back: its "added" date is now today) and by the user in the app. Without the sign-in the heart stays off as before.
+- **The edge light's cost is its frame rate, not its area** (measured, nothing changed). Light alone on the bare
+  desktop, on battery (30 frames, scale 1): off 2 % GPU / 18.5 % WindowServer; on 10 % / 31 %; window there but not
+  drawing 2 % / 19 %; a new empty surface every frame 10 % / 30.5 %; only the top strip 5 % / 29 %; only the sides
+  5 % / 28 %; top and bottom 10 % / 30 %. So the shader is free, the window is free, and one small strip costs
+  WindowServer as much as all four: splitting the window into strips would gain nothing. MonoCode's own window takes
+  about 30 % of the GPU while it streams, so these runs were made with the chat idle.
 Checks on the final tree: `./Scripts/test.sh` 570/570 with the node tests (twice), `./Scripts/smoke.sh` passed (31
 subsystems), `./Scripts/make-app.sh` signed with the Apple Development identity, installed to /Applications with
 `./Scripts/install.sh --no-build`. Every commit builds with its tests (`swift build --build-tests` in a worktree); the
