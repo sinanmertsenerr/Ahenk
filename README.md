@@ -1,57 +1,113 @@
 # Ahenk
 
+<img src="docs/screenshots/icon.png" width="96" align="right" alt="">
+
 **English** · [Türkçe](#türkçe)
 
-Ahenk is a macOS app that lets the desktop live with the music: an edge
-light around every screen that moves with the beat in the album's colors, a
-glass player on the desktop, synced lyrics, a live wallpaper from the song's
-motion artwork or video, and a Dock icon that becomes the album cover. It
-follows the music apps on your Mac, music sites in the browser, any app that
-shows what is playing, and your own files.
+Ahenk is a macOS app that makes the desktop move with the music: a light
+around every screen in the album's colors that follows the beat, a glass
+player and a big clock on the desktop, synced lyrics beside the cover, a live
+wallpaper from the song's motion artwork or music video, and a Dock icon that
+becomes the cover. It follows Apple Music, Spotify, music sites in the
+browser, any app that shows what is playing, and your own song files.
 
-> Status: in development. In place: settings, menu bar, Settings window,
-> demo mode, the now-playing hub that follows Apple Music, Spotify, browsers
-> and any app that shows what is playing, the analysis that hears the beat,
-> the edge light around every screen in 22 styles, and the glass desktop
-> player: a big clock, Continue Playing, the artist's albums as a cover flow,
-> search, the player bar and a play queue; synced lyrics beside the album
-> cover in eight styles (Fisheye, Spread, Karaoke, Typewriter, Neon, Echo,
-> Glitch, Cinema), with a countdown in instrumental parts, other versions,
-> search and timing; the browser extension for YouTube Music, YouTube,
-> Spotify, SoundCloud, Amazon Music, Deezer and TIDAL; and the live wallpaper:
-> the album's motion artwork, the song's music video or another by the
-> artist, or the cover itself, melting in over your wallpaper while the song
-> plays, chosen with the dots above the player; and the desktop extras: the
-> Dock icon as the cover with a ring that beats along, Clear Desk, stickers
-> cut out of your photos, and your own song files played by Ahenk itself; and
-> sound effects (Nightcore, Slowed + Reverb, 8D Audio, Bass Boost, Echo and
-> more, with reverb, pitch and a ten-band equalizer) and plain lyrics timed
-> to the song on your Mac. The features arrive step by step; see
-> [docs/PROGRESS.md](docs/PROGRESS.md).
+![The desktop with Ahenk: the clock, Continue Playing, the lyrics, the player and the edge light](docs/screenshots/desktop-en.jpg)
 
-### Requirements
+<sub>Every picture here is drawn by Ahenk's demo mode: invented songs, invented lyric lines and generated covers.</sub>
 
-macOS 14.2 or later, Xcode 16 or later (Swift 6).
+## Features
 
-### Build and run
+- **Edge light.** The edges of every screen glow in the cover's colors and
+  move with the beat: kicks push the light forward, calm parts let it drift.
+  22 styles with live previews (Soft Glow, Pulse, Breathe, Wave, Spectrum,
+  Snake, Twin Snakes, Lava, Aurora, Rainbow, Neon Tube, Plasma, Fire, Embers,
+  Snow, Hearts, Fireworks, Sparkles, Bubbles, Lightning, Rain, Starfield); all
+  edges, the bottom, the top or only the corners; thickness, glow, intensity,
+  speed; the album's, your own or rainbow colors; on or off per display; "only
+  on the desktop"; it steps aside for full-screen apps. When the music
+  pauses it fades out and stops drawing.
+- **Desktop player.** Under your windows: a big thin clock with the date,
+  Continue Playing (playing row tinted), the playing artist's albums as a
+  cover flow (click one for its songs; a pick plays the album on from there),
+  a search field that plays the pick in the source you chose (right-click:
+  Play Next, Add to Queue), and the player bar: shuffle, previous,
+  play/pause, next, repeat, cover, title, "artist — album", progress, more,
+  lyrics, queue, like and volume. The source picker at its left chooses
+  where picks play and pauses the previous source; the list's title opens
+  your playlists; one button plays or pauses the whole list; the queue panel
+  shows what comes next (play, remove, add); a small player; a loading state
+  while a song starts; "start every song at 0:15". When two sources play at
+  once, the player and the menu bar menu ask which one to follow.
+- **Lyrics.** Synced lyrics on the desktop beside the cover, in the cover's
+  colors, in eight styles with their own typefaces: Fisheye, Spread,
+  Karaoke, Typewriter, Neon, Echo, Glitch and Cinema. Instrumental parts show
+  a music note that counts down to the next line. Other Lyrics, Search
+  Lyrics, timing nudges kept per song, automatic sync, and the cover beside
+  them can be hidden.
+- **Lyrics timed on your Mac (Beta).** For a song with only plain words (or
+  none: search for them or paste them), whisper.cpp hears the sung words on
+  your Mac and Ahenk gives every line and word its time.
+- **Live wallpaper.** While a song plays, the album's motion artwork (Apple's
+  catalog), the song's music video or another one by the same artist
+  (YouTube's embedded player, muted) or the moving cover melts in over your
+  wallpaper and melts back when the music stops. The dots above the player
+  choose the video; type the artist's name when it is not found. Keep your
+  own videos (files or addresses) in a list and pick one.
+- **Dock icon.** The cover with a ring that beats along and shows the song's
+  progress; Ahenk's own icon comes back when nothing plays.
+- **Clear Desk.** The moon button hides every other app with one click and
+  brings exactly those back with another.
+- **Stickers.** Pick any photo; its subject is cut out on your Mac and can be
+  stuck on the desktop, the clock, the list, the player or the lyrics.
+- **Your own songs.** Drop a folder of songs on Continue Playing and Ahenk
+  plays it itself, with the light, lyrics, covers and wallpaper.
+- **Sound effects.** Beside the lyrics: Nightcore, Slowed + Reverb, 8D
+  Audio, Bass Boost, Echo, Vaporwave, Lo-fi, Concert Hall and Underwater,
+  with speed, pitch, reverb and a ten-band equalizer, switched on and off
+  while the song plays.
+- **Light on your Mac.** Nothing playing means nothing drawn; anything
+  hidden stops drawing; on battery and in Low Power Mode Ahenk runs lighter
+  by itself, and Optimized Mode makes it lighter always.
+- **English and Turkish**, switched in Settings › General whatever the Mac's
+  language.
+
+![Every edge light style](docs/screenshots/light-styles.jpg)
+
+![The eight lyric styles while a line is sung](docs/screenshots/lyrics-styles.jpg)
+
+![The sound effects and Align Lyrics, which open over the lyrics](docs/screenshots/effects-and-alignment.jpg)
+
+## Install
+
+You need macOS 14.2 or later (Apple Silicon recommended) and Xcode 16 or
+later (Swift 6).
 
 ```sh
-./Scripts/make-app.sh              # build and sign dist/Ahenk.app
-./Scripts/run-demo.sh              # launch with invented songs (no music needed)
-./Scripts/test.sh                  # lint and unit tests
-./Scripts/smoke.sh                 # headless check of every subsystem
-./Scripts/bridge-e2e.sh            # the browser extension end to end in a headless test browser
-./Scripts/install.sh               # install to /Applications
+git clone https://github.com/sinanmertsenerr/Ahenk.git
+cd Ahenk
+./Scripts/install.sh               # builds, signs and installs /Applications/Ahenk.app
+open /Applications/Ahenk.app
 ```
+
+The scripts sign with the maintainer's Apple Development identity when it is
+on the Mac, so macOS keeps Ahenk's permissions across rebuilds. Anywhere else,
+use `ALLOW_ADHOC=1 ./Scripts/install.sh`: the app is signed ad hoc and macOS
+asks for its permissions again after each rebuild. `./Scripts/make-app.sh`
+only builds `dist/Ahenk.app`.
+
+The first launch opens a short guide: the permissions, the browser extension
+and **Open Ahenk at login**. It opens again from the menu bar menu (**Getting
+Started…**) and Settings › General, where opening at login can be switched
+too. Ahenk lives in the menu bar (quick switches, Clear Desk, Settings) and
+in the Dock, whose icon becomes the cover.
 
 ### Browser extension
 
 Music sites in the browser (YouTube Music, YouTube, Spotify, SoundCloud,
 Amazon Music, Deezer and TIDAL) report exactly what plays through the Ahenk
 browser extension, and the desktop player plays your picks, playlists and
-queue there. Install it once; the menu bar menu's **Install Browser
-Extension…** shows its folders in Finder (`make-app.sh` puts them into
-`Ahenk.app/Contents/Resources/Extension`):
+queue there. **Install Browser Extension…** in the menu bar menu shows its
+folders in Finder (they are inside `Ahenk.app/Contents/Resources/Extension`):
 
 - **Chrome, Edge, Brave, Arc, Opera, Vivaldi:** open the extensions page
   (`chrome://extensions`), turn on Developer mode, click **Load unpacked** and
@@ -60,109 +116,84 @@ Extension…** shows its folders in Finder (`make-app.sh` puts them into
 - **Firefox:** `about:debugging` › This Firefox › **Load Temporary Add-on…** ›
   `manifest.json` in the `Firefox` folder. Firefox forgets it when it quits.
 
-The extension's button shows whether it is connected; Settings › Sources
-lists the connected browsers and their music tabs.
+If you installed an earlier version, reload it on the extensions page: 1.2.0
+is needed for the speed of Nightcore and Slowed in a browser tab. The
+extension's button shows whether it is connected; Settings › Sources lists
+the connected browsers, their music tabs and an extension that needs a reload.
 
-Ahenk uses two permissions: system audio (so the light hears the music;
-nothing is recorded, never the microphone) and Automation (to read the song,
-cover, shuffle, repeat and favorites from Apple Music and Spotify and send
-the commands you choose). macOS asks for system audio only when you press
-**Allow Listening…** in Settings › Sound or in the menu bar menu; Ahenk then
-listens to the app that plays your music, only while music plays, and
-analyzes the sound in memory. If you said no, turn Ahenk on in System
-Settings › Privacy & Security › Screen & System Audio Recording › System
-Audio Recording Only. Without Automation, Ahenk still shows what plays;
-it asks only when you press **Allow Access…** in Settings › Sources (or, the
-first time, when you pick a song in the desktop player to play there). To
-find covers, albums and search results, Ahenk sends a song's title and artist,
-or what you type into the search, to Apple's public catalog and asks
-Spotify's public page for a track's cover; to play a pick in Spotify, it asks
-ListenBrainz (MetaBrainz) for the song's Spotify ID by its title, artist and
-album. While lyrics are on, it sends the playing song's title, artist, album
-and length to LRCLIB, Musixmatch and NetEase to find its lyrics (each can be
-turned off in Settings › Lyrics) and keeps what it finds on your Mac. The
-browser extension talks only to Ahenk on this Mac (127.0.0.1, which accepts
-nothing but the extension): it reads what the music site's own page shows
-(the song, its position, and the site's own synced lyrics when its lyrics view
-loads them) and carries out your commands there. Nothing else leaves your Mac.
+## Permissions and privacy
 
-### Live wallpaper
+Ahenk asks for two permissions, each only when you press its button (in the
+guide or in Settings):
 
-While a song plays, a layer just above your desktop picture shows the album's
-motion artwork (from Apple's catalog), the song's music video or another one
-by the same artist (YouTube's embedded player, privacy-enhanced and muted),
-or the cover, blurred and slowly moving; your own wallpaper setting is never
-changed. Videos stream while they show and are never downloaded. The dots
-above the player choose among them; Settings › Live Wallpaper adds your own
-video files and addresses. It pauses while windows cover the desktop and
-shows only the cover in Low Power Mode.
+- **System audio** ("System Audio Recording Only"), so the light, the Dock
+  ring and the lyrics' timing hear the beat. Ahenk listens to the app that
+  plays your music, only while it plays, analyzes the sound in memory and
+  records nothing; never the microphone. The sound effects for other apps
+  use the same permission. If you said no: System Settings › Privacy &
+  Security › Screen & System Audio Recording › System Audio Recording Only ›
+  Ahenk. Without it the light still glows while music plays.
+- **Automation** for Apple Music and Spotify, to read the song, its cover,
+  shuffle, repeat and favorites and to send the commands you choose. macOS
+  can ask only while that app is open. Without it Ahenk still shows what
+  plays.
 
-### Desktop extras
+What leaves your Mac: to find covers, albums and search results, a song's
+title and artist (or what you type into the search) go to Apple's public
+catalog, and Spotify's public page is asked for a track's cover; to play a
+pick in Spotify, ListenBrainz (MetaBrainz) is asked for the song's Spotify ID;
+while lyrics are on, the playing song's title, artist, album and length go
+to LRCLIB, Musixmatch and NetEase (each can be turned off in Settings ›
+Lyrics); the live wallpaper searches YouTube and Apple's catalog for videos
+by the song's title and artist and streams what it shows. The browser
+extension talks only to Ahenk on this Mac (127.0.0.1, which accepts nothing
+but the extension). Lyric alignment runs `whisper-cli`, which you install
+yourself (`brew install whisper-cpp`), and a speech model that is fetched
+only when you press **Download the Model**. Nothing else leaves your Mac.
 
-- **Dock icon.** While a song plays, Ahenk's Dock icon is its cover with a
-  ring in the cover's colors that swells on every beat and shows the song's
-  progress; it stays still while paused and Ahenk's own icon comes back when
-  nothing plays. The ring changes a few times a second (fewer in Optimized
-  Mode and on battery, not at all in Low Power Mode). Settings › Desktop
-  Player › Dock, or **Dock Art** in the menu bar menu.
-- **Clear Desk.** The moon button beside the search field (or **Clear Desk**
-  in the menu bar menu) hides every other app, so only the desktop, the
-  widgets and the wallpaper remain; another click shows exactly the apps it
-  hid. Apps are only hidden and shown, never quit; apps you had hidden
-  yourself, full-screen apps and menu bar extras are left alone, and whatever
-  Ahenk hid comes back when it quits.
-- **Stickers.** Pick any photo (Settings › Stickers, **Add Sticker…** in the
-  player's menu, or drop it on a widget) and Ahenk cuts its subject out on
-  your Mac with Vision; nothing is uploaded. Drag a sticker to move it, its
-  corner to resize it and the handle above it to turn it; right-click to stick
-  it to the clock, the list or the player (it then moves with it) or to
-  remove it.
-- **Your own songs.** Drop a folder of songs (or song files) on Continue
-  Playing, or choose **Add Folder…** in the list's menu, and Ahenk plays them
-  itself as the source "Files on This Mac": titles and covers come from the
-  files, and the light, the lyrics, the wallpaper, the queue, shuffle and
-  repeat work as with any other source. The light needs no permission for these songs. The
-  folders are remembered in Settings › Sources; the files are never copied.
+## Demo mode
 
-### Sound effects
+```sh
+./Scripts/run-demo.sh              # invented songs, generated covers, a 120 BPM beat; no music or permissions
+```
 
-The slider button beside the lyrics (or **Sound Effects…** in the player's
-menu, or Settings › Sound) opens the effects: the presets Nightcore, Slowed +
-Reverb, 8D Audio, Bass Boost, Echo, Vaporwave, Lo-fi, Concert Hall and
-Underwater, and your own speed, pitch, reverb and ten-band equalizer.
-Everything changes the sound at once, while the song plays.
+The demo runs every feature without touching your music. The pictures in
+this README come from `./Scripts/make-screenshots.sh`, which draws Ahenk's
+own views offscreen in demo mode; nothing of the screen is captured.
 
-- **Your own song files** are changed inside Ahenk's player, speed included.
-- **Another app** (Apple Music, Spotify, a browser): Ahenk mutes that app's
-  own sound and plays it again with the effects. This needs the system audio
-  permission, the same one the light uses. A browser tab with the Ahenk
-  extension also takes the speed; Apple Music and Spotify cannot change speed,
-  so there Nightcore and Slowed move the pitch only, and the panel says so.
-- The light and the beat keep following the song as it was recorded, not the
-  echo.
-- The effects are switched off when another player takes over and when Ahenk
-  quits, and an app gets its own sound back the moment Ahenk stops playing it.
+![The first-run guide](docs/screenshots/guide.jpg)
 
-### Lyrics timed on your Mac (Beta)
+![Settings › Edge Light and Sound](docs/screenshots/settings.jpg)
 
-When a song has only plain words, or none (search for them with **Search
-Lyrics** and pick the right song, or paste them), the wand button beside the
-lyrics times them to the song: whisper.cpp recognises the sung words on your
-Mac, Ahenk gives every line (and word) its time, and the result is kept like
-any other lyrics. For your own song files Ahenk reads the file; for another
-app it listens to the rest of the song first, so start the song over to time
-every line. Nothing leaves your Mac.
+## Performance
 
-It needs two things Ahenk does not ship: `whisper-cli` (`brew install
-whisper-cpp`) and a speech model (`ggml-….bin`). Ahenk looks for them in
-`/opt/homebrew/bin`, `/usr/local/bin`, `~/Developer/whisper-models`,
-`~/Library/Application Support/Ahenk/Models` and the other usual folders, and
-tells you what is missing; **Download the Model** (574 MB, once) fetches the
-suggested model only when you press it, or choose your own files in Settings ›
-Lyrics. Singing is harder to recognise than speech: lines the model did not
-hear are placed between the ones it did.
+Measured on an M5 MacBook Pro (release build, demo mode, one 1512 × 982
+display, CPU of Ahenk's own process averaged over 30 s with `top`):
 
-### License
+| Situation | CPU | Memory |
+|---|---|---|
+| Nothing playing (live) | 0.0 % | 44 MB |
+| Paused (demo) | 0.0 % | 96 MB |
+| Playing: light, player, lyrics and Dock icon | 8.7 % | 169 MB |
+| The same with the live wallpaper | 9.1 % | 168 MB |
+| On battery (lighter by itself) | 6.4 % | 153 MB |
+| Low Power Mode | 5.5 % | 151 MB |
+| Optimized Mode | 6.4 % | 153 MB |
+
+## Development
+
+```sh
+./Scripts/make-app.sh              # build and sign dist/Ahenk.app
+./Scripts/test.sh                  # lint, the extension's tests and the unit tests
+./Scripts/smoke.sh                 # every subsystem, headless (also checks both languages)
+./Scripts/bridge-e2e.sh            # the browser extension end to end in a headless test browser
+./Scripts/make-screenshots.sh      # the README's pictures
+```
+
+`docs/PROGRESS.md` describes how each part works, what was measured and
+what is known not to work yet.
+
+## License
 
 MIT. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
@@ -170,59 +201,120 @@ MIT. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 
 ## Türkçe
 
-Ahenk, masaüstünü müzikle birlikte yaşatan bir macOS uygulamasıdır: her
-ekranın kenarında albümün renkleriyle ritme göre hareket eden bir ışık,
-masaüstünde cam bir oynatıcı, eşzamanlı şarkı sözleri, şarkının hareketli
-kapağından ya da videosundan canlı duvar kâğıdı ve albüm kapağına dönüşen bir
-Dock simgesi. Mac'inizdeki müzik uygulamalarını, tarayıcıdaki müzik
-sitelerini, çalan şarkıyı gösteren her uygulamayı ve kendi dosyalarınızı izler.
+Ahenk, masaüstünü müzikle birlikte hareket ettiren bir macOS uygulamasıdır:
+her ekranın çevresinde albümün renkleriyle ritmi izleyen bir ışık,
+masaüstünde cam bir oynatıcı ve büyük bir saat, kapağın yanında eşzamanlı
+şarkı sözleri, şarkının hareketli kapağından ya da müzik videosundan canlı
+duvar kâğıdı ve albüm kapağına dönüşen bir Dock simgesi. Apple Music'i,
+Spotify'ı, tarayıcıdaki müzik sitelerini, çalan şarkıyı gösteren her
+uygulamayı ve kendi şarkı dosyalarınızı izler.
 
-> Durum: geliştiriliyor. Hazır olanlar: ayarlar, menü çubuğu, Ayarlar
-> penceresi, demo modu, Apple Music'i, Spotify'ı, tarayıcıları ve çalan
-> şarkıyı gösteren her uygulamayı izleyen "şu an çalıyor" merkezi, ritmi
-> duyan ses analizi, her ekranın kenarında 22 farklı stille parlayan kenar
-> ışığı ve masaüstündeki cam oynatıcı: büyük bir saat, Çalmaya Devam Et
-> listesi, sanatçının albümlerini dizen kapak akışı, arama, oynatıcı çubuğu ve
-> çalma sırası; albüm kapağının yanında sekiz stilde (Balıkgözü, Yayılma,
-> Karaoke, Daktilo, Neon, Yankı, Bozulma, Sinema) eşzamanlı şarkı sözleri,
-> enstrümantal bölümlerde geri sayım, sözlerin diğer sürümleri, söz arama ve
-> zamanlama ayarı; YouTube Music, YouTube, Spotify, SoundCloud, Amazon Music,
-> Deezer ve TIDAL için tarayıcı eklentisi; ve canlı duvar kâğıdı: şarkı
-> çalarken albümün hareketli kapağı, şarkının müzik videosu ya da sanatçının
-> başka bir videosu veya kapağın kendisi duvar kâğıdınızın üzerine yavaşça
-> gelir; hangisinin gösterileceği oynatıcının üstündeki noktalarla seçilir;
-> ve masaüstü ekleri: ritimle atan bir halkayla albüm kapağına dönüşen Dock
-> simgesi, Masayı Temizle, fotoğraflarınızdan kesilen çıkartmalar ve Ahenk'in
-> kendisinin çaldığı şarkı dosyalarınız; ayrıca ses efektleri (Nightcore,
-> Slowed + Reverb, 8D Ses, Bas Güçlendirme, Yankı ve daha fazlası; yankılanma,
-> perde ve on bantlı ekolayzır) ve Mac'inizde şarkıya hizalanan şarkı sözleri.
-> Özellikler adım adım geliyor; ayrıntılar
-> [docs/PROGRESS.md](docs/PROGRESS.md) dosyasında.
+![Ahenk'li masaüstü: saat, Çalmaya Devam Et listesi, şarkı sözleri, oynatıcı ve kenar ışığı](docs/screenshots/desktop-tr.jpg)
 
-### Gereksinimler
+<sub>Buradaki bütün görseller Ahenk'in demo modunda çizildi: kurgusal şarkılar, kurgusal söz satırları ve üretilmiş kapaklar.</sub>
 
-macOS 14.2 ya da sonrası, Xcode 16 ya da sonrası (Swift 6).
+## Özellikler
 
-### Derleme ve çalıştırma
+- **Kenar ışığı.** Her ekranın kenarları kapağın renkleriyle parlar ve
+  ritimle hareket eder: vuruşlar ışığı öne iter, sakin bölümlerde ışık
+  süzülür. Canlı önizlemeli 22 stil (Yumuşak Işıma, Nabız, Nefes, Dalga,
+  Spektrum, Yılan, İkiz Yılanlar, Lav, Kutup Işıkları, Gökkuşağı, Neon Tüp,
+  Plazma, Ateş, Korlar, Kar, Kalpler, Havai Fişek, Pırıltılar, Baloncuklar,
+  Şimşek, Yağmur, Yıldızlar); bütün kenarlar, yalnızca alt, yalnızca üst
+  ya da yalnızca köşeler; kalınlık, parlama, yoğunluk, hız; albümün renkleri,
+  kendi renkleriniz ya da gökkuşağı; ekran başına açma kapama; "yalnızca
+  masaüstünde" modu; tam ekran uygulamalarda kenara çekilir. Müzik
+  duraklayınca yavaşça söner ve çizmeyi tamamen bırakır.
+- **Masaüstü oynatıcı.** Pencerelerinizin altında: tarihiyle birlikte büyük
+  ve ince bir saat, Çalmaya Devam Et listesi (çalan satır renkli), çalan
+  sanatçının albümlerini dizen kapak akışı (bir albüme tıklayınca şarkıları
+  açılır, seçtiğiniz şarkıdan sonra albüm oradan devam eder), seçtiğiniz
+  kaynakta çalan bir arama alanı (sağ tık: Hemen Sonra Çal, Çalma Sırasına
+  Ekle) ve
+  oynatıcı çubuğu: karıştır, önceki, çal/duraklat, sonraki, tekrar, kapak,
+  şarkı adı, "sanatçı — albüm", ilerleme, diğer, sözler, sıra, beğen ve ses.
+  Çubuğun solundaki kaynak seçici şarkıların nerede çalacağını belirler ve
+  önceki kaynağı duraklatır; listenin başlığı çalma listelerinizi açar; tek
+  düğme bütün listeyi çalar ya da duraklatır; sıra paneli sırada ne olduğunu
+  gösterir (çal, çıkar, ekle); küçük oynatıcı; şarkı başlarken bir yükleniyor
+  görünümü; "her şarkıyı 0:15'ten başlat". İki kaynak aynı anda çalarsa
+  oynatıcı ve menü çubuğu menüsü hangisinin izleneceğini sorar.
+- **Şarkı sözleri.** Masaüstünde, kapağın yanında, kapağın renkleriyle ve
+  her biri kendi yazı tipiyle sekiz stilde eşzamanlı sözler: Balıkgözü,
+  Yayılma, Karaoke, Daktilo, Neon, Yankı, Bozulma ve Sinema. Enstrümantal
+  bölümlerde bir müzik notası sonraki satıra geri sayar. Diğer Sözler, Söz
+  Ara, şarkı başına saklanan zamanlama ayarı, otomatik eşitleme; sözlerin
+  yanındaki kapak gizlenebilir.
+- **Mac'inizde zamanlanan sözler (Beta).** Yalnızca zamansız sözleri olan
+  (ya da hiç sözü olmayan: arayıp bulun veya yapıştırın) bir şarkıda
+  whisper.cpp söylenen sözleri Mac'inizde duyar, Ahenk de her satıra ve
+  sözcüğe zamanını verir.
+- **Canlı duvar kâğıdı.** Şarkı çalarken albümün hareketli kapağı (Apple'ın
+  kataloğundan), şarkının müzik videosu ya da aynı sanatçının başka bir
+  videosu (YouTube'un yerleştirilmiş oynatıcısında, sessiz) veya hareket eden
+  kapak duvar kâğıdınızın üzerine yavaşça gelir, müzik durunca yavaşça geri
+  çekilir. Videoyu oynatıcının üstündeki noktalar seçer; sanatçı
+  bulunamazsa adını yazarsınız. Kendi videolarınızı (dosya ya da adres) bir
+  listede tutup birini seçebilirsiniz.
+- **Dock simgesi.** Ritimle atan ve şarkının ilerleyişini gösteren bir
+  halkayla birlikte albüm kapağı; hiçbir şey çalmadığında Ahenk'in kendi
+  simgesi geri gelir.
+- **Masayı Temizle.** Ay düğmesi tek tıkla diğer bütün uygulamaları gizler,
+  ikinci tıkla tam olarak onları geri getirir.
+- **Çıkartmalar.** Herhangi bir fotoğrafı seçin; öznesi Mac'inizde kesilir ve
+  masaüstüne, saate, listeye, oynatıcıya ya da sözlere yapıştırılabilir.
+- **Kendi şarkılarınız.** Bir şarkı klasörünü Çalmaya Devam Et listesine
+  bırakın; Ahenk onu ışık, sözler, kapaklar ve duvar kâğıdıyla birlikte
+  kendisi çalar.
+- **Ses efektleri.** Sözlerin yanında: Nightcore, Slowed + Reverb, 8D Ses,
+  Bas Güçlendirme, Yankı, Vaporwave, Lo-fi, Konser Salonu ve Su Altı; hız,
+  perde, yankılanma ve on bantlı ekolayzırla birlikte, şarkı çalarken açılıp
+  kapanır.
+- **Mac'inizi yormaz.** Hiçbir şey çalmıyorsa hiçbir şey çizilmez; görünmeyen
+  her parça çizmeyi bırakır; pilde ve Düşük Güç Modunda Ahenk kendiliğinden
+  daha hafif çalışır, Optimize Edilmiş Mod da onu her zaman hafifletir.
+- **İngilizce ve Türkçe**: Mac'in dili ne olursa olsun Ayarlar › Genel'den
+  seçilir.
+
+![Bütün kenar ışığı stilleri](docs/screenshots/light-styles.jpg)
+
+![Bir satır söylenirken sekiz söz stili](docs/screenshots/lyrics-styles.jpg)
+
+![Sözlerin üzerinde açılan ses efektleri ve Sözleri Hizala paneli](docs/screenshots/effects-and-alignment.jpg)
+
+## Kurulum
+
+macOS 14.2 ya da sonrası (Apple Silicon önerilir) ve Xcode 16 ya da sonrası
+(Swift 6) gerekir.
 
 ```sh
-./Scripts/make-app.sh              # dist/Ahenk.app paketini derler ve imzalar
-./Scripts/run-demo.sh              # kurgusal şarkılarla açar (müzik gerekmez)
-./Scripts/test.sh                  # denetimler ve birim testleri
-./Scripts/smoke.sh                 # tüm alt sistemleri arayüzsüz dener
-./Scripts/bridge-e2e.sh            # tarayıcı eklentisini arayüzsüz bir test tarayıcısında baştan sona dener
-./Scripts/install.sh               # /Applications klasörüne kurar
+git clone https://github.com/sinanmertsenerr/Ahenk.git
+cd Ahenk
+./Scripts/install.sh               # derler, imzalar ve /Applications/Ahenk.app olarak kurar
+open /Applications/Ahenk.app
 ```
+
+Betikler, Mac'te varsa geliştiricinin Apple Development kimliğiyle imzalar;
+böylece macOS, Ahenk'in izinlerini yeniden derlemelerden sonra da hatırlar.
+Başka bir Mac'te `ALLOW_ADHOC=1 ./Scripts/install.sh` kullanın: uygulama
+geçici imzayla imzalanır ve macOS her derlemeden sonra izinleri yeniden
+sorar. `./Scripts/make-app.sh` yalnızca `dist/Ahenk.app` paketini derler.
+
+İlk açılışta kısa bir rehber açılır: izinler, tarayıcı eklentisi ve
+**Oturum açıldığında Ahenk'i aç** seçeneği. Rehber menü çubuğu menüsünden
+(**Başlangıç Rehberi…**) ve Ayarlar › Genel bölümünden yeniden açılır;
+oturum açılışında başlatma da orada açılıp kapatılır. Ahenk menü çubuğunda
+(hızlı anahtarlar, Masayı Temizle, Ayarlar) ve simgesi albüm kapağına dönüşen
+Dock'ta yaşar.
 
 ### Tarayıcı eklentisi
 
 Tarayıcıdaki müzik siteleri (YouTube Music, YouTube, Spotify, SoundCloud,
 Amazon Music, Deezer ve TIDAL), Ahenk tarayıcı eklentisi sayesinde neyin
 çaldığını tam olarak bildirir; masaüstü oynatıcı da seçtiğiniz şarkıları,
-çalma listelerini ve çalma sırasını orada çalar. Eklentiyi bir kez kurmanız
-yeterli; menü çubuğu menüsündeki **Tarayıcı Eklentisini Kur…** komutu
-klasörlerini Finder'da gösterir (`make-app.sh` bu klasörleri
-`Ahenk.app/Contents/Resources/Extension` içine koyar):
+çalma listelerini ve çalma sırasını orada çalar. Menü çubuğu menüsündeki
+**Tarayıcı Eklentisini Kur…** komutu eklentinin klasörlerini Finder'da
+gösterir (klasörler `Ahenk.app/Contents/Resources/Extension` içindedir):
 
 - **Chrome, Edge, Brave, Arc, Opera, Vivaldi:** uzantılar sayfasını açın
   (`chrome://extensions`), Geliştirici modunu açın, **Paketlenmemiş öğe
@@ -232,122 +324,88 @@ klasörlerini Finder'da gösterir (`make-app.sh` bu klasörleri
 - **Firefox:** `about:debugging` › Bu Firefox › **Geçici Eklenti Yükle…** ›
   `Firefox` klasöründeki `manifest.json`. Firefox kapanınca eklentiyi unutur.
 
-Eklentinin düğmesi bağlı olup olmadığını gösterir; Ayarlar › Kaynaklar bağlı
-tarayıcıları ve müzik sekmelerini listeler.
+Daha önceki bir sürümü kurduysanız uzantılar sayfasından yeniden yükleyin:
+bir tarayıcı sekmesinde Nightcore ve Slowed hızının değişmesi için 1.2.0
+sürümü gerekir. Eklentinin düğmesi bağlı olup olmadığını gösterir; Ayarlar ›
+Kaynaklar bölümü bağlı tarayıcıları, müzik sekmelerini ve yeniden yüklenmesi
+gereken bir eklentiyi listeler.
 
-Ahenk iki izin kullanır: sistem sesi (ışık müziği duysun diye; hiçbir şey
-kaydedilmez, mikrofon asla kullanılmaz) ve Otomasyon (Apple Music ile
-Spotify'dan şarkıyı, kapağı, karıştırma, tekrar ve favori bilgisini okumak ve
-seçtiğiniz komutları göndermek için). macOS sistem sesi iznini yalnızca
-Ayarlar › Ses'teki ya da menü çubuğu menüsündeki **Dinlemeye İzin Ver…**
-düğmesine bastığınızda sorar; Ahenk bundan sonra yalnızca müzik çalarken,
-müziğinizi çalan uygulamayı dinler ve sesi bellekte analiz eder. Hayır
-dediyseniz Sistem Ayarları › Gizlilik ve Güvenlik › Ekran ve Sistem Sesi
-Kaydı › Yalnızca Sistem Sesi Kaydı bölümünden Ahenk'i açın. Otomasyon izni
-olmadan da neyin çaldığını gösterir; izni yalnızca Ayarlar › Kaynaklar'daki
-**Erişime İzin Ver…** düğmesine bastığınızda (ya da masaüstü oynatıcıda o
-uygulamada çalması için ilk kez bir şarkı seçtiğinizde) ister. Kapakları,
-albümleri ve arama sonuçlarını bulmak için şarkının adını ve sanatçısını ya da
-aramaya yazdıklarınızı Apple'ın herkese açık kataloğuna gönderir, bir parçanın
-kapağını Spotify'ın herkese açık sayfasından ister; seçtiğiniz bir şarkıyı
-Spotify'da çalmak için şarkının adını, sanatçısını ve albümünü ListenBrainz'e
-(MetaBrainz) göndererek Spotify kimliğini bulur. Şarkı sözleri açıkken, çalan
-şarkının sözlerini bulmak için adını, sanatçısını, albümünü ve süresini
-LRCLIB, Musixmatch ve NetEase hizmetlerine gönderir (her biri Ayarlar › Şarkı
-Sözleri'nden kapatılabilir) ve bulduklarını Mac'inizde saklar. Tarayıcı
-eklentisi yalnızca bu Mac'teki Ahenk'le konuşur (127.0.0.1; Ahenk eklentiden
-başkasını kabul etmez): müzik sitesinin kendi sayfasında görünenleri (şarkıyı,
-konumunu ve sitenin sözler görünümü yüklediğinde sitenin kendi eşzamanlı
-sözlerini) okur ve komutlarınızı orada yerine getirir. Mac'inizden başka hiçbir
-şey çıkmaz.
+## İzinler ve gizlilik
 
-### Canlı duvar kâğıdı
+Ahenk iki izin ister; her birini yalnızca ilgili düğmeye bastığınızda
+(rehberde ya da Ayarlar'da) sorar:
 
-Şarkı çalarken masaüstü resminizin hemen üstündeki bir katman albümün
-hareketli kapağını (Apple'ın kataloğundan), şarkının müzik videosunu ya da
-aynı sanatçının başka bir videosunu (YouTube'un gizlilik odaklı, sessiz
-yerleştirilmiş oynatıcısında) veya bulanık ve yavaşça hareket eden kapağı
-gösterir; kendi duvar kâğıdı ayarınız hiç değişmez. Videolar gösterildikleri
-sırada akış olarak oynatılır, asla indirilmez. Oynatıcının üstündeki noktalar
-bunlar arasında seçim yapar; Ayarlar › Canlı Duvar Kâğıdı'ndan kendi video
-dosyalarınızı ve adreslerinizi ekleyebilirsiniz. Pencereler masaüstünü
-örttüğünde duraklar, Düşük Güç Modunda yalnızca kapağı gösterir.
+- **Sistem sesi** ("Yalnızca Sistem Sesi Kaydı"): ışık, Dock'taki halka ve
+  sözlerin zamanlaması ritmi duysun diye. Ahenk müziğinizi çalan uygulamayı
+  yalnızca o çalarken dinler, sesi bellekte analiz eder ve hiçbir şey
+  kaydetmez; mikrofon asla kullanılmaz. Başka uygulamalardaki ses efektleri
+  de aynı izni kullanır. Hayır dediyseniz: Sistem Ayarları › Gizlilik ve
+  Güvenlik › Ekran ve Sistem Sesi Kaydı › Yalnızca Sistem Sesi Kaydı ›
+  Ahenk. Bu izin olmadan da ışık müzik çalarken parlar.
+- **Otomasyon**: Apple Music ve Spotify'dan şarkıyı, kapağını, karıştırma,
+  tekrar ve favori bilgisini okumak ve seçtiğiniz komutları göndermek için.
+  macOS bunu yalnızca o uygulama açıkken sorabilir. Bu izin olmadan da Ahenk
+  neyin çaldığını gösterir.
 
-### Masaüstü ekleri
+Mac'inizden çıkanlar: kapakları, albümleri ve arama sonuçlarını bulmak için
+şarkının adı ve sanatçısı (ya da aramaya yazdıklarınız) Apple'ın herkese açık
+kataloğuna gider, bir parçanın kapağı Spotify'ın herkese açık sayfasından
+istenir; seçtiğiniz bir şarkıyı Spotify'da çalmak için şarkının Spotify
+kimliği ListenBrainz'e (MetaBrainz) sorulur; sözler açıkken çalan şarkının
+adı, sanatçısı, albümü ve süresi LRCLIB, Musixmatch ve NetEase hizmetlerine
+gider (her biri Ayarlar › Şarkı Sözleri bölümünden kapatılabilir); canlı
+duvar kâğıdı videoları şarkının adı ve sanatçısıyla YouTube'da ve Apple'ın
+kataloğunda arar, gösterdiğini akış olarak oynatır. Tarayıcı eklentisi
+yalnızca bu Mac'teki Ahenk'le konuşur (127.0.0.1; Ahenk eklentiden başkasını
+kabul etmez). Sözleri hizalamak için kendi kurduğunuz `whisper-cli` (`brew
+install whisper-cpp`) çalışır; konuşma modeli yalnızca **Modeli İndir**
+düğmesine bastığınızda indirilir. Mac'inizden başka hiçbir şey çıkmaz.
 
-- **Dock simgesi.** Şarkı çalarken Ahenk'in Dock simgesi şarkının kapağına
-  dönüşür; çevresindeki halka kapağın renklerini taşır, her vuruşta genişler
-  ve şarkının ne kadarının çalındığını gösterir. Şarkı duraklatıldığında halka
-  durur, hiçbir şey çalmadığında Ahenk'in kendi simgesi geri gelir. Halka
-  saniyede birkaç kez değişir (Optimize Edilmiş Modda ve pilde daha seyrek,
-  Düşük Güç Modunda hiç). Ayarlar › Masaüstü Oynatıcı › Dock bölümünden ya da
-  menü çubuğu menüsündeki **Dock'ta Albüm Kapağı** seçeneğinden açılıp
-  kapatılır.
-- **Masayı Temizle.** Arama alanının yanındaki ay düğmesi (ya da menü çubuğu
-  menüsündeki **Masayı Temizle**) diğer bütün uygulamaları gizler; geriye
-  masaüstü, araçlar ve duvar kâğıdı kalır. Bir kez daha tıkladığınızda yalnızca
-  Ahenk'in gizlediği uygulamalar geri gelir. Uygulamalar yalnızca gizlenir ve
-  gösterilir, hiçbiri kapatılmaz; sizin gizlediğiniz uygulamalara, tam ekran
-  uygulamalara ve menü çubuğu araçlarına dokunulmaz. Ahenk kapanırken
-  gizlediği her şeyi geri getirir.
-- **Çıkartmalar.** Herhangi bir fotoğrafı seçin (Ayarlar › Çıkartmalar,
-  oynatıcı menüsündeki **Çıkartma Ekle…** ya da fotoğrafı bir aracın üstüne
-  bırakmak); Ahenk fotoğraftaki özneyi Vision ile Mac'inizde arka plandan
-  ayırır, hiçbir şey yüklenmez. Çıkartmayı taşımak için kendisini, boyutunu
-  değiştirmek için köşesini, döndürmek için üstündeki tutamacı sürükleyin;
-  saate, listeye ya da oynatıcıya yapıştırmak (çıkartma artık onunla birlikte
-  taşınır) veya silmek için sağ tıklayın.
-- **Kendi şarkılarınız.** Bir şarkı klasörünü (ya da şarkı dosyalarını) Çalmaya
-  Devam Et listesine bırakın veya listenin menüsünden **Klasör Ekle…**
-  komutunu seçin; Ahenk bu şarkıları "Bu Mac'teki Dosyalar" kaynağı olarak
-  kendisi çalar.
-  Şarkı adları ve kapaklar dosyalardan okunur; ışık, şarkı sözleri, duvar
-  kâğıdı, çalma sırası, karıştırma ve tekrar diğer kaynaklardaki gibi çalışır.
-  Bu şarkılarda ışık için izin gerekmez. Klasörler Ayarlar › Kaynaklar'da
-  durur; dosyalar hiçbir yere kopyalanmaz.
+## Demo modu
 
-### Ses efektleri
+```sh
+./Scripts/run-demo.sh              # kurgusal şarkılar, üretilmiş kapaklar, dakikada 120 vuruş; müzik ya da izin gerekmez
+```
 
-Şarkı sözlerinin yanındaki kaydırıcı düğmesi (ya da oynatıcı menüsündeki
-**Ses Efektleri…**, veya Ayarlar › Ses) efektleri açar: Nightcore, Slowed +
-Reverb, 8D Ses, Bas Güçlendirme, Yankı, Vaporwave, Lo-fi, Konser Salonu ve Su
-Altı hazır ayarları ile kendi hız, perde, yankılanma ve on bantlı ekolayzır
-ayarlarınız. Her değişiklik şarkı çalarken anında duyulur.
+Demo, müziğinize dokunmadan bütün özellikleri çalıştırır. Bu sayfadaki
+görseller, Ahenk'in kendi görünümlerini demo modunda ekran dışında çizen
+`./Scripts/make-screenshots.sh` betiğinden gelir; ekrandan hiçbir şey
+yakalanmaz.
 
-- **Kendi şarkı dosyalarınızın** sesi, hız dahil, Ahenk'in oynatıcısının içinde
-  değiştirilir.
-- **Başka bir uygulamada** (Apple Music, Spotify, tarayıcı) Ahenk o uygulamanın
-  kendi sesini susturur ve sesi efektlerle yeniden çalar. Bunun için ışığın da
-  kullandığı sistem sesi izni gerekir. Ahenk eklentisi kurulu bir tarayıcı
-  sekmesinde hız da değişir; Apple Music ve Spotify'da hız değiştirilemediği
-  için orada Nightcore ve Slowed yalnızca perdeyi kaydırır, panel de bunu
-  söyler.
-- Işık ve ritim, yankıyı değil şarkının kaydedildiği hâlini izlemeyi sürdürür.
-- Başka bir oynatıcı devreye girdiğinde ve Ahenk kapandığında efektler kapanır;
-  Ahenk bir uygulamanın sesini çalmayı bıraktığı anda o uygulama kendi sesine
-  kavuşur.
+![Başlangıç rehberi](docs/screenshots/guide.jpg)
 
-### Mac'inizde zamanlanan şarkı sözleri (Beta)
+![Ayarlar › Kenar Işığı ve Ses](docs/screenshots/settings.jpg)
 
-Bir şarkının yalnızca zamansız sözleri varsa ya da hiç sözü yoksa (**Söz Ara**
-ile bulup doğru şarkıyı seçin veya sözleri yapıştırın), sözlerin yanındaki
-sihirli değnek düğmesi sözleri şarkıya hizalar: whisper.cpp söylenen sözleri
-Mac'inizde tanır, Ahenk her satıra (ve sözcüğe) zamanını verir, sonuç da diğer
-sözler gibi saklanır. Kendi şarkı dosyalarınızda Ahenk dosyayı okur; başka bir
-uygulamada ise önce şarkının kalanını dinler, bu yüzden bütün satırların
-zamanlanması için şarkıyı baştan başlatın. Hiçbir şey Mac'inizden çıkmaz.
+## Performans
 
-Bunun için Ahenk'le birlikte gelmeyen iki şey gerekir: `whisper-cli` (`brew
-install whisper-cpp`) ve bir konuşma modeli (`ggml-….bin`). Ahenk bunları
-`/opt/homebrew/bin`, `/usr/local/bin`, `~/Developer/whisper-models`,
-`~/Library/Application Support/Ahenk/Models` ve alışılmış diğer klasörlerde
-arar, eksik olanı söyler; **Modeli İndir** (574 MB, bir kereliğine) önerilen
-modeli yalnızca siz bastığınızda indirir. Dilerseniz Ayarlar › Şarkı Sözleri
-bölümünden kendi dosyalarınızı seçebilirsiniz. Şarkıyı tanımak konuşmayı
-tanımaktan zordur: modelin duyamadığı satırlar, duyduklarının arasına
-yerleştirilir.
+M5 işlemcili bir MacBook Pro'da ölçüldü (sürüm derlemesi, demo modu, tek bir
+1512 × 982 ekran; Ahenk'in kendi sürecinin işlemci kullanımı, `top` ile 30
+saniyelik ortalama):
 
-### Lisans
+| Durum | İşlemci | Bellek |
+|---|---|---|
+| Hiçbir şey çalmıyor (gerçek kullanım) | %0,0 | 44 MB |
+| Duraklatıldı (demo) | %0,0 | 96 MB |
+| Çalıyor: ışık, oynatıcı, sözler ve Dock simgesi | %8,7 | 169 MB |
+| Aynısı, canlı duvar kâğıdıyla | %9,1 | 168 MB |
+| Pilde (kendiliğinden hafif) | %6,4 | 153 MB |
+| Düşük Güç Modu | %5,5 | 151 MB |
+| Optimize Edilmiş Mod | %6,4 | 153 MB |
+
+## Geliştirme
+
+```sh
+./Scripts/make-app.sh              # dist/Ahenk.app paketini derler ve imzalar
+./Scripts/test.sh                  # denetimler, eklentinin testleri ve birim testleri
+./Scripts/smoke.sh                 # bütün alt sistemleri arayüzsüz dener (iki dili de denetler)
+./Scripts/bridge-e2e.sh            # tarayıcı eklentisini arayüzsüz bir test tarayıcısında baştan sona dener
+./Scripts/make-screenshots.sh      # bu sayfadaki görseller
+```
+
+`docs/PROGRESS.md` her parçanın nasıl çalıştığını, neyin ölçüldüğünü ve
+neyin henüz çalışmadığını anlatır.
+
+## Lisans
 
 MIT. Ayrıntılar [LICENSE](LICENSE) ve
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) dosyalarında.
