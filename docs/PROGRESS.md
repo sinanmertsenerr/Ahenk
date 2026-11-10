@@ -2473,6 +2473,16 @@ Not a plan step: fixes and changes asked for while using 1.0.0, one commit each 
 - Also: LRCLIB is searched without the album, Clear Desk no longer trusts `hide()`'s answer, one Recently Played row per
   song across an app and a browser, the guide fits below its title bar, `-AhenkExperiment` measurement switches.
 
+- **A pick's Spotify ID comes from Spotify's own search page** (`SpotifySearchPage`, `SpotifyPageFinder`; the app
+  reads the page in a web view that is never shown, `SpotifySearchWebReader`: no account, no key, nothing kept on disk,
+  nothing played, let go 30 s after the last search). ListenBrainz knew few new Turkish releases (five of eight songs
+  tried were missing), so picks opened Spotify's search and queued songs were skipped; it stays as the fallback when the
+  page cannot be read. The row must carry the asked title by one of the asked artists. Checked in the signed app with
+  `./Scripts/smoke.sh --smoke-only spotifySearch` (12 songs read in 2.0 s; it needs the network, so it runs only when
+  named). Not checked here: a real pick from the player (that would start the user's playback). Risks: the page's
+  markup can change (then the fallback and Spotify's search, as before), and Spotify's terms do not welcome automated
+  reading of its site.
+
 Checks on the final tree: `./Scripts/test.sh` 570/570 with the node tests (twice), `./Scripts/smoke.sh` passed (31
 subsystems), `./Scripts/make-app.sh` signed with the Apple Development identity, installed to /Applications with
 `./Scripts/install.sh --no-build`. Every commit builds with its tests (`swift build --build-tests` in a worktree); the
