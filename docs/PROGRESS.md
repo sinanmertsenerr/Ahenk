@@ -2508,6 +2508,34 @@ Not a plan step: fixes and changes asked for while using 1.0.0, one commit each 
   then), the next 356 ms; the route kept ready afterwards was not timed. Not checked: signing in with Google, Apple or
   Facebook inside the window, an account with two computers, a free account. 588 tests pass; the smoke check was not
   run again.
+- **The strip behind the menu bar shows pictures, not the live layers** (`WallpaperMenuBarWindow`). Asked why one
+  video takes 60 % of the GPU, the wallpaper alone was measured on the bare desktop (light, lyrics, player and Dock art
+  off, one clip repeated from 0:15; GPU = `ioreg`'s Device Utilization, 2 s samples from 24 s after launch; WindowServer
+  from `ps`), each case two or three times:
+
+  | Case | GPU | WindowServer |
+  |---|---|---|
+  | Ahenk not running | 2 % | 19 % |
+  | wallpaper video, as it was | 60 % | 48 % |
+  | no strip (`-AhenkExperiment noStrip`) | 19 % | 16–17 % |
+  | strip without its pulse | 57–59 % | 46–50 % |
+  | no strip, opaque window / no scrim / no mask | 17–19 % | 17–18 % |
+  | no strip, video stopped on a frame | 4–6 % | 19 % |
+  | strip as pictures, 1 / 15 a second (trial) | 20 % / 22 % | 18 % / 28 % |
+  | as shipped (10 a second) | 21 % | 22 % |
+
+  So two thirds of the cost was the `CALayerHost` mirror of the wallpaper window in the strip, not the video: with it
+  the window server drew the whole screen again for every frame. An opaque window, no scrim, no mask and the rule that
+  hides the player's chrome changed nothing. The strip now shows the window server's own picture of the wallpaper
+  window's top edge (`CGWindowListCreateImage`, found at run time since the SDK no longer declares it; no permission
+  for the app's own windows), ten times a second. The log names the picture's size and its mean colour after 60
+  pictures (the first one is of a wallpaper that has not melted in yet): 132 133 126 with the clip on screen. Not
+  looked at by eye on a bright, fast scene. One thing not explained: in a first batch of 24 runs some cases read 2–3 %
+  GPU with the video "showing"; the 18 runs after it agreed with each other and are the ones above.
+- **The wallpaper video says what it is** in the log (size, frames a second over 8 s, dropped frames, the player's own
+  codec line): here AV1 1920×1080 at 25 frames, shown at 960×540 points @2x. The count over the first 8 s reads 15 a
+  second (it includes the seek to the song's position); not looked into. The player's title, logo, cards and end screen
+  are also hidden by name; the text the user saw at a video's start was not reproduced in two recorded starts.
 Checks on the final tree: `./Scripts/test.sh` 570/570 with the node tests (twice), `./Scripts/smoke.sh` passed (31
 subsystems), `./Scripts/make-app.sh` signed with the Apple Development identity, installed to /Applications with
 `./Scripts/install.sh --no-build`. Every commit builds with its tests (`swift build --build-tests` in a worktree); the
