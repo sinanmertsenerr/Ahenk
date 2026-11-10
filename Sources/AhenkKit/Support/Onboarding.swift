@@ -34,6 +34,13 @@ public enum OnboardingPolicy {
         case .normal: requested || !completed
         }
     }
+
+    /// Closing the guide marks it seen only in a normal run: a plain demo
+    /// run shares the user's stored settings, and its guide asked for
+    /// nothing, so it must not keep the real one from opening.
+    public static func closingCountsAsSeen(mode: LaunchOptions.Mode) -> Bool {
+        mode == .normal
+    }
 }
 
 /// The browser extension's version, as it says in its `hello`.

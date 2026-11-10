@@ -4,8 +4,8 @@ import SwiftUI
 
 /// The first-run guide's window: opens by itself on the first normal
 /// launch, again from the menu bar menu, the app menu and Settings ›
-/// General. Closing it (any way) counts as done, so it never nags; its
-/// content is released when it closes.
+/// General. Closing it (any way) in a normal run counts as done, so it
+/// never nags; its content is released when it closes.
 @MainActor
 final class OnboardingWindowController: NSObject, NSWindowDelegate {
     static let size = NSSize(width: 640, height: 560)
@@ -64,7 +64,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        if !environment.settings.general.onboardingCompleted {
+        if OnboardingPolicy.closingCountsAsSeen(mode: environment.options.mode), !environment.settings.general.onboardingCompleted {
             environment.settings.general.onboardingCompleted = true
             Self.log.info("The guide was closed; it opens again only when asked")
         }

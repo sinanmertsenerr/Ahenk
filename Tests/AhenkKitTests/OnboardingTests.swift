@@ -25,6 +25,13 @@ struct OnboardingTests {
         #expect(!OnboardingPolicy.showsAtLaunch(mode: .smoke, completed: false, requested: true), "a smoke run shows no window")
     }
 
+    @Test("Only a normal run's guide is marked seen when it closes")
+    func closingCounts() {
+        #expect(OnboardingPolicy.closingCountsAsSeen(mode: .normal))
+        #expect(!OnboardingPolicy.closingCountsAsSeen(mode: .demo), "a demo shares the stored settings and asked for nothing")
+        #expect(!OnboardingPolicy.closingCountsAsSeen(mode: .smoke))
+    }
+
     @Test("Extension versions are read and compared as numbers")
     func versions() {
         #expect(ExtensionVersion("1.2.0") == ExtensionVersion(major: 1, minor: 2, patch: 0))
