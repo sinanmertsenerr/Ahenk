@@ -21,7 +21,8 @@ import AppKit
 ///
 /// Playing a pick is something the user asked for, so the source's app is
 /// launched if needed (in the background) and macOS may ask once for the
-/// Automation permission. When Ahenk's queue moves on by itself
+/// Automation permission. Spotify comes to the front by itself when it is
+/// told to play a song; the front is given back at once (`AppFocusKeeper`). When Ahenk's queue moves on by itself
 /// (`interactive: false`), nothing is brought to the front: a song that
 /// would need the user's click is skipped instead. Reading playlists and
 /// the volume never launches an app and never asks.
@@ -49,6 +50,7 @@ final class PlaybackRouter {
     private let services: NowPlayingServices
     private let demo: DemoProvider?
     private let log = AhenkLogger(category: "player")
+    private let spotifyFocus = AppFocusKeeper(bundleIdentifier: KnownApps.spotify)
 
     init(services: NowPlayingServices, demo: DemoProvider?) {
         self.services = services
@@ -156,21 +158,25 @@ final class PlaybackRouter {
         guard await scripts.automationPermission(for: KnownApps.spotify, askIfNeeded: interactive) == .granted else {
             return .failed("Allow Ahenk to control Spotify in System Settings › Privacy & Security › Automation.".l10n)
         }
-        // A Spotify that has only just opened takes the song without
-        // starting it: ask what it does and say it again until it plays.
-        for attempt in 0..<6 {
-            guard case .success(let value) = await scripts.run(script), case .played = ScriptPlayResult.parse(value) else {
-                if attempt == 0 { return .failed("Spotify did not start the song.".l10n) }
-                break
+        // `play track` brings Spotify to the front by itself: the front
+        // goes back to the app the user works in.
+        return await spotifyFocus.keepingInBackground {
+            // A Spotify that has only just opened takes the song without
+            // starting it: ask what it does and say it again until it plays.
+            for attempt in 0..<6 {
+                guard case .success(let value) = await scripts.run(script), case .played = ScriptPlayResult.parse(value) else {
+                    if attempt == 0 { return .failed("Spotify did not start the song.".l10n) }
+                    break
+                }
+                try? await Task.sleep(for: .milliseconds(attempt == 0 ? 700 : 1400))
+                guard case .success(let check) = await scripts.run(SpotifyAppScripts.playbackCheckScript),
+                      let playing = SpotifyAppScripts.isPlaying(trackID: trackID, check: check)
+                else { return .started }
+                if playing { return .started }
+                log.notice("Spotify has not started the song yet (try \(attempt + 1)); asking again")
             }
-            try? await Task.sleep(for: .milliseconds(attempt == 0 ? 700 : 1400))
-            guard case .success(let check) = await scripts.run(SpotifyAppScripts.playbackCheckScript),
-                  let playing = SpotifyAppScripts.isPlaying(trackID: trackID, check: check)
-            else { return .started }
-            if playing { return .started }
-            log.notice("Spotify has not started the song yet (try \(attempt + 1)); asking again")
+            return .started
         }
-        return .started
     }
 
     private func playInBrowser(_ song: CatalogSong, site: MusicSource) async -> Outcome {
