@@ -171,8 +171,9 @@ struct SourcesPane: View {
 }
 
 /// Apple Music or Spotify: installed, running, playing, and how much Ahenk
-/// may do with it; a button to allow access or open System Settings.
-private struct MusicAppRow: View {
+/// may do with it; a button to allow access or open System Settings (also
+/// on the first-run guide's Music Apps page).
+struct MusicAppRow: View {
     let source: MusicSource
     let services: NowPlayingServices
 
@@ -241,6 +242,15 @@ private struct BrowserRow: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            if ExtensionVersion.needsReload(reported: browser.extensionVersion) {
+                Label(
+                    L10n.format("An older version: reload it on the browser's extensions page to get version %@.", ExtensionVersion.shipped.description),
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .padding(.leading, 32)
+            }
             ForEach(browser.tabs) { tab in
                 HStack(spacing: 6) {
                     Text(tab.site.title)
@@ -298,7 +308,8 @@ private struct PlayerRow: View {
     }
 }
 
-private struct AppIcon: View {
+/// An app's icon at list size, or a symbol when the app is not known.
+struct AppIcon: View {
     let image: NSImage?
     /// Drawn when the app is not known.
     var placeholder = "app.dashed"

@@ -52,6 +52,8 @@ import Foundation
 ///   checks and measurements (the folder is temporary and deleted on quit).
 /// - `--demo-desk-cleared`: in demo mode, Clear Desk is switched on at
 ///   launch, on the demo's invented apps (nothing on the Mac is hidden).
+/// - `--welcome`: open the first-run guide at launch (also in demo mode,
+///   where it asks for nothing).
 /// - `--power <battery|low-power|hot>`: in demo mode, act as if the Mac ran
 ///   on battery, in Low Power Mode or hot (measurements of the lighter mode
 ///   without touching the Mac's own power settings).
@@ -116,6 +118,8 @@ public struct LaunchOptions: Equatable, Sendable {
     public var demoLocal = false
     /// Demo only: the invented desk starts cleared (`--demo-desk-cleared`).
     public var demoDeskCleared = false
+    /// Open the first-run guide at launch (`--welcome`).
+    public var showsWelcome = false
     /// Demo only: the power state to act as if (`--power`).
     public var simulatedPower: SimulatedPower?
 
@@ -189,6 +193,8 @@ public struct LaunchOptions: Equatable, Sendable {
                 demoLocal = true
             case "--demo-desk-cleared":
                 demoDeskCleared = true
+            case "--welcome":
+                showsWelcome = true
             case "--power":
                 simulatedPower = (inlineValue ?? Self.popValue(&remaining)).flatMap { SimulatedPower(rawValue: $0.lowercased()) }
             case "--wallpaper-song":

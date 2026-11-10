@@ -31,6 +31,8 @@ final class AppEnvironment {
     var clearDesk: DeskClearing { deskController }
 
     private(set) lazy var settingsWindow = SettingsWindowController(environment: self)
+    /// The first-run guide (permissions, the browser extension, login).
+    private(set) lazy var onboarding = OnboardingWindowController(environment: self)
     /// The edge light on every screen (started with the services).
     private(set) lazy var light = EdgeLightController(
         settings: settings, nowPlaying: nowPlaying, features: audio.store, power: power
@@ -201,6 +203,11 @@ final class AppEnvironment {
 
     func showSettings(_ pane: SettingsPane? = nil) {
         settingsWindow.show(pane: pane)
+    }
+
+    /// The first-run guide, from its first page unless it is open already.
+    func showOnboarding(_ page: OnboardingPage? = nil) {
+        onboarding.show(page: page)
     }
 
     /// Files dropped on a desktop widget: pictures become stickers there;

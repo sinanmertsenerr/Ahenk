@@ -114,6 +114,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let pane = environment.options.settingsPane {
             environment.showSettings(SettingsPane(argument: pane))
         }
+        // The first normal launch opens the guide (permissions, the browser
+        // extension, login); `--welcome` opens it on request.
+        if OnboardingPolicy.showsAtLaunch(mode: options.mode, completed: settings.general.onboardingCompleted, requested: options.showsWelcome) {
+            environment.showOnboarding()
+        }
         log.info("Ready")
     }
 

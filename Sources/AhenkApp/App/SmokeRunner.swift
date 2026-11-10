@@ -70,6 +70,9 @@ final class SmokeRunner {
             await report.check("soundEffects") { try await EffectsCheck.run(environment: self.environment) }
         }
         if selected("settingsWindow") { await report.check("settingsWindow") { try await self.checkSettingsWindow() } }
+        if selected("onboarding") {
+            await report.check("onboarding") { try await OnboardingCheck.run(environment: self.environment, snapshots: self.snapshotDirectory()) }
+        }
         if selected("bridge") {
             await report.check("bridge") { try await BridgeCheck.run(settings: self.environment.settings, snapshots: self.snapshotDirectory()) }
         }
@@ -141,7 +144,7 @@ final class SmokeRunner {
             throw SmokeFailure("Shaders/EdgeLight.metal missing from the resource bundle")
         }
         let symbols = Set(QuickMenu.symbolNames + SettingsPane.allCases.map(\.symbolName) + DesktopSymbols.all
-            + [BrowserExtensionInstaller.symbolName] + WallpaperSymbols.all
+            + [BrowserExtensionInstaller.symbolName] + WallpaperSymbols.all + OnboardingView.symbols
             + ["backward.fill", "forward.fill", "play.fill", "pause.fill", "plus", "minus", "waveform", "app.dashed", "globe"])
         let missing = symbols.filter { NSImage(systemSymbolName: $0, accessibilityDescription: nil) == nil }
         guard missing.isEmpty else { throw SmokeFailure("Missing SF Symbols: \(missing.sorted().joined(separator: ", "))") }

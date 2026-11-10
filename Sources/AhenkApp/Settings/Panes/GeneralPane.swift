@@ -40,6 +40,12 @@ struct GeneralPane: View {
 
             Section {
                 LoginItemToggle(loginItem: environment.loginItem)
+                LabeledContent {
+                    Button("Open the Guide…".l10n) { environment.showOnboarding() }
+                } label: {
+                    Text("Getting started".l10n)
+                    Text("The permissions Ahenk uses, the browser extension and where everything is.".l10n)
+                }
             } header: {
                 Text("Startup".l10n)
             }

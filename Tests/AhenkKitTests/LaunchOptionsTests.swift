@@ -127,4 +127,12 @@ struct LaunchOptionsTests {
         #expect(LaunchOptions(arguments: ["Ahenk", "--power", "solar"]).simulatedPower == nil, "an unknown state is ignored")
         #expect(LaunchOptions(arguments: ["Ahenk"]).simulatedPower == nil)
     }
+
+    @Test("Launch option for the first-run guide")
+    func welcome() {
+        let options = LaunchOptions(arguments: ["Ahenk", "--demo", "--welcome"])
+        #expect(options.showsWelcome && options.mode == .demo)
+        #expect(!LaunchOptions(arguments: ["Ahenk"]).showsWelcome)
+        #expect(!options.usesDetachedSettings, "opening the guide changes nothing by itself")
+    }
 }

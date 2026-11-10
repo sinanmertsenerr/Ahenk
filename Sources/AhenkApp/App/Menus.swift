@@ -58,7 +58,7 @@ enum QuickMenu {
 
     /// Every SF Symbol the menus use (checked by `--smoke`).
     static var symbolNames: [String] {
-        QuickToggle.allCases.map(\.symbolName) + ["moon", "moon.fill", "gearshape", "power", BrowserExtensionInstaller.symbolName]
+        QuickToggle.allCases.map(\.symbolName) + ["moon", "moon.fill", "gearshape", "power", "questionmark.circle", BrowserExtensionInstaller.symbolName]
     }
 
     static func populate(_ menu: NSMenu, environment: AppEnvironment, placement: Placement) {
@@ -147,6 +147,11 @@ enum QuickMenu {
             install.subtitle = "For YouTube Music, Spotify, SoundCloud and other music sites".l10n
         }
         menu.addItem(install)
+        let guide = ClosureMenuItem(title: "Getting Started…".l10n) { [weak environment] in
+            environment?.showOnboarding()
+        }
+        guide.image = symbol("questionmark.circle")
+        menu.addItem(guide)
         let settingsItem = ClosureMenuItem(title: "Settings…".l10n, keyEquivalent: ",") { [weak environment] in
             environment?.showSettings()
         }
@@ -247,6 +252,9 @@ enum MainMenu {
         })
         app.addItem(ClosureMenuItem(title: "Install Browser Extension…".l10n) {
             BrowserExtensionInstaller.present()
+        })
+        app.addItem(ClosureMenuItem(title: "Getting Started…".l10n) { [weak environment] in
+            environment?.showOnboarding()
         })
         app.addItem(.separator())
         app.addItem(withTitle: "Hide Ahenk".l10n, action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
