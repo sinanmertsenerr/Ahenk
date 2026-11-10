@@ -203,6 +203,7 @@
       last = null;
       return;
     }
+    captions(state);
     const due = state.state === 'playing' && now - lastSentAt > 30000;
     if (force || !reported || due || C.noticeableChange(last, state, now)) {
       post({ kind: 'state', state });
@@ -252,6 +253,48 @@
       });
     },
   };
+
+  // MARK: A video's own captions as lyrics
+
+  // YouTube and YouTube Music: a music video often carries captions its
+  // uploader wrote, timed for this very video (the lyrics catalogs time
+  // the album's recording, which a video with an intro runs ahead of).
+  // Asked once per video, from the player's own data; nothing is clicked.
+  let captionsFor = null;
+
+  function captions(state) {
+    if (site !== 'youtubeMusic' && site !== 'youtube') return;
+    if (!state || !state.trackId || state.kind !== 'music' || captionsFor === state.trackId) return;
+    const player = document.getElementById('movie_player');
+    const response = player && typeof player.getPlayerResponse === 'function' ? call(() => player.getPlayerResponse(), null) : null;
+    // The player still shows the video before: the next report asks again.
+    if (!response || !response.videoDetails || response.videoDetails.videoId !== state.trackId) return;
+    captionsFor = state.trackId;
+    const list = response.captions && response.captions.playerCaptionsTracklistRenderer && response.captions.playerCaptionsTracklistRenderer.captionTracks;
+    // Captions somebody wrote are the lyrics; automatic ones only say
+    // when each word is sung (Ahenk times the real lyrics with them).
+    const written = L.pickCaptionTrack(list, navigator.language);
+    const track = written || L.pickHeardTrack(list);
+    if (!track) return;
+    const heard = !written;
+    const asked = state.trackId;
+    fetch(track.baseUrl + (track.baseUrl.indexOf('?') === -1 ? '?' : '&') + 'fmt=json3', { credentials: 'include' })
+      .then((answer) => (answer.ok ? answer.json() : null))
+      .then((json) => {
+        const lines = json && (heard ? L.fromYouTubeAutoCaptions(json) : L.fromYouTubeCaptions(json));
+        const current = read() || last;
+        if (!lines || !current || current.trackId !== asked) return;
+        const lastLine = lines[lines.length - 1];
+        if (current.duration && lastLine && lastLine.start > current.duration + 2) return;
+        post({
+          kind: 'lyrics',
+          heard: heard || undefined,
+          song: { title: current.title, artist: current.artist, album: current.album, duration: current.duration, trackId: current.trackId },
+          lines,
+        });
+      })
+      .catch(() => {});
+  }
 
   // MARK: Commands
 

@@ -364,7 +364,7 @@ ext.runtime.onConnect.addListener((port) => {
         break;
       }
       case 'lyrics':
-        if (Array.isArray(message.lines)) send(P.lyrics(tabId, site, message.song, message.lines));
+        if (Array.isArray(message.lines)) send(P.lyrics(tabId, site, message.song, message.lines, message.heard === true));
         break;
       default:
         break;

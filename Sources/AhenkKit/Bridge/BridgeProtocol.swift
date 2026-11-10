@@ -585,15 +585,19 @@ public struct BridgeSiteLyrics: Codable, Equatable, Sendable {
     public var site: String
     public var song: BridgeSong
     public var lines: [BridgeLyricLine]
+    /// The lines are a video's automatic captions: words that were heard,
+    /// each with its time, not the song's lyrics.
+    public var heard: Bool
 
-    public init(tabID: Int, site: String, song: BridgeSong, lines: [BridgeLyricLine]) {
+    public init(tabID: Int, site: String, song: BridgeSong, lines: [BridgeLyricLine], heard: Bool = false) {
         self.tabID = tabID
         self.site = site
         self.song = song
         self.lines = lines
+        self.heard = heard
     }
 
-    enum CodingKeys: String, CodingKey { case tabID = "tabId", site, song, lines }
+    enum CodingKeys: String, CodingKey { case tabID = "tabId", site, song, lines, heard }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -601,6 +605,7 @@ public struct BridgeSiteLyrics: Codable, Equatable, Sendable {
         site = c.lenient(.site, "")
         song = try c.decode(BridgeSong.self, forKey: .song)
         lines = c.lenientArray(.lines, [])
+        heard = c.lenient(.heard, false)
     }
 }
 

@@ -122,6 +122,74 @@
     );
   }
 
+  /** YouTube's captions for a video (the player's caption tracks): the
+   *  one a person wrote, in the language that is sung. The automatic
+   *  track, when there is one, names that language; else the only written
+   *  track, else the one in the listener's own language. Automatic
+   *  captions themselves are not lyrics (words are missing or wrong). */
+  function pickCaptionTrack(tracks, preferred) {
+    if (!Array.isArray(tracks)) return null;
+    const base = (code) => String(code || '').toLowerCase().split('-')[0];
+    const usable = tracks.filter((t) => t && typeof t.baseUrl === 'string' && typeof t.languageCode === 'string');
+    const written = usable.filter((t) => t.kind !== 'asr');
+    if (!written.length) return null;
+    const spoken = usable.find((t) => t.kind === 'asr');
+    const inLanguage = (code) => written.find((t) => base(t.languageCode) === base(code));
+    return (spoken && inLanguage(spoken.languageCode)) || (written.length === 1 ? written[0] : null) || (preferred && inLanguage(preferred)) || null;
+  }
+
+  /** The automatic captions of a video (speech recognition), when there
+   *  are any: their words are often wrong, but each has its time, which is
+   *  what Ahenk needs to time the real lyrics against this very video. */
+  function pickHeardTrack(tracks) {
+    if (!Array.isArray(tracks)) return null;
+    return tracks.find((t) => t && t.kind === 'asr' && typeof t.baseUrl === 'string') || null;
+  }
+
+  /** Automatic captions (`fmt=json3`) as heard words: every caption is a
+   *  line whose words carry their own start (`tStartMs` + `tOffsetMs`).
+   *  Marks like "[music]" and ">>" are not words. */
+  function fromYouTubeAutoCaptions(json) {
+    if (!json || !Array.isArray(json.events)) return null;
+    const lines = [];
+    for (const event of json.events) {
+      if (!event || !Array.isArray(event.segs)) continue;
+      const base = number(event.tStartMs);
+      if (!Number.isFinite(base) || base < 0) continue;
+      const words = [];
+      for (const seg of event.segs) {
+        if (!seg || typeof seg.utf8 !== 'string') continue;
+        const offset = number(seg.tOffsetMs);
+        const start = (base + (Number.isFinite(offset) && offset > 0 ? offset : 0)) / 1000;
+        for (const piece of seg.utf8.replace(/\[[^\]]*\]/g, ' ').replace(/>>/g, ' ').split(/\s+/)) {
+          if (/[\p{L}\p{N}]/u.test(piece)) words.push({ start: round(start), text: piece });
+        }
+      }
+      if (words.length) lines.push({ start: words[0].start, text: words.map((word) => word.text).join(' '), words });
+    }
+    return lines.length >= 2 ? lines : null;
+  }
+
+  /** A caption track as YouTube serves it (`fmt=json3`): { events: [{
+   *  tStartMs, dDurationMs, segs: [{ utf8 }] }] }. The notes around sung
+   *  lines and the "[Music]" marks are dropped; a caption of two rows is
+   *  one line. */
+  function fromYouTubeCaptions(json) {
+    if (!json || !Array.isArray(json.events)) return null;
+    const lines = [];
+    for (const event of json.events) {
+      if (!event || !Array.isArray(event.segs)) continue;
+      const start = number(event.tStartMs);
+      if (!Number.isFinite(start) || start < 0) continue;
+      let text = event.segs.map((seg) => (seg && typeof seg.utf8 === 'string' ? seg.utf8 : '')).join('');
+      text = text.replace(/[\u266A\u266B\u266C]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!text || /^[\[(][^\])]*[\])]$/.test(text)) continue;
+      const length = number(event.dDurationMs);
+      lines.push({ start: start / 1000, end: length > 0 ? (start + length) / 1000 : undefined, text });
+    }
+    return finish(lines);
+  }
+
   const TEXT_KEYS = ['words', 'text', 'line', 'lyricLine', 'lyric', 'content', 'value'];
   const TIME_KEYS = [
     ['startTimeMs', 1000], ['startTimeMilliseconds', 1000], ['startMs', 1000], ['milliseconds', 1000], ['timeMs', 1000],
@@ -227,6 +295,10 @@
     return lines ? { lines, trackId } : null;
   }
 
-  const api = { URL_PATTERNS, wants, parseLRC, stampSeconds, fromSpotify, fromDeezer, fromTidal, fromYouTubeMusic, scanTimedLines, extract };
+  const api = {
+    URL_PATTERNS, wants, parseLRC, stampSeconds, fromSpotify, fromDeezer, fromTidal, fromYouTubeMusic, pickCaptionTrack, fromYouTubeCaptions, pickHeardTrack,
+    fromYouTubeAutoCaptions,
+    scanTimedLines, extract,
+  };
   if (!root.AhenkLyrics) Object.defineProperty(root, 'AhenkLyrics', { value: Object.freeze(api), configurable: false, enumerable: false });
 })(typeof globalThis !== 'undefined' ? globalThis : this);

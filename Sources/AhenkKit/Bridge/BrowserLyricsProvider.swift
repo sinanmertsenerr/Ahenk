@@ -25,8 +25,17 @@ public final class BrowserLyricsProvider: LyricsProvider, Sendable {
         var lyrics: SyncedLyrics
     }
 
+    /// A video's automatic captions: the words heard in it, with times.
+    private struct Heard: Sendable {
+        var tabKey: String
+        var site: BrowserSite
+        var song: BridgeSong
+        var words: [RecognizedWord]
+    }
+
     private struct State: Sendable {
         var entries: [Entry] = []
+        var heard: [Heard] = []
         var continuations: [UUID: AsyncStream<Void>.Continuation] = [:]
     }
 
@@ -49,6 +58,10 @@ public final class BrowserLyricsProvider: LyricsProvider, Sendable {
     /// replaces them). Empty or untimed lists are ignored.
     public func store(_ lyrics: BridgeSiteLyrics, tabKey: String) {
         guard let site = BrowserSite(rawValue: lyrics.site) else { return }
+        if lyrics.heard {
+            storeHeard(lyrics, site: site, tabKey: tabKey)
+            return
+        }
         let lines = lyrics.lines
             .filter { $0.start.isFinite && $0.start >= 0 }
             .map { line in
@@ -70,9 +83,40 @@ public final class BrowserLyricsProvider: LyricsProvider, Sendable {
         continuations.forEach { $0.yield(()) }
     }
 
+    private func storeHeard(_ lyrics: BridgeSiteLyrics, site: BrowserSite, tabKey: String) {
+        var words: [RecognizedWord] = []
+        for line in lyrics.lines {
+            for word in line.words ?? [] where word.start.isFinite && word.start >= 0 {
+                let text = word.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !text.isEmpty { words.append(RecognizedWord(text: text, start: word.start, end: word.end ?? word.start + 0.3)) }
+            }
+        }
+        guard words.count >= 8 else { return }
+        words.sort { $0.start < $1.start }
+        let entry = Heard(tabKey: tabKey, site: site, song: lyrics.song, words: words)
+        let continuations = state.withLock { state -> [AsyncStream<Void>.Continuation] in
+            state.heard.removeAll { $0.tabKey == tabKey && Self.matches(entry.song, $0.song) }
+            state.heard.insert(entry, at: 0)
+            if state.heard.count > Self.capacity { state.heard.removeLast(state.heard.count - Self.capacity) }
+            return Array(state.continuations.values)
+        }
+        continuations.forEach { $0.yield(()) }
+    }
+
+    /// The words a video's automatic captions heard in this song, when a
+    /// tab sent them: the times to put the song's real lyrics at.
+    public func heardWords(for query: LyricsQuery) -> (site: BrowserSite, words: [RecognizedWord])? {
+        let heard = state.withLock { $0.heard }
+        let song = BridgeSong(title: query.title, artist: query.artist, album: query.album, duration: query.duration, trackID: query.spotifyTrackID)
+        return heard.first { Self.matches(song, $0.song, spotifyID: query.spotifyTrackID) }.map { ($0.site, $0.words) }
+    }
+
     /// Forgets everything (the bridge stopped).
     public func removeAll() {
-        state.withLock { $0.entries = [] }
+        state.withLock {
+            $0.entries = []
+            $0.heard = []
+        }
     }
 
     /// Fires whenever lyrics arrive, so the lyrics on screen can be looked

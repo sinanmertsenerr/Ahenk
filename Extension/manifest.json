@@ -3,7 +3,7 @@
   "name": "__MSG_extensionName__",
   "short_name": "Ahenk",
   "description": "__MSG_extensionDescription__",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "default_locale": "en",
   "minimum_chrome_version": "116",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApTyB8L3Hkuil3O6TW55XBByvShIAAgB9Uktk2sYiqug3vpCqpbC5sZuVw0Uy0dkvCEcWGLVb1KvXrgqDUh+kd9QhwlG7YmXog5uSrP5Lcd+sur4ysYsFfsmJ+l0uOlXZmJXtg/P/FRy+6zsDR3FeBAcg7jiPGD6FJIj/1YXDoL5pNte6KbnR9m4W9mDw0e0f4QqkCqUzyHKkFDRvdr8CqckgZhlGaYX0y797UkzWmU4BFWr4gO33UrgT/K4lqnDGvEOwZSxQdmQw2PHvbWBc9DliTtdRXMfKCR0rbWFOiaHWFgT95JdeQZDwe2c9rcJcpNAXusaL0OHdzGEOjbZPyQIDAQAB",

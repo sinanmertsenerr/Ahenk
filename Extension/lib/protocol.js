@@ -117,16 +117,16 @@
     });
   }
 
-  function lyrics(tabId, site, current, lines) {
-    return {
-      type: 'lyrics',
-      lyrics: {
-        tabId,
-        site,
-        song: song(current),
-        lines: (lines || []).map((line) => compact({ start: finite(line.start, 0), end: finite(line.end, 0), text: String(line.text || ''), words: line.words })),
-      },
+  function lyrics(tabId, site, current, lines, heard) {
+    const body = {
+      tabId,
+      site,
+      song: song(current),
+      lines: (lines || []).map((line) => compact({ start: finite(line.start, 0), end: finite(line.end, 0), text: String(line.text || ''), words: line.words })),
     };
+    // Automatic captions: heard words with their times, not lyrics.
+    if (heard) body.heard = true;
+    return { type: 'lyrics', lyrics: body };
   }
 
   /** The answer to a command or request; `extra` adds playlists, songs, queue, volume. */

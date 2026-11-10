@@ -90,6 +90,9 @@ final class LyricsController {
     @ObservationIgnored var siteLyrics: BrowserLyricsProvider?
     @ObservationIgnored private var siteTask: Task<Void, Never>?
     private let log = AhenkLogger(category: "lyrics")
+    /// The song (its cache key) whose lyrics the video's captions were
+    /// tried on, so it happens once per load.
+    @ObservationIgnored private var timedByCaptions: String?
 
     /// Nudges move the timing this much (seconds).
     static let nudgeStep = 0.2
@@ -188,6 +191,7 @@ final class LyricsController {
         let query = LyricsQuery(track: track)
         song = track
         self.query = query
+        timedByCaptions = nil
         phase = .loading
         lyrics = nil
         timeline = nil
@@ -213,14 +217,73 @@ final class LyricsController {
     /// shown (unless the user picked a version), even mid-lookup.
     private func siteLyricsArrived() {
         guard settings.lyrics.enabled, let query, choice == nil,
-              BrowserLyricsProvider.site(ofSource: source ?? "") == nil,
-              let found = siteLyrics?.lookup(query)
+              BrowserLyricsProvider.site(ofSource: source ?? "") == nil
         else { return }
+        guard let found = siteLyrics?.lookup(query) else {
+            // No lyrics of its own, but maybe the words its video's
+            // automatic captions heard.
+            timeWithHeardWords()
+            return
+        }
         task?.cancel()
         let response = LyricsResponse(
             result: .synced(found.lyrics), source: BrowserLyricsProvider.sourceName(for: found.site), timingAuthority: .canonicalRecording
         )
         apply(response, choice: nil, for: query, origin: .playingSource)
+    }
+
+    /// A music video's lyrics by the video's own clock. The lyrics catalogs
+    /// time the album's recording; a video with an intro runs ahead of it
+    /// (and some catalog entries carry the video's length with the album's
+    /// timing). When the site sent the words its automatic captions heard,
+    /// the lyrics found (timed or not) are lined up with them:
+    /// - plain lyrics get their timing from it;
+    /// - timed lyrics are replaced only when most lines were found and
+    ///   they sit more than a second and a half from the catalog's timing.
+    private func timeWithHeardWords() {
+        guard settings.lyrics.enabled, let query, choice == nil, timedByCaptions != query.cacheKey,
+              BrowserLyricsProvider.site(ofSource: source ?? "") == nil,
+              let heard = siteLyrics?.heardWords(for: query)
+        else { return }
+        let lines = wordsToAlign
+        guard lines.count >= 2 else { return }
+        timedByCaptions = query.cacheKey
+        let catalog = lyrics?.lines.filter { LyricsTimeline.isSung($0.text) }.map(\.start)
+        let duration = song.flatMap { $0.duration > 0 ? $0.duration : nil }
+        let words = heard.words
+        let site = heard.site
+        Task { [weak self] in
+            let result = await Task.detached(priority: .utility) {
+                LyricAligner.align(lines: lines, words: words, audioStart: 0, audioEnd: duration, songDuration: duration)
+            }.value
+            guard let self, self.query == query, self.choice == nil else { return }
+            let found = "\(result.anchoredLines) of \(result.totalLines) lines"
+            guard result.quality != .failed else {
+                self.log.info("The video's captions do not fit these lyrics (\(found))")
+                return
+            }
+            if let catalog {
+                let timed = result.lyrics.lines.map(\.start)
+                guard result.quality == .good, timed.count == catalog.count, !timed.isEmpty else {
+                    self.log.info("The video's captions found \(found): the catalog's timing stays")
+                    return
+                }
+                let shifts = zip(timed, catalog).map { $0 - $1 }.sorted()
+                let shift = shifts[shifts.count / 2]
+                guard abs(shift) > 1.5 else {
+                    self.log.info("The catalog's timing agrees with the video's captions (\(String(format: "%+.1f", shift)) s)")
+                    return
+                }
+                self.log.info("The video runs \(String(format: "%+.1f", shift)) s from the catalog's timing; timed \(found) by its captions")
+            } else {
+                self.log.info("Timed \(found) by the video's captions")
+            }
+            self.task?.cancel()
+            let response = LyricsResponse(
+                result: .synced(result.lyrics), source: BrowserLyricsProvider.sourceName(for: site), timingAuthority: .canonicalRecording
+            )
+            self.apply(response, choice: nil, for: query, origin: .playingSource)
+        }
     }
 
     /// Tries the providers again (the failed state's button).
@@ -270,6 +333,7 @@ final class LyricsController {
         let lines = lyrics?.lines.count ?? plainLines.count
         let how = origin.map { " (\($0.rawValue))" } ?? ""
         log.info("Lyrics: \(Self.describe(phase)), \(lines) lines from \(response.source)\(how)")
+        timeWithHeardWords()
     }
 
     private static func describe(_ phase: Phase) -> String {

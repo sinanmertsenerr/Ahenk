@@ -107,3 +107,44 @@ test('only responses that may hold lyrics are read', () => {
   assert.equal(L.extract('spotify', 'https://x', null), null);
   assert.equal(L.extract('spotify', 'https://x', { nothing: true }), null);
 });
+
+test('YouTube captions: the written track in the sung language, as timed lines', () => {
+  const tracks = [
+    { baseUrl: 'https://x/de', languageCode: 'de' },
+    { baseUrl: 'https://x/tr', languageCode: 'tr' },
+    { baseUrl: 'https://x/asr', languageCode: 'tr', kind: 'asr' },
+  ];
+  assert.equal(L.pickCaptionTrack(tracks).baseUrl, 'https://x/tr', 'the automatic track names the sung language');
+  assert.equal(L.pickCaptionTrack([tracks[2]]), null, 'automatic captions alone are not lyrics');
+  assert.equal(L.pickCaptionTrack([tracks[0]]).baseUrl, 'https://x/de', 'the only written track');
+  assert.equal(L.pickCaptionTrack([tracks[0], tracks[1]], 'tr-TR').baseUrl, 'https://x/tr', "else the listener's language");
+  assert.equal(L.pickCaptionTrack([tracks[0], tracks[1]], 'fr'), null);
+  assert.equal(L.pickCaptionTrack(null), null);
+
+  const lines = L.fromYouTubeCaptions({ events: [
+    { tStartMs: 1309, dDurationMs: 4000, segs: [{ utf8: '[Music]' }] },
+    { tStartMs: 19112, dDurationMs: 2000, segs: [{ utf8: '\u266A Lanterns under ice \u266A' }] },
+    { tStartMs: 21143, dDurationMs: 2500, segs: [{ utf8: 'We counted\n' }, { utf8: 'every light' }] },
+    { tStartMs: 24000, segs: [{ utf8: '\n' }] },
+    { tStartMs: 26000 },
+  ] });
+  assert.deepEqual(texts(lines), ['Lanterns under ice', 'We counted every light']);
+  assert.deepEqual(starts(lines), [19.112, 21.143]);
+  assert.equal(lines[0].end, 21.112);
+  assert.equal(L.fromYouTubeCaptions({ events: [] }), null);
+  assert.equal(L.fromYouTubeCaptions(null), null);
+});
+
+test('YouTube automatic captions: heard words with their own times', () => {
+  assert.equal(L.pickHeardTrack([{ baseUrl: 'https://x/tr', languageCode: 'tr' }]), null);
+  assert.equal(L.pickHeardTrack([{ baseUrl: 'https://x/asr', languageCode: 'tr', kind: 'asr' }]).baseUrl, 'https://x/asr');
+  const lines = L.fromYouTubeAutoCaptions({ events: [
+    { tStartMs: 1309, segs: [{ utf8: '[music]' }] },
+    { tStartMs: 75280, segs: [{ utf8: '>> Lanterns' }, { utf8: ' under', tOffsetMs: 600 }, { utf8: ' [music] ice', tOffsetMs: 1100 }] },
+    { tStartMs: 78680, segs: [{ utf8: 'we' }, { utf8: ' counted', tOffsetMs: 400 }] },
+  ] });
+  assert.equal(lines.length, 2);
+  assert.deepEqual(lines[0].words, [{ start: 75.28, text: 'Lanterns' }, { start: 75.88, text: 'under' }, { start: 76.38, text: 'ice' }]);
+  assert.equal(lines[1].text, 'we counted');
+  assert.equal(L.fromYouTubeAutoCaptions({ events: [{ tStartMs: 1, segs: [{ utf8: '[music]' }] }] }), null);
+});
