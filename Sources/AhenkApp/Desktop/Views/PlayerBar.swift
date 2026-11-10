@@ -231,7 +231,7 @@ private struct NowPlayingSummary: View {
     private func subtitle(starting: CatalogSong?, snapshot: NowPlayingSnapshot?) -> String {
         if starting != nil { return "Starting…".l10n }
         guard let track = snapshot?.track else { return "Pick a song to start.".l10n }
-        return [track.artist, track.album].filter { !$0.isEmpty }.joined(separator: " \u{2014} ")
+        return [model.credit(for: track), track.album].filter { !$0.isEmpty }.joined(separator: " \u{2014} ")
     }
 }
 

@@ -194,6 +194,7 @@ final class DesktopPlayerModel {
         })
         if let palette = nowPlaying.artwork?.palette { theme = PlayerTheme(palette: palette) }
         observers.append(ChangeObserver({ nowPlaying.snapshot?.track }) { [weak self] track in
+            self?.readCredit(of: track)
             self?.trackChanged(track)
             self?.refreshSiteQueue()
         })
@@ -847,6 +848,34 @@ final class DesktopPlayerModel {
         guard let first = search.value?.songs.first else { return }
         play([first], at: 0, context: .search)
         onReleaseKeyboard?()
+    }
+
+    // MARK: The song's artists
+
+    /// Everyone on the playing Spotify song, by track ID ("A, B, C"); the
+    /// Spotify app itself names only the first.
+    private(set) var credits: [String: String] = [:]
+    @ObservationIgnored private lazy var spotifyArtists: SpotifyTrackArtists? = services.isDemo
+        ? nil
+        : SpotifyTrackArtists(fetcher: services.fetcher, cache: CatalogCache(directory: CatalogCache.standardDirectory))
+
+    /// The artist line for `track`: everyone on it when known.
+    func credit(for track: Track) -> String {
+        credits[track.id] ?? track.artist
+    }
+
+    private func readCredit(of track: Track?) {
+        guard let track, track.source == .spotify || track.source == .spotifyWeb, credits[track.id] == nil,
+              let reader = spotifyArtists
+        else { return }
+        let id = track.id
+        Task { [weak self] in
+            guard let names = await reader.artists(of: id), names.count > 1 else { return }
+            let credit = SpotifyTrackArtists.credit(names)
+            guard let self, !credit.isEmpty else { return }
+            if self.credits.count > 200 { self.credits.removeAll() }
+            self.credits[id] = credit
+        }
     }
 
     /// A song picked from the results plays alone; songs the user queued
