@@ -2483,6 +2483,13 @@ Not a plan step: fixes and changes asked for while using 1.0.0, one commit each 
   markup can change (then the fallback and Spotify's search, as before), and Spotify's terms do not welcome automated
   reading of its site.
 
+- **Spotify stays in the background when a song starts** (`FocusKeeping`, `AppFocusKeeper`). Spotify's `play track`
+  brings Spotify to the front by itself (Spotify's doing since late 2024; other tools report the same). The router notes
+  the app in front, watches activations during the start and 1.5 s after it, and gives the front back: a Spotify that
+  was hidden is hidden again, a visible one stays visible if activating or reopening the app before works, else it is
+  hidden. Finder is never reopened. Not checked here: the hand-back itself (it needs a real start in Spotify); the log
+  line "the front went back to …" names the step that worked and how long Spotify was in front.
+
 Checks on the final tree: `./Scripts/test.sh` 570/570 with the node tests (twice), `./Scripts/smoke.sh` passed (31
 subsystems), `./Scripts/make-app.sh` signed with the Apple Development identity, installed to /Applications with
 `./Scripts/install.sh --no-build`. Every commit builds with its tests (`swift build --build-tests` in a worktree); the
