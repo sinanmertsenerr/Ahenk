@@ -49,8 +49,14 @@ final class ScratchDirectory {
 }
 
 /// Polls `condition` until it holds or `timeout` passes.
+///
+/// The timeout only bounds a failure; a condition that holds returns at
+/// once. It is far longer than any wait a test expects, because the whole
+/// run can stand still for a couple of seconds while every test starts at
+/// once (measured: 1.4–2.2 s on a busy Mac), and a deadline of that size
+/// fails tests that did nothing wrong.
 @MainActor
-func eventually(timeout: Duration = .seconds(2), _ condition: @MainActor () -> Bool) async -> Bool {
+func eventually(timeout: Duration = .seconds(10), _ condition: @MainActor () -> Bool) async -> Bool {
     let deadline = ContinuousClock.now + timeout
     while ContinuousClock.now < deadline {
         if condition() { return true }

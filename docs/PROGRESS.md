@@ -2129,6 +2129,11 @@ no timer and no processor exists; the tap's callback reads one atomic slot.
   whisper.cpp as an optional tool the user installs (nothing of it is bundled).
 - The feature list's items for QA: the effects button beside the lyrics, the presets by name, reverb, pitch, the
   ten-band equalizer, live toggling; Search lyrics → pick the song → aligned on the Mac, one download, Beta.
+- **The test run stands still while it starts.** Every test waits about as long as every other at the start of a run
+  (median test time 1.4–1.8 s before this step, 1.6–2.2 s after it, on a busy Mac). With this step's tests that reached
+  the 2 s deadline of `eventually`, and "A start delay keeps the old song until the new one starts" failed in 8 of 32
+  runs (0 of 19 before the step). `eventually` now waits up to 10 s (it still returns as soon as the condition holds);
+  14 of 14 runs pass. What holds the run up was not looked for; it is worth finding in the performance pass.
 
 ### Known gaps and risks
 
