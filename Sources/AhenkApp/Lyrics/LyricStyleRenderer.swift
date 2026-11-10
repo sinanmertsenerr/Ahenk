@@ -171,7 +171,7 @@ enum LyricLayers {
     }
 }
 
-/// The base of the eight styles: keeps the visuals of the lines on screen
+/// The base of every style: keeps the visuals of the lines on screen
 /// (made once per line, dropped when the line leaves), and offers the
 /// slots lines glide between.
 class LyricStyleRenderer {

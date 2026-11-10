@@ -592,7 +592,7 @@ final class SmokeRunner {
         guard session.add(measured) == nil else { throw SmokeFailure("a single sync window changed the timing") }
 
         let saved = directory.map { ", snapshots in \($0.path)" } ?? ""
-        return "\(frames) style frames (8 styles × 4 moments × 2 languages) with the right line and countdown, \(states) states, "
+        return "\(frames) style frames (\(LyricStyle.allCases.count) styles × 4 moments × 2 languages) with the right line and countdown, \(states) states, "
             + "\(widgets) widget renders; found, listed, picked, nudged and searched lyrics; a 32 s sync window measured in \(milliseconds) ms "
             + "(\(measured.stage.rawValue)); fonts \(fonts.joined(separator: ", "))\(saved)"
     }

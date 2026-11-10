@@ -22,7 +22,7 @@ struct LyricsStageContent: Equatable {
     var songID = ""
     var title = ""
     var artist = ""
-    var style: LyricStyle = .fisheye
+    var style: LyricStyle = .plain
     var palette: Palette = .neutral
     var useAlbumColors = true
     var textScale: Double = 1
@@ -388,7 +388,7 @@ final class LyricsGapVisual {
     private let ring = CAShapeLayer()
     private let digits = LyricLayers.plain()
     private var context: LyricsRenderContext?
-    private var style: LyricStyle = .fisheye
+    private var style: LyricStyle = .plain
     private var shownNumber: Int?
     private var ringSize: CGFloat = 64
 

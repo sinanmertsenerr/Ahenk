@@ -184,7 +184,7 @@ struct AppSettingsTests {
         #expect(s.light.enabled && s.player.enabled && s.lyrics.enabled && s.wallpaper.enabled)
         #expect(s.dock.albumArtIcon)
         #expect(s.light.style == .glow && s.light.position == .allEdges && s.light.colorSource == .album)
-        #expect(s.lyrics.style == .fisheye)
+        #expect(s.lyrics.style == .plain)
         #expect(!s.player.startAtFifteenSeconds)
         #expect(s.general.lighterOnBattery)
         #expect(!s.effects.enabled && s.effects.equalizerBands == SoundEffectSettings.flatEqualizer)
@@ -194,7 +194,7 @@ struct AppSettingsTests {
     @Test("There are 22 light styles and 8 lyric styles")
     func styleCounts() {
         #expect(LightStyle.allCases.count == 22)
-        #expect(LyricStyle.allCases.count == 8)
+        #expect(LyricStyle.allCases.count == 6)
         #expect(SoundEffectSettings.equalizerFrequencies.count == 10)
     }
 

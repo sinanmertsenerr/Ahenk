@@ -2,7 +2,7 @@ import AhenkKit
 import AppKit
 import QuartzCore
 
-// The eight lyric styles. Each builds a line's layers once (sprites drawn
+// The lyric styles (Plain and Drift are in LyricStylesPlain.swift). Each builds a line's layers once (sprites drawn
 // with its own font) and then, every frame, only moves, scales and fades
 // them from the scene and the beat. The motion's numbers come from
 // AhenkKit's LyricsStyleMath.
@@ -10,14 +10,12 @@ import QuartzCore
 extension LyricStyle {
     func makeRenderer() -> LyricStyleRenderer {
         switch self {
-        case .fisheye: FisheyeStyle(style: self)
-        case .spread: SpreadStyle(style: self)
-        case .karaoke: KaraokeStyle(style: self)
-        case .typewriter: TypewriterStyle(style: self)
-        case .neon: NeonStyle(style: self)
-        case .echo: EchoStyle(style: self)
+        case .plain: PlainStyle(style: self)
         case .glitch: GlitchStyle(style: self)
         case .cinema: CinemaStyle(style: self)
+        case .karaoke: KaraokeStyle(style: self)
+        case .typewriter: TypewriterStyle(style: self)
+        case .drift: DriftStyle(style: self)
         }
     }
 }
@@ -29,153 +27,6 @@ private func mix(_ a: CGFloat, _ b: CGFloat, _ t: Double) -> CGFloat {
 /// The usual ink: the line's colour with a soft dark shadow under it.
 private func readableInk(_ color: SRGBColor, shade: Double = 0.55, blur: Double = 8) -> LyricInk {
     LyricInk(color: color, shade: shade, shadeBlur: blur)
-}
-
-// MARK: - Fisheye
-
-/// A lens travels along the line as it is sung: words under it grow, the
-/// rest shrink and make room, and every word bobs a little with the beat.
-/// The next line waits small below; the last one shrinks away above.
-final class FisheyeStyle: LyricStyleRenderer {
-    static let small = 0.72
-    static let large = 1.0
-
-    override var maxRows: Int { 3 }
-    override var wrapShare: CGFloat { 0.84 }
-    override var rowSpacing: CGFloat { 0.9 }
-    override var animatesContinuously: Bool { true }
-
-    override func build(_ visual: LyricLineVisual, context: LyricsRenderContext) {
-        visual.addUnits(scale: context.scale) { sprite($0.text, ink: readableInk(context.ink), for: visual) }
-        let descent = -visual.layout.font.descender
-        // Each word scales around the left end of its baseline.
-        for (index, layer) in visual.units.enumerated() {
-            guard let sprite = visual.sprites[index] else { continue }
-            layer.anchorPoint = CGPoint(x: sprite.inset / sprite.size.width, y: (sprite.inset + descent) / sprite.size.height)
-        }
-    }
-
-    override func render(_ scene: LyricsScene, frame: LyricsFrame) {
-        // The next line waits below, except in instrumental parts (the
-        // countdown has the stage then).
-        let waiting = scene.gap == nil
-        keep(indices(of: scene, upcoming: waiting))
-        let current = scene.current.flatMap { state in visual(state.index).map { (state, $0) } }
-        let previous = scene.previous.flatMap { state in visual(state.index).map { (state, $0) } }
-        let next = waiting ? scene.upcoming.flatMap { index in index == scene.current?.index ? nil : visual(index) } : nil
-        let enter = current?.0.enter ?? 1
-        let e = LyricsEasing.outCubic(enter)
-        let currentScale = mix(0.7, 1, e)
-        let previousScale = current == nil ? 1 : mix(1, 0.78, e)
-        let spots = stack(
-            current: current.map { $0.1.height * currentScale }, previous: previous.map { $0.1.height * previousScale },
-            upcoming: next.map { $0.height * 0.7 }, enter: current == nil ? (scene.previous?.exit ?? 0) : enter, spacing: 12,
-            arrivingFrom: current.map { $0.1.height * 0.7 }
-        )
-        if let (state, visual) = current {
-            lens(visual, focus: state.sung, frame: frame, emphasis: state.enter)
-            place(visual, centerY: spots.current, scale: currentScale, opacity: mix(0.25, 1, e))
-        }
-        if let (state, visual) = previous {
-            lens(visual, focus: 1, frame: frame, emphasis: 1 - state.exit)
-            let fade = current == nil ? LyricsEasing.inOutCubic(state.exit) : e
-            place(visual, centerY: spots.previous, scale: previousScale, opacity: CGFloat(1 - fade))
-        }
-        if let visual = next {
-            lens(visual, focus: -1, frame: frame, emphasis: 0)
-            place(visual, centerY: spots.upcoming, scale: 0.7, opacity: 0.25 * CGFloat(LyricsEasing.unit(enter * 1.5)))
-        }
-    }
-
-    /// Scales and packs the words of each row for a lens at `focus`.
-    private func lens(_ visual: LyricLineVisual, focus: Double, frame: LyricsFrame, emphasis: Double) {
-        let layout = visual.layout
-        let total = Double(max(1, layout.characterCount))
-        let words = max(1, layout.units.count)
-        let radius = max(0.1, 1.25 / Double(words))
-        let features = frame
-        let space = Double(layout.font.pointSize) * 0.26
-        for row in layout.rows {
-            let range = row.units
-            guard !range.isEmpty else { continue }
-            let centers = range.map { Double(layout.units[$0].characters.lowerBound + layout.units[$0].characters.upperBound) / 2 / total }
-            var scales = FisheyeLens.scales(centers: centers, focus: focus, radius: radius, minimum: Self.small, maximum: Self.large)
-            // Away from the lens (waiting lines), everything is small.
-            scales = scales.map { Self.small + ($0 - Self.small) * LyricsEasing.unit(emphasis * 1.4) }
-            let widths = range.map { Double(layout.units[$0].rect.width) }
-            let packedWidth = zip(widths, scales).reduce(0) { $0 + $1.0 * $1.1 } + space * Double(range.count - 1) * Self.small
-            let available = Double(min(visual.container.bounds.width, context?.size.width ?? visual.container.bounds.width))
-            let fit = min(1, available / max(1, packedWidth))
-            scales = scales.map { $0 * fit }
-            let lefts = FisheyeLens.pack(
-                widths: widths, scales: scales, space: space, leading: !centered, origin: 0,
-                center: Double(visual.container.bounds.width) / 2
-            )
-            let baseline = Double(layout.size.height - (row.rect.minY + layout.baseline))
-            for (offset, unitIndex) in range.enumerated() {
-                let layer = visual.units[unitIndex]
-                let scale = scales[offset]
-                let focused = (scale - Self.small) / (Self.large - Self.small)
-                let pulse = 1 + 0.045 * features.beat * focused
-                let bob = FisheyeLens.bob(index: unitIndex, beatPhase: features.beatPhase, energy: features.energy, amplitude: 2.6)
-                layer.setPosition(CGPoint(x: lefts[offset], y: baseline + bob))
-                layer.setScale(CGFloat(scale * pulse))
-                layer.setOpacity(0.62 + 0.38 * focused)
-            }
-        }
-    }
-}
-
-// MARK: - Spread
-
-/// Letters gather from the middle of each row as the line comes, drift
-/// apart while it is sung (a little more on every beat) and fly wide as it
-/// leaves.
-final class SpreadStyle: LyricStyleRenderer {
-    override var units: LyricsTypesetter.Units { .letters }
-    override var tracking: CGFloat { 0.6 }
-    override var rowSpacing: CGFloat { 1.12 }
-    override var wrapShare: CGFloat { 1.04 }
-    override var animatesContinuously: Bool { true }
-
-    override func build(_ visual: LyricLineVisual, context: LyricsRenderContext) {
-        visual.addUnits(scale: context.scale) { sprite($0.text, ink: readableInk(context.ink), for: visual) }
-    }
-
-    override func render(_ scene: LyricsScene, frame: LyricsFrame) {
-        keep(indices(of: scene, upcoming: false))
-        let current = scene.current.flatMap { state in visual(state.index).map { (state, $0) } }
-        let previous = scene.previous.flatMap { state in visual(state.index).map { (state, $0) } }
-        let spots = stack(
-            current: current?.1.height, previous: previous?.1.height, upcoming: nil,
-            enter: current?.0.enter ?? (scene.previous?.exit ?? 0), spacing: 16
-        )
-        if let (state, visual) = current {
-            spread(visual, enter: state.enter, sung: state.sung, exit: 0, frame: frame)
-            place(visual, centerY: spots.current, opacity: 1)
-        }
-        if let (state, visual) = previous {
-            spread(visual, enter: 1, sung: 1, exit: state.exit, frame: frame)
-            place(visual, centerY: spots.previous, opacity: 1)
-        }
-    }
-
-    private func spread(_ visual: LyricLineVisual, enter: Double, sung: Double, exit: Double, frame: LyricsFrame) {
-        let factor = SpreadMotion.factor(enter: enter, sung: sung, exit: exit, beat: frame.beat)
-        let layout = visual.layout
-        for row in layout.rows {
-            let middle = Double(row.rect.midX)
-            let count = row.units.count
-            for (offset, unitIndex) in row.units.enumerated() {
-                let base = visual.basePositions[unitIndex]
-                let x = middle + (Double(base.x) - middle) * factor
-                let fall = (1 - LyricsEasing.outCubic(enter)) * 16 * (0.5 + LyricsNoise.unit(UInt64(visual.index), unitIndex))
-                let layer = visual.units[unitIndex]
-                layer.setPosition(CGPoint(x: x, y: Double(base.y) + fall))
-                layer.setOpacity(SpreadMotion.opacity(index: offset, count: count, enter: enter, exit: exit))
-            }
-        }
-    }
 }
 
 // MARK: - Karaoke
@@ -394,138 +245,6 @@ final class TypewriterStyle: LyricStyleRenderer {
         let typing = typed < Double(count)
         let blink = sin(frame.hostTime * 2 * .pi * 1.1) > -0.2 ? 1.0 : 0.12
         caret.setOpacity(typing ? 1 : blink)
-    }
-}
-
-// MARK: - Neon
-
-/// A neon sign per line: each word's tube flickers on when its turn comes,
-/// then hums; the glow swells with the beat. Every line lights in the next
-/// colour of the cover; a finished line switches off.
-final class NeonStyle: LyricStyleRenderer {
-    override var maxRows: Int { 2 }
-    override var rowSpacing: CGFloat { 0.98 }
-    override var animatesContinuously: Bool { true }
-
-    override func build(_ visual: LyricLineVisual, context: LyricsRenderContext) {
-        let color = context.accent(visual.index)
-        let tube = color.mixed(with: .white, amount: 0.7)
-        var halos: [CALayer] = []
-        // The halo (a wide glow) under each word, then the bright tube.
-        for unit in visual.layout.units {
-            let image = sprite(unit.text, ink: LyricInk(color: color, alpha: 0.85, shade: 0, glow: 1, glowColor: color, glowBlur: 20), for: visual)
-            let halo = LyricLayers.sprite(image, scale: context.scale)
-            if let image { halo.frame = visual.spriteFrame(for: unit.rect, sprite: image) }
-            visual.container.addSublayer(halo)
-            halos.append(halo)
-        }
-        visual.extras["halo"] = halos
-        visual.addUnits(scale: context.scale) {
-            sprite($0.text, ink: LyricInk(color: tube, shade: 0.3, shadeBlur: 5, glow: 0.95, glowColor: color, glowBlur: 7), for: visual)
-        }
-    }
-
-    override func render(_ scene: LyricsScene, frame: LyricsFrame) {
-        keep(indices(of: scene, upcoming: false))
-        let center = currentCenter
-        if let current = scene.current, let visual = visual(current.index) {
-            light(visual, sinceStart: current.sinceStart, off: 0, frame: frame)
-            place(visual, centerY: center, opacity: current.enter > 0 ? 1 : 0)
-        }
-        if let previous = scene.previous, let visual = visual(previous.index) {
-            light(visual, sinceStart: previous.sinceStart, off: previous.exit, frame: frame)
-            place(visual, centerY: center + 4 * CGFloat(previous.exit), opacity: 1)
-        }
-    }
-
-    private func light(_ visual: LyricLineVisual, sinceStart: Double, off: Double, frame: LyricsFrame) {
-        guard let halos = visual.extras["halo"], let timeline, timeline.lines.indices.contains(visual.index) else { return }
-        let line = timeline.lines[visual.index]
-        let count = visual.units.count
-        let features = frame
-        let swell = 0.42 + 0.38 * features.beat + 0.2 * features.energy
-        for (index, layer) in visual.units.enumerated() {
-            let seed = UInt64(visual.index &* 131 &+ index &* 17)
-            let on = NeonSign.ignitionTime(index: index, count: count, sungDuration: line.sungEnd - line.start)
-            var lit = NeonSign.ignition(since: sinceStart - on, seed: seed)
-            if lit >= 1 { lit *= NeonSign.hum(time: frame.hostTime, seed: seed) }
-            // Switching off: a last flicker, then dark.
-            let fade = off > 0 ? pow(1 - off, 0.6) * (LyricsNoise.unit(seed, Int(off * 20)) > 0.3 ? 1 : 0.4) : 1
-            layer.setOpacity((0.1 + 0.9 * lit) * fade)
-            halos[index].setOpacity(lit * swell * pow(1 - off, 2))
-        }
-    }
-}
-
-// MARK: - Echo
-
-/// The line with copies trailing behind it in the cover's colours; the
-/// copies follow every move a moment later, and each beat sends a ripple
-/// out from the line.
-final class EchoStyle: LyricStyleRenderer {
-    override var maxRows: Int { 2 }
-    override var rowSpacing: CGFloat { 0.98 }
-    override var animatesContinuously: Bool { true }
-
-    private static let copies = 3
-    private static let delay = 0.07
-
-    override func build(_ visual: LyricLineVisual, context: LyricsRenderContext) {
-        for copy in stride(from: Self.copies, through: 1, by: -1) {
-            visual.addRows("copy\(copy)", scale: context.scale) {
-                sprite($0.text, ink: LyricInk(color: context.accent(copy - 1), shade: 0), for: visual)
-            }
-        }
-        visual.addRows("ripple", scale: context.scale) { sprite($0.text, ink: LyricInk(color: context.accent(0), shade: 0), for: visual) }
-        visual.addRows("main", scale: context.scale) { sprite($0.text, ink: readableInk(context.ink, shade: 0.5, blur: 7), for: visual) }
-    }
-
-    override func render(_ scene: LyricsScene, frame: LyricsFrame) {
-        keep(indices(of: scene, upcoming: false))
-        let current = scene.current.flatMap { state in visual(state.index).map { (state, $0) } }
-        let previous = scene.previous.flatMap { state in visual(state.index).map { (state, $0) } }
-        let enter = current?.0.enter ?? (scene.previous?.exit ?? 0)
-        // Room for the copies trailing under the leaving line.
-        let spots = stack(current: current?.1.height, previous: previous?.1.height, upcoming: nil, enter: enter, spacing: 34)
-        let travel = previous == nil ? 40 : spots.previous - spots.current
-        if let (state, visual) = current {
-            echo(visual, progress: state.enter, leaving: false, frame: frame, travel: max(30, travel))
-            place(visual, centerY: spots.current, opacity: CGFloat(min(1, state.enter * 2.2)))
-        }
-        if let (state, visual) = previous {
-            echo(visual, progress: state.exit, leaving: true, frame: frame, travel: max(30, travel))
-            place(visual, centerY: spots.previous, opacity: 1)
-        }
-    }
-
-    private func echo(_ visual: LyricLineVisual, progress: Double, leaving: Bool, frame: LyricsFrame, travel: CGFloat) {
-        let features = frame
-        let fade = leaving ? 1 - LyricsEasing.unit(progress) : 1
-        let spacing = 5 + 7 * features.energy
-        for copy in 1...Self.copies {
-            guard let layers = visual.extras["copy\(copy)"] else { continue }
-            let main = leaving ? LyricsEasing.inOutCubic(progress) : LyricsEasing.outCubic(progress)
-            let delayed = EchoTrail.delayed(progress, copy: copy, delay: Self.delay, duration: LyricsScene.glide)
-            let follow = leaving ? LyricsEasing.inOutCubic(delayed) : LyricsEasing.outCubic(delayed)
-            // Copies lag behind the move: below while rising.
-            let lag = CGFloat(main - follow) * travel * (leaving ? -1 : 1)
-            let alpha = [0.42, 0.26, 0.15][copy - 1] * (leaving ? pow(1 - LyricsEasing.unit(delayed), 1.3) : min(1, progress * 1.6))
-            let drop = CGFloat(Double(copy) * spacing)
-            let shift = leaving ? lag : -lag
-            for layer in layers {
-                let rest = visual.rest(layer).position
-                layer.setPosition(CGPoint(x: rest.x + CGFloat(copy) * 2, y: rest.y - drop + shift))
-                layer.setOpacity(alpha)
-            }
-        }
-        if let ripples = visual.extras["ripple"] {
-            let ripple = EchoTrail.ripple(sinceBeat: frame.sinceBeat, strength: features.beat > 0 ? max(features.beat, 0.6) : 0.6)
-            for layer in ripples {
-                layer.setScale(CGFloat(ripple.scale))
-                layer.setOpacity(leaving ? 0 : ripple.opacity * (frame.isPlaying ? 1 : 0))
-            }
-        }
-        visual.extras["main"]?.forEach { $0.setOpacity(fade) }
     }
 }
 

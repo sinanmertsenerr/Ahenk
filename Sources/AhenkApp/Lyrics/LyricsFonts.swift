@@ -26,11 +26,12 @@ enum LyricsFonts {
 
     static func face(for style: LyricStyle) -> Face {
         switch style {
-        case .fisheye:
-            // A heavy slab serif: big, round counters that read well magnified.
-            Face(name: "Superclarendon", pointSize: 52, optical: 1.05) { named("Superclarendon-Black", $0) ?? serif($0, .black) }
-        case .spread:
-            Face(name: "SF Pro Expanded", pointSize: 32, optical: 1.12) { NSFont.systemFont(ofSize: $0, weight: .heavy, width: .expanded) }
+        case .plain:
+            Face(name: "SF Pro", pointSize: 40) { NSFont.systemFont(ofSize: $0, weight: .bold) }
+        case .glitch:
+            Face(name: "SF Mono", pointSize: 32, optical: 1.08) { NSFont.monospacedSystemFont(ofSize: $0, weight: .heavy) }
+        case .cinema:
+            Face(name: "Didot", pointSize: 40) { named("Didot-Bold", $0) ?? serif($0, .semibold) }
         case .karaoke:
             Face(name: "SF Pro Rounded", pointSize: 40) { size in
                 let base = NSFont.systemFont(ofSize: size, weight: .heavy)
@@ -38,15 +39,8 @@ enum LyricsFonts {
             }
         case .typewriter:
             Face(name: "American Typewriter", pointSize: 38) { named("AmericanTypewriter-Semibold", $0) ?? NSFont.monospacedSystemFont(ofSize: $0, weight: .medium) }
-        case .neon:
-            // A sign painter's script, as hand-bent tubes are.
-            Face(name: "SignPainter", pointSize: 60, optical: 0.78) { named("SignPainter-HouseScriptSemibold", $0) ?? named("SignPainter-HouseScript", $0) ?? serif($0, .bold) }
-        case .echo:
-            Face(name: "Futura Condensed", pointSize: 52, optical: 0.9) { named("Futura-CondensedExtraBold", $0) ?? NSFont.systemFont(ofSize: $0, weight: .black, width: .condensed) }
-        case .glitch:
-            Face(name: "SF Mono", pointSize: 32, optical: 1.08) { NSFont.monospacedSystemFont(ofSize: $0, weight: .heavy) }
-        case .cinema:
-            Face(name: "Didot", pointSize: 40) { named("Didot-Bold", $0) ?? serif($0, .semibold) }
+        case .drift:
+            Face(name: "Baskerville", pointSize: 46, optical: 0.92) { named("Baskerville-SemiBoldItalic", $0) ?? serif($0, .semibold) }
         }
     }
 

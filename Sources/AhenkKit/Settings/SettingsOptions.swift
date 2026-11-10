@@ -126,15 +126,17 @@ public enum ClockFormat: String, CaseIterable, Codable, Sendable, Identifiable {
 
 /// Desktop lyrics styles (Step 6), each with its own font.
 public enum LyricStyle: String, CaseIterable, Codable, Sendable, Identifiable {
-    case fisheye
-    case spread
+    /// Nothing but the words, one line after another (the default).
+    case plain
+    /// A line decodes out of random characters.
+    case glitch
+    /// A film title: a slow fade and a hairline.
+    case cinema
     /// The whole line lights up as it is sung.
     case karaoke
     case typewriter
-    case neon
-    case echo
-    case glitch
-    case cinema
+    /// Calm: words surface, sway and float away.
+    case drift
 
     public var id: String { rawValue }
 }

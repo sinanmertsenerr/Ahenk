@@ -18,25 +18,6 @@ struct LyricsStyleMathTests {
         #expect(LyricsWrap.rows(widths: [], space: 10, maxWidth: 200).isEmpty)
     }
 
-    @Test("Fisheye: the word under the lens is largest and the rest shrink with distance")
-    func fisheye() {
-        let centers = [0.1, 0.3, 0.5, 0.7, 0.9]
-        let scales = FisheyeLens.scales(centers: centers, focus: 0.5, radius: 0.2, minimum: 0.7, maximum: 1)
-        #expect(abs(scales[2] - 1) < 1e-9)
-        #expect(scales[1] < scales[2] && scales[0] < scales[1] && abs(scales[1] - scales[3]) < 1e-9)
-        #expect(scales.allSatisfy { $0 >= 0.7 && $0 <= 1 })
-        let widths = [80.0, 60, 100, 40, 90]
-        let lefts = FisheyeLens.pack(widths: widths, scales: scales, space: 10, leading: true, origin: 0, center: 0)
-        #expect(lefts[0] == 0)
-        for index in 1..<lefts.count {
-            #expect(lefts[index] >= lefts[index - 1] + widths[index - 1] * scales[index - 1], "words never overlap")
-        }
-        let centered = FisheyeLens.pack(widths: widths, scales: scales, space: 10, leading: false, origin: 0, center: 300)
-        let right = centered.last! + widths.last! * scales.last!
-        #expect(abs((centered[0] + right) / 2 - 300) < 1e-9)
-        #expect(abs(FisheyeLens.bob(index: 0, beatPhase: 0.25, energy: 1, amplitude: 3) - 3) < 1e-9)
-    }
-
     @Test("Karaoke: rows light up in order, up to their last letter")
     func karaoke() {
         #expect(KaraokeFill.litPerRow(progress: 0, counts: [10, 6]) == [0, 0])
@@ -58,43 +39,6 @@ struct LyricsStyleMathTests {
         #expect(TypewriterReveal.strike(index: 5, typed: 4) == 0)
         #expect(abs(TypewriterReveal.strike(index: 5, typed: 5.8) - 0.5) < 1e-9)
         #expect(TypewriterReveal.strike(index: 5, typed: 9) == 1)
-    }
-
-    @Test("Spread: letters come in from wide, rest in place, leave wide")
-    func spread() {
-        #expect(abs(SpreadMotion.factor(enter: 0, sung: 0, exit: 0, beat: 0) - 1.9) < 1e-9)
-        #expect(abs(SpreadMotion.factor(enter: 1, sung: 0, exit: 0, beat: 0) - 1) < 1e-9)
-        #expect(SpreadMotion.factor(enter: 1, sung: 1, exit: 0, beat: 0) > 1)
-        #expect(SpreadMotion.factor(enter: 1, sung: 1, exit: 1, beat: 0) > 2)
-        let middle = SpreadMotion.opacity(index: 5, count: 11, enter: 0.3, exit: 0)
-        let edge = SpreadMotion.opacity(index: 0, count: 11, enter: 0.3, exit: 0)
-        #expect(middle > edge, "the middle appears first")
-        #expect(SpreadMotion.opacity(index: 0, count: 11, enter: 1, exit: 0) == 1)
-        #expect(SpreadMotion.opacity(index: 0, count: 11, enter: 1, exit: 1) == 0)
-    }
-
-    @Test("Neon: words light up in order with a flicker, then hum")
-    func neon() {
-        let times = (0..<4).map { NeonSign.ignitionTime(index: $0, count: 4, sungDuration: 3) }
-        #expect(times == times.sorted() && times[0] == 0 && times[3] < 1.4)
-        #expect(NeonSign.ignition(since: -0.1, seed: 1) == 0)
-        #expect(NeonSign.ignition(since: 0.5, seed: 1) == 1)
-        #expect(NeonSign.ignition(since: 0.1, seed: 9) == NeonSign.ignition(since: 0.1, seed: 9), "the same flicker every time")
-        for step in 0..<200 {
-            let hum = NeonSign.hum(time: Double(step) * 0.05, seed: 3)
-            #expect(hum >= 0.5 && hum <= 1)
-        }
-    }
-
-    @Test("Echo: copies lag behind the line; a beat's ripple grows and fades")
-    func echo() {
-        #expect(EchoTrail.delayed(0.5, copy: 1, delay: 0.07, duration: 0.5) < 0.5)
-        #expect(EchoTrail.delayed(1, copy: 3, delay: 0.07, duration: 0.5) < 1)
-        let start = EchoTrail.ripple(sinceBeat: 0, strength: 1)
-        let later = EchoTrail.ripple(sinceBeat: 0.3, strength: 1)
-        #expect(start.scale == 1 && start.opacity > later.opacity && later.scale > 1)
-        #expect(EchoTrail.ripple(sinceBeat: 2, strength: 1).opacity == 0)
-        #expect(EchoTrail.ripple(sinceBeat: .infinity, strength: 1).opacity == 0)
     }
 
     @Test("Glitch: a line decodes from left to right and is whole after the decode; tears only on strong beats")

@@ -8,9 +8,9 @@ struct LyricsSettingsTests {
     @Test("The position decodes leniently and defaults to above the player")
     func position() throws {
         #expect(LyricsSettings().position == .abovePlayer)
-        let data = Data(#"{"position": "top", "style": "neon"}"#.utf8)
+        let data = Data(#"{"position": "top", "style": "cinema"}"#.utf8)
         let decoded = try JSONDecoder().decode(LyricsSettings.self, from: data)
-        #expect(decoded.position == .top && decoded.style == .neon)
+        #expect(decoded.position == .top && decoded.style == .cinema)
         let unknown = try JSONDecoder().decode(LyricsSettings.self, from: Data(#"{"position": "sideways"}"#.utf8))
         #expect(unknown.position == .abovePlayer)
     }

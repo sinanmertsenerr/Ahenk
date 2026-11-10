@@ -99,42 +99,6 @@ public enum LyricsWrap {
     }
 }
 
-/// Fisheye: a lens travels along the line as it is sung; words under it
-/// grow, the others shrink and make room.
-public enum FisheyeLens {
-    /// Each word's scale for a lens at `focus`. `centers` and `focus` are
-    /// positions along the line (0…1 of its characters); `radius` is the
-    /// lens's half width in the same unit.
-    public static func scales(centers: [Double], focus: Double, radius: Double, minimum: Double, maximum: Double) -> [Double] {
-        centers.map { center in
-            let distance = abs(center - focus) / max(1e-6, radius)
-            let falloff = exp(-distance * distance * 1.6)
-            return minimum + (maximum - minimum) * falloff
-        }
-    }
-
-    /// Where each scaled word starts on its row (left edges), the row laid
-    /// out from `origin` (leading) or around `center` (centred): scaled
-    /// widths plus a scaled space, never overlapping.
-    public static func pack(widths: [Double], scales: [Double], space: Double, leading: Bool, origin: Double, center: Double) -> [Double] {
-        guard !widths.isEmpty else { return [] }
-        var positions: [Double] = []
-        var x = 0.0
-        for index in widths.indices {
-            positions.append(x)
-            let gap = index + 1 < widths.count ? space * (scales[index] + scales[index + 1]) / 2 : 0
-            x += widths[index] * scales[index] + gap
-        }
-        let start = leading ? origin : center - x / 2
-        return positions.map { $0 + start }
-    }
-
-    /// A word's gentle bob with the beat (points).
-    public static func bob(index: Int, beatPhase: Double, energy: Double, amplitude: Double) -> Double {
-        sin(2 * .pi * beatPhase + Double(index) * 0.9) * amplitude * (0.35 + 0.65 * LyricsEasing.unit(energy))
-    }
-}
-
 /// Karaoke: the line lights up from its first letter to its last as it is sung.
 public enum KaraokeFill {
     /// How far a row is lit, in points. `boundaries` are the x positions of
@@ -175,74 +139,6 @@ public enum TypewriterReveal {
     /// `length` letters' worth of typing.
     public static func strike(index: Int, typed: Double, length: Double = 1.6) -> Double {
         LyricsEasing.unit((typed - Double(index)) / max(0.01, length))
-    }
-}
-
-/// Spread: letters gather from the middle as a line comes, drift apart as
-/// it is sung and fly wide as it leaves.
-public enum SpreadMotion {
-    /// How far letters stand from their row's middle, 1 being their
-    /// place: they come in from twice as far, settle (with a slight
-    /// overshoot), drift apart while the line is sung and fly out again.
-    public static func factor(enter: Double, sung: Double, exit: Double, beat: Double) -> Double {
-        let arrive = 1.9 - 0.9 * LyricsEasing.outBack(enter, overshoot: 0.9)
-        let drift = 0.05 * LyricsEasing.unit(sung)
-        let leave = 1.1 * LyricsEasing.inOutCubic(exit)
-        return arrive + drift + leave + 0.015 * LyricsEasing.unit(beat)
-    }
-
-    /// A letter's opacity: letters near the middle appear first and the
-    /// outer ones leave first.
-    public static func opacity(index: Int, count: Int, enter: Double, exit: Double) -> Double {
-        guard count > 0 else { return 0 }
-        let middle = Double(count - 1) / 2
-        let distance = middle > 0 ? abs(Double(index) - middle) / middle : 0
-        let appear = LyricsEasing.unit((enter - distance * 0.4) / 0.6)
-        let fade = 1 - LyricsEasing.unit((exit - (1 - distance) * 0.3) / 0.55)
-        return appear * fade
-    }
-}
-
-/// Neon: each word lights up like a tube when its turn comes, flickering
-/// first, then hums.
-public enum NeonSign {
-    /// When word `index` of `count` lights up, in seconds after the line starts.
-    public static func ignitionTime(index: Int, count: Int, sungDuration: Double) -> Double {
-        guard count > 1 else { return 0 }
-        return Double(index) / Double(count) * min(1.4, max(0.2, sungDuration * 0.6))
-    }
-
-    /// A starting tube's brightness `since` seconds after it was switched
-    /// on: a few uneven flashes, then on.
-    public static func ignition(since: Double, seed: UInt64) -> Double {
-        guard since > 0 else { return 0 }
-        guard since < 0.32 else { return 1 }
-        let step = Int(since / 0.04)
-        let flash = LyricsNoise.unit(seed, step)
-        return step == 0 ? 0.85 : (flash > 0.45 ? 1 : 0.15 + 0.2 * flash)
-    }
-
-    /// The hum of a lit tube: a faint flicker between about 0.9 and 1.
-    public static func hum(time: Double, seed: UInt64) -> Double {
-        let slow = sin(time * 7.3 + Double(seed % 97)) * 0.5 + 0.5
-        let blink = LyricsNoise.unit(seed, Int(time * 12)) > 0.996 ? 0.6 : 1
-        return (0.9 + 0.1 * slow) * blink
-    }
-}
-
-/// Echo: copies trail the line, and each beat sends one ripple outwards.
-public enum EchoTrail {
-    /// Copy `copy` (1, 2, …) follows the line `delay` seconds per copy
-    /// later: its glide progress at `progress` of a glide `duration` long.
-    public static func delayed(_ progress: Double, copy: Int, delay: Double, duration: Double) -> Double {
-        LyricsEasing.unit(progress - Double(copy) * delay / max(0.01, duration))
-    }
-
-    /// A beat's ripple `sinceBeat` seconds after it: growing and fading.
-    public static func ripple(sinceBeat: Double, strength: Double, length: Double = 0.6) -> (scale: Double, opacity: Double) {
-        guard sinceBeat >= 0, sinceBeat < length else { return (1, 0) }
-        let t = sinceBeat / length
-        return (1 + 0.1 * LyricsEasing.outCubic(t), 0.36 * LyricsEasing.unit(strength) * (1 - t) * (1 - t))
     }
 }
 

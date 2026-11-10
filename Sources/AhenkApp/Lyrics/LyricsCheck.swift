@@ -102,7 +102,7 @@ enum LyricsCheck {
             ("plain", .plain(plain)),
         ]
         var drawn = 0
-        for style in [LyricStyle.fisheye, .cinema] {
+        for style in [LyricStyle.plain, .cinema] {
             for (name, phase) in states {
                 view.content = content(song: song, timeline: nil, style: style, phase: phase)
                 view.layoutSubtreeIfNeeded()

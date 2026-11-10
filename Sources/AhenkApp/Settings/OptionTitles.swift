@@ -82,14 +82,12 @@ extension LyricStyle {
     @MainActor
     var title: String {
         switch self {
-        case .fisheye: "Fisheye".l10n
-        case .spread: "Spread".l10n
-        case .karaoke: "Karaoke".l10n
-        case .typewriter: "Typewriter".l10n
-        case .neon: "Neon".l10n
-        case .echo: "Echo".l10n
+        case .plain: "Plain".l10n
         case .glitch: "Glitch".l10n
         case .cinema: "Cinema".l10n
+        case .karaoke: "Karaoke".l10n
+        case .typewriter: "Typewriter".l10n
+        case .drift: "Drift".l10n
         }
     }
 }

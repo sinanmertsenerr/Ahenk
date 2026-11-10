@@ -454,14 +454,13 @@
 "Hide the Album Cover" = "Albüm Kapağını Gizle";
 
 /* MARK: Lyric styles */
-"Fisheye" = "Balıkgözü";
-"Spread" = "Yayılma";
 "Karaoke" = "Karaoke";
 "Typewriter" = "Daktilo";
-"Neon" = "Neon";
 "Echo" = "Yankı";
 "Glitch" = "Bozulma";
 "Cinema" = "Sinema";
+"Drift" = "Süzülme";
+"Plain" = "Sade";
 
 /* MARK: Live wallpaper */
 "While a song plays, its motion artwork or music video becomes the wallpaper, then fades back into yours." = "Şarkı çalarken hareketli kapağı ya da müzik videosu duvar kâğıdı olur; ardından yavaşça sizinkine geri döner.";

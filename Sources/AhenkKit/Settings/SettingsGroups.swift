@@ -199,7 +199,7 @@ public struct LyricsSettings: Codable, Equatable, Sendable {
     public static let offsetRange: ClosedRange<Double> = -5...5
 
     public var enabled = true
-    public var style: LyricStyle = .fisheye
+    public var style: LyricStyle = .plain
     /// Where the lyrics sit until they are dragged (choosing one forgets
     /// the dragged place).
     public var position: LyricsPosition = .abovePlayer

@@ -39,8 +39,8 @@ browser, any app that shows what is playing, and your own song files.
   while a song starts; "start every song at 0:15". When two sources play at
   once, the player and the menu bar menu ask which one to follow.
 - **Lyrics.** Synced lyrics on the desktop beside the cover, in the cover's
-  colors, in eight styles with their own typefaces: Fisheye, Spread,
-  Karaoke, Typewriter, Neon, Echo, Glitch and Cinema. Instrumental parts show
+  colors, in six styles with their own typefaces: Plain (nothing but
+  the words), Glitch, Cinema, Karaoke, Typewriter and Drift. Instrumental parts show
   a music note that counts down to the next line. Other Lyrics, Search
   Lyrics, timing nudges kept per song, automatic sync, and the cover beside
   them can be hidden.
@@ -249,8 +249,8 @@ uygulamayı ve kendi şarkı dosyalarınızı izler.
   görünümü; "her şarkıyı 0:15'ten başlat". İki kaynak aynı anda çalarsa
   oynatıcı ve menü çubuğu menüsü hangisinin izleneceğini sorar.
 - **Şarkı sözleri.** Masaüstünde, kapağın yanında, kapağın renkleriyle ve
-  her biri kendi yazı tipiyle sekiz stilde eşzamanlı sözler: Balıkgözü,
-  Yayılma, Karaoke, Daktilo, Neon, Yankı, Bozulma ve Sinema. Enstrümantal
+  her biri kendi yazı tipiyle altı stilde eşzamanlı sözler: Sade (yalnızca
+  sözler), Bozulma, Sinema, Karaoke, Daktilo ve Süzülme. Enstrümantal
   bölümlerde bir müzik notası sonraki satıra geri sayar. Diğer Sözler, Söz
   Ara, şarkı başına saklanan zamanlama ayarı, otomatik eşitleme; sözlerin
   yanındaki kapak gizlenebilir.
