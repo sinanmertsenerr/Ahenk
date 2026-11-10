@@ -27,7 +27,8 @@ enum DemoStage {
         return window
     }
 
-    private static func backdropImage(size: CGSize, scale: CGFloat) -> NSImage? {
+    /// The generated dusk wallpaper (also the README pictures' backdrop).
+    static func backdropImage(size: CGSize, scale: CGFloat) -> NSImage? {
         let width = Int(size.width * scale), height = Int(size.height * scale)
         guard width > 0, height > 0, let space = CGColorSpace(name: CGColorSpace.sRGB),
               let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,

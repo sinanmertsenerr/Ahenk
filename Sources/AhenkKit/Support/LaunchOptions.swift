@@ -52,6 +52,8 @@ import Foundation
 ///   checks and measurements (the folder is temporary and deleted on quit).
 /// - `--demo-desk-cleared`: in demo mode, Clear Desk is switched on at
 ///   launch, on the demo's invented apps (nothing on the Mac is hidden).
+/// - `--gallery <dir>`: with `--smoke --snapshots`, also compose the
+///   README's pictures from the snapshots and offscreen renders into `dir`.
 /// - `--welcome`: open the first-run guide at launch (also in demo mode,
 ///   where it asks for nothing).
 /// - `--power <battery|low-power|hot>`: in demo mode, act as if the Mac ran
@@ -120,6 +122,8 @@ public struct LaunchOptions: Equatable, Sendable {
     public var demoDeskCleared = false
     /// Open the first-run guide at launch (`--welcome`).
     public var showsWelcome = false
+    /// Where `--smoke` writes the README's pictures (`--gallery`).
+    public var galleryDirectory: String?
     /// Demo only: the power state to act as if (`--power`).
     public var simulatedPower: SimulatedPower?
 
@@ -195,6 +199,8 @@ public struct LaunchOptions: Equatable, Sendable {
                 demoDeskCleared = true
             case "--welcome":
                 showsWelcome = true
+            case "--gallery":
+                galleryDirectory = inlineValue ?? Self.popValue(&remaining)
             case "--power":
                 simulatedPower = (inlineValue ?? Self.popValue(&remaining)).flatMap { SimulatedPower(rawValue: $0.lowercased()) }
             case "--wallpaper-song":

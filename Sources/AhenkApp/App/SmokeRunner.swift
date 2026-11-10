@@ -79,6 +79,13 @@ final class SmokeRunner {
         if let wait = environment.options.bridgeWait, let port = environment.options.bridgePort, selected("bridgeLive") {
             await report.check("bridgeLive") { try await BridgeCheck.runLive(port: port, wait: wait) }
         }
+        // Last: it reuses the snapshots the checks above wrote.
+        if let gallery = environment.options.galleryDirectory, selected("gallery") {
+            let output = URL(fileURLWithPath: (gallery as NSString).expandingTildeInPath, isDirectory: true)
+            await report.check("gallery") {
+                try await ReadmeGallery.run(environment: self.environment, snapshots: self.snapshotDirectory(), output: output)
+            }
+        }
         report.finish()
         for entry in report.subsystems {
             log.info("\(entry.name): \(entry.status.rawValue), \(entry.detail)")
