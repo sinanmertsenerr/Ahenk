@@ -154,10 +154,21 @@ final class PlaybackRouter {
         guard await scripts.automationPermission(for: KnownApps.spotify, askIfNeeded: interactive) == .granted else {
             return .failed("Allow Ahenk to control Spotify in System Settings › Privacy & Security › Automation.".l10n)
         }
-        if case .success(let value) = await scripts.run(script), case .played = ScriptPlayResult.parse(value) {
-            return .started
+        // A Spotify that has only just opened takes the song without
+        // starting it: ask what it does and say it again until it plays.
+        for attempt in 0..<6 {
+            guard case .success(let value) = await scripts.run(script), case .played = ScriptPlayResult.parse(value) else {
+                if attempt == 0 { return .failed("Spotify did not start the song.".l10n) }
+                break
+            }
+            try? await Task.sleep(for: .milliseconds(attempt == 0 ? 700 : 1400))
+            guard case .success(let check) = await scripts.run(SpotifyAppScripts.playbackCheckScript),
+                  let playing = SpotifyAppScripts.isPlaying(trackID: trackID, check: check)
+            else { return .started }
+            if playing { return .started }
+            log.notice("Spotify has not started the song yet (try \(attempt + 1)); asking again")
         }
-        return .failed("Spotify did not start the song.".l10n)
+        return .started
     }
 
     private func playInBrowser(_ song: CatalogSong, site: MusicSource) async -> Outcome {

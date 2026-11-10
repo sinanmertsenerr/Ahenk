@@ -215,6 +215,37 @@ public enum SpotifyAppScripts {
         """)
     }
 
+    /// What Spotify does right now: `{"state", "playing" | "paused" |
+    /// "stopped", the song's URI, seconds into it}`. Asked after
+    /// `playTrack`: a Spotify that has only just opened shows the song
+    /// without starting it.
+    public static let playbackCheckScript = ScriptFormatting.ifRunning(bundleIdentifier: bundleIdentifier, otherwise: #"{"notrunning"}"#, body: """
+    with timeout of 4 seconds
+    \ttell application id "\(bundleIdentifier)"
+    \t\tset currentState to player state as text
+    \t\tset currentID to ""
+    \t\tset currentPosition to 0
+    \t\ttry
+    \t\t\tset currentID to id of current track
+    \t\t\tset currentPosition to player position
+    \t\tend try
+    \t\treturn {"state", currentState, currentID, currentPosition as text}
+    \tend tell
+    end timeout
+    """)
+
+    /// `true` when the check says the wanted song (or one that has only
+    /// just begun: Spotify may swap in another edition) plays; `nil` when
+    /// the answer cannot be read.
+    public static func isPlaying(trackID: String, check value: ScriptValue) -> Bool? {
+        let items = value.list ?? []
+        guard items.count >= 4, items[0].text == "state", let state = items[1].text else { return nil }
+        guard state == "playing" else { return false }
+        if items[2].text == "spotify:track:\(trackID)" { return true }
+        let position = Double((items[3].text ?? "").replacingOccurrences(of: ",", with: ".")) ?? .infinity
+        return position < 8
+    }
+
     public static let volumeScript = ScriptFormatting.ifRunning(bundleIdentifier: bundleIdentifier, otherwise: "missing value", body: """
     with timeout of 4 seconds
     \ttell application id "\(bundleIdentifier)" to return sound volume
