@@ -72,7 +72,7 @@ struct WallpaperPane: View {
             } header: {
                 Text("Look".l10n)
             } footer: {
-                Text("Dimming and a soft shade at the edges keep the clock, the player, the lyrics and the edge light readable over bright videos. On battery and in Optimized Mode videos play at a lower resolution; in Low Power Mode only the cover moves.".l10n)
+                Text("Dimming and a soft shade at the edges keep the clock, the player, the lyrics and the edge light readable over bright videos. In Low Power Mode only the cover moves.".l10n)
             }
 
             Section {

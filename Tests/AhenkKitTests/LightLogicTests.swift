@@ -78,14 +78,13 @@ struct LightFramePolicyTests {
 
     @Test("Hidden screens get no frames at all")
     func hidden() {
-        let plan = LightFramePolicy.plan(LightFrameInputs(optimizedMode: true, isVisible: false))
+        let plan = LightFramePolicy.plan(LightFrameInputs(isOnBattery: true, isVisible: false))
         #expect(plan.isPaused && plan.reason == .hidden)
     }
 
-    @Test("Optimized Mode, battery, Low Power Mode and heat run lighter")
+    @Test("Battery, Low Power Mode and heat run lighter")
     func lighter() {
         let cases: [(LightFrameInputs, LightFramePlan.Reason)] = [
-            (LightFrameInputs(optimizedMode: true), .optimizedMode),
             (LightFrameInputs(isOnBattery: true), .battery),
             (LightFrameInputs(isLowPowerMode: true), .lowPowerMode),
             (LightFrameInputs(isThermallyConstrained: true), .thermal),

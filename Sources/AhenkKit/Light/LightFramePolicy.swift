@@ -19,8 +19,6 @@ public enum LightQuality: Equatable, Sendable {
 
 /// What decides how hard the light may work on one display.
 public struct LightFrameInputs: Equatable, Sendable {
-    /// Settings › General › Optimized Mode.
-    public var optimizedMode: Bool
     /// Settings › General › Run lighter on battery (also covers Low Power
     /// Mode).
     public var lighterOnBattery: Bool
@@ -34,11 +32,10 @@ public struct LightFrameInputs: Equatable, Sendable {
     public var maximumFramesPerSecond: Int
 
     public init(
-        optimizedMode: Bool = false, lighterOnBattery: Bool = true, isOnBattery: Bool = false,
+        lighterOnBattery: Bool = true, isOnBattery: Bool = false,
         isLowPowerMode: Bool = false, isThermallyConstrained: Bool = false, isVisible: Bool = true,
         maximumFramesPerSecond: Int = 60
     ) {
-        self.optimizedMode = optimizedMode
         self.lighterOnBattery = lighterOnBattery
         self.isOnBattery = isOnBattery
         self.isLowPowerMode = isLowPowerMode
@@ -52,7 +49,6 @@ public struct LightFrameInputs: Equatable, Sendable {
 public struct LightFramePlan: Equatable, Sendable {
     public enum Reason: String, Equatable, Sendable {
         case normal
-        case optimizedMode
         case battery
         case lowPowerMode
         case thermal
@@ -73,7 +69,7 @@ public struct LightFramePlan: Equatable, Sendable {
 /// Frame rate and quality from power state and visibility:
 ///
 /// - hidden → paused (0 fps);
-/// - Optimized Mode, the Mac running hot, or (with "Run lighter on battery")
+/// - the Mac running hot, or (with "Run lighter on battery")
 ///   battery power or Low Power Mode → 30 fps, ``LightQuality/light``, half
 ///   resolution;
 /// - otherwise 60 fps (never more: the light moves smoothly at 60 and a
@@ -90,8 +86,6 @@ public enum LightFramePolicy {
         let reason: LightFramePlan.Reason
         if inputs.isThermallyConstrained {
             reason = .thermal
-        } else if inputs.optimizedMode {
-            reason = .optimizedMode
         } else if inputs.lighterOnBattery, inputs.isLowPowerMode {
             reason = .lowPowerMode
         } else if inputs.lighterOnBattery, inputs.isOnBattery {

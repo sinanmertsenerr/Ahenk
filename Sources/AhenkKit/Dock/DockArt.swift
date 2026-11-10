@@ -27,7 +27,6 @@ public struct DockArtInputs: Equatable, Sendable {
     public var hasCover: Bool
     /// Music plays (the light's rule: music or unlabelled content).
     public var isPlaying: Bool
-    public var optimizedMode: Bool
     public var lighterOnBattery: Bool
     public var isOnBattery: Bool
     public var isLowPowerMode: Bool
@@ -35,14 +34,13 @@ public struct DockArtInputs: Equatable, Sendable {
 
     public init(
         enabled: Bool = true, beatRing: Bool = true, hasCover: Bool = true, isPlaying: Bool = true,
-        optimizedMode: Bool = false, lighterOnBattery: Bool = true, isOnBattery: Bool = false,
+        lighterOnBattery: Bool = true, isOnBattery: Bool = false,
         isLowPowerMode: Bool = false, isThermallyConstrained: Bool = false
     ) {
         self.enabled = enabled
         self.beatRing = beatRing
         self.hasCover = hasCover
         self.isPlaying = isPlaying
-        self.optimizedMode = optimizedMode
         self.lighterOnBattery = lighterOnBattery
         self.isOnBattery = isOnBattery
         self.isLowPowerMode = isLowPowerMode
@@ -59,7 +57,7 @@ public struct DockArtInputs: Equatable, Sendable {
 /// - Off, or nothing to show → the app icon (a new song's cover gets
 ///   ``coverGrace`` to arrive first; the last cover stays meanwhile).
 /// - Paused, the ring off, Low Power Mode or a hot Mac → the cover, still.
-/// - Optimized Mode or (with "run lighter") battery → 6 frames a second.
+/// - battery (with "run lighter") → 6 frames a second.
 /// - Otherwise 10 frames a second.
 public enum DockArtPolicy {
     public static let normalFramesPerSecond = 10
@@ -81,7 +79,7 @@ public enum DockArtPolicy {
         guard inputs.enabled, inputs.hasCover else { return .appIcon }
         guard inputs.isPlaying, inputs.beatRing else { return .still }
         if inputs.isThermallyConstrained || (inputs.lighterOnBattery && inputs.isLowPowerMode) { return .still }
-        if inputs.optimizedMode || (inputs.lighterOnBattery && inputs.isOnBattery) {
+        if inputs.lighterOnBattery, inputs.isOnBattery {
             return .animated(framesPerSecond: lighterFramesPerSecond)
         }
         return .animated(framesPerSecond: normalFramesPerSecond)

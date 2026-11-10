@@ -64,10 +64,8 @@
 "Language" = "Dil";
 "Ahenk keeps this language even when your Mac uses another one." = "Mac'iniz başka bir dil kullansa bile Ahenk bu dilde kalır.";
 "Performance" = "Performans";
-"Optimized Mode" = "Optimize Edilmiş Mod";
-"Uses less energy: fewer particles, lower frame rates and smaller videos." = "Daha az enerji harcar: daha az parçacık, daha düşük kare hızı ve daha küçük videolar.";
 "Run lighter on battery" = "Pilde daha hafif çalış";
-"Also applies when Low Power Mode is on." = "Düşük Güç Modu açıkken de geçerlidir.";
+"The edge light draws half as often on battery. In Low Power Mode only the cover moves." = "Pilde kenar ışığı yarı sıklıkta çizilir. Düşük Güç Modunda yalnızca kapak hareket eder.";
 "Menu Bar" = "Menü Çubuğu";
 "Show the song title in the menu bar" = "Şarkının adını menü çubuğunda göster";
 "Troubleshooting" = "Sorun Giderme";
@@ -150,7 +148,6 @@
 "On" = "Açık";
 "On, lighter on battery" = "Açık, pilde daha hafif";
 "On, lighter in Low Power Mode" = "Açık, Düşük Güç Modunda daha hafif";
-"On, lighter in Optimized Mode" = "Açık, Optimize Edilmiş Modda daha hafif";
 "On, lighter while the Mac is hot" = "Açık, Mac ısındığı için daha hafif";
 "Stepped aside" = "Kenara çekildi";
 "Not available on this Mac" = "Bu Mac'te kullanılamıyor";
@@ -477,7 +474,7 @@
 "Crossfade" = "Geçiş süresi";
 "Dimming" = "Karartma";
 "Blur" = "Bulanıklık";
-"Dimming and a soft shade at the edges keep the clock, the player, the lyrics and the edge light readable over bright videos. On battery and in Optimized Mode videos play at a lower resolution; in Low Power Mode only the cover moves." = "Karartma ve kenarlardaki hafif gölge; saatin, oynatıcının, şarkı sözlerinin ve kenar ışığının parlak videoların üzerinde de kolayca okunmasını sağlar. Pilde ve Optimize Edilmiş Modda videolar daha düşük çözünürlükte oynatılır; Düşük Güç Modunda yalnızca kapak hareket eder.";
+"Dimming and a soft shade at the edges keep the clock, the player, the lyrics and the edge light readable over bright videos. In Low Power Mode only the cover moves." = "Karartma ve kenarlardaki hafif gölge; saatin, oynatıcının, şarkı sözlerinin ve kenar ışığının parlak videoların üzerinde de kolayca okunmasını sağlar. Düşük Güç Modunda yalnızca kapak hareket eder.";
 "A YouTube video plays separately on each display." = "Bir YouTube videosu her ekranda ayrı ayrı oynatılır.";
 "Your Videos" = "Videolarınız";
 "No videos yet. Videos you add appear here." = "Henüz video yok. Eklediğiniz videolar burada görünür.";
@@ -747,14 +744,14 @@
 "Ready when the music is" = "Müzik başladığında hazır";
 "Play a song in any music app or site, or drop a folder of songs on the list, and your desktop follows it." = "Herhangi bir müzik uygulamasında ya da sitesinde bir şarkı çalın veya listeye bir şarkı klasörü bırakın; masaüstünüz ona eşlik eder.";
 "The menu bar icon holds quick switches, Clear Desk and Settings." = "Menü çubuğundaki simgede hızlı anahtarlar, Masayı Temizle ve Ayarlar bulunur.";
-"On battery and in Low Power Mode Ahenk runs lighter by itself; Optimized Mode in Settings › General makes it lighter always." = "Pilde ve Düşük Güç Modunda Ahenk kendiliğinden daha hafif çalışır; Ayarlar › Genel bölümündeki Optimize Edilmiş Mod onu her zaman hafifletir.";
+"On battery and in Low Power Mode Ahenk runs lighter by itself." = "Pilde ve Düşük Güç Modunda Ahenk kendiliğinden daha hafif çalışır.";
 "Open this guide again from the menu bar menu or Settings › General." = "Bu rehberi menü çubuğu menüsünden ya da Ayarlar › Genel bölümünden yeniden açabilirsiniz.";
 "Acknowledgements" = "Teşekkürler";
 "Reads what plays on macOS 15.4 and later. BSD 3-Clause License, included in Ahenk." = "macOS 15.4 ve sonrasında neyin çaldığını okur. BSD 3 Maddeli Lisans; Ahenk'le birlikte gelir.";
 "Times plain lyrics on this Mac. MIT License. Optional: you install it yourself (brew install whisper-cpp); Ahenk does not include it or any speech model." = "Zamansız şarkı sözlerini bu Mac'te şarkıya hizalar. MIT Lisansı. İsteğe bağlıdır: kendiniz kurarsınız (brew install whisper-cpp); Ahenk onu da, herhangi bir konuşma modelini de içermez.";
 "Covers, albums and search from Apple's public catalog; lyrics from LRCLIB, Musixmatch and NetEase; Spotify song IDs from ListenBrainz; music videos in YouTube's embedded player." = "Kapaklar, albümler ve arama için Apple'ın herkese açık kataloğu; şarkı sözleri için LRCLIB, Musixmatch ve NetEase; Spotify şarkı kimlikleri için ListenBrainz; müzik videoları için YouTube'un yerleştirilmiş oynatıcısı kullanılır.";
-"Lock Widgets" = "Araçları Kilitle";
-"Unlock Widgets" = "Araçların Kilidini Aç";
 "All" = "Tümü";
 "Artists" = "Sanatçılar";
 "Top Result" = "En İyi Sonuç";
+"Lock Widgets" = "Araçları Kilitle";
+"Unlock Widgets" = "Araçların Kilidini Aç";

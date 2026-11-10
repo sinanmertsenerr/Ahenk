@@ -67,7 +67,7 @@ browser, any app that shows what is playing, and your own song files.
   while the song plays.
 - **Light on your Mac.** Nothing playing means nothing drawn; anything
   hidden stops drawing; on battery and in Low Power Mode Ahenk runs lighter
-  by itself, and Optimized Mode makes it lighter always.
+  by itself.
 - **English and Turkish**, switched in Settings › General whatever the Mac's
   language.
 
@@ -178,7 +178,6 @@ display, CPU of Ahenk's own process averaged over 30 s with `top`):
 | The same with the live wallpaper | 9.1 % | 168 MB |
 | On battery (lighter by itself) | 6.4 % | 153 MB |
 | Low Power Mode | 5.5 % | 151 MB |
-| Optimized Mode | 6.4 % | 153 MB |
 
 ## Development
 
@@ -272,7 +271,7 @@ uygulamayı ve kendi şarkı dosyalarınızı izler.
   kapanır.
 - **Mac'inizi yormaz.** Hiçbir şey çalmıyorsa hiçbir şey çizilmez; görünmeyen
   her parça çizmeyi bırakır; pilde ve Düşük Güç Modunda Ahenk kendiliğinden
-  daha hafif çalışır, Optimize Edilmiş Mod da onu her zaman hafifletir.
+  daha hafif çalışır.
 - **İngilizce ve Türkçe**: Mac'in dili ne olursa olsun Ayarlar › Genel'den
   seçilir.
 
@@ -390,7 +389,6 @@ saniyelik ortalama):
 | Aynısı, canlı duvar kâğıdıyla | %9,1 | 168 MB |
 | Pilde (kendiliğinden hafif) | %6,4 | 153 MB |
 | Düşük Güç Modu | %5,5 | 151 MB |
-| Optimize Edilmiş Mod | %6,4 | 153 MB |
 
 ## Geliştirme
 

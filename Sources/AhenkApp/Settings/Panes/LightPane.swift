@@ -188,7 +188,6 @@ extension EdgeLightController.Status {
             case .normal, .hidden: "On".l10n
             case .battery: "On, lighter on battery".l10n
             case .lowPowerMode: "On, lighter in Low Power Mode".l10n
-            case .optimizedMode: "On, lighter in Optimized Mode".l10n
             case .thermal: "On, lighter while the Mac is hot".l10n
             }
         case .steppedAside: "Stepped aside".l10n

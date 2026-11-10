@@ -115,8 +115,6 @@ struct LaunchOptionsTests {
         #expect(LaunchOptions(arguments: ["Ahenk", "--wallpaper-song", "Glass Harbor|Nova Atlas|212"]).wallpaperSong?.duration == 212)
         #expect(options.usesDetachedSettings, "a run that picks the source never saves")
         #expect(!LaunchOptions(arguments: ["Ahenk", "--demo", "--wallpaper-song", "A|B"]).usesDetachedSettings)
-        let optimized = LaunchOptions(arguments: ["Ahenk", "--demo", "--optimized"])
-        #expect(optimized.optimized && optimized.usesDetachedSettings)
     }
 
     @Test("Launch options for the power state of a measurement")

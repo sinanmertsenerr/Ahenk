@@ -41,8 +41,6 @@ import Foundation
 /// - `--wallpaper-source <kind>`: the live wallpaper shows this kind of
 ///   candidate first for this run (`motionArtwork`, `songVideo`,
 ///   `artistVideo`, `artwork`), or `off` for none (measurements).
-/// - `--optimized`: Optimized Mode for this run only (measurements of the
-///   lighter mode).
 /// - `--full-rate`: this run does not run lighter on battery (measurements
 ///   of the full frame rates on an unplugged MacBook).
 /// - `--dock-art <on|still|off>`: Dock Art for this run only: the cover with
@@ -110,8 +108,6 @@ public struct LaunchOptions: Equatable, Sendable {
     public var wallpaperSongArgument: String?
     /// The candidate kind the wallpaper shows first (`--wallpaper-source`).
     public var wallpaperSource: String?
-    /// Optimized Mode for this run (`--optimized`), not saved.
-    public var optimized = false
     /// "Run lighter on battery" is off for this run (`--full-rate`), not saved.
     public var fullRate = false
     /// Dock Art for this run (`--dock-art`: `on`, `still`, `off`), not saved.
@@ -140,7 +136,7 @@ public struct LaunchOptions: Equatable, Sendable {
     /// The run works on an in-memory copy of the settings, so what it
     /// changes (a smoke check, a scene, a language) is never saved.
     public var usesDetachedSettings: Bool {
-        mode == .smoke || demoScene != nil || language != nil || lyricsStyle != nil || wallpaperSource != nil || optimized
+        mode == .smoke || demoScene != nil || language != nil || lyricsStyle != nil || wallpaperSource != nil
             || fullRate || dockArt != nil
     }
 
@@ -187,8 +183,6 @@ public struct LaunchOptions: Equatable, Sendable {
                 bridgePort = (inlineValue ?? Self.popValue(&remaining)).flatMap(Int.init).flatMap { (1024...65_535).contains($0) ? $0 : nil }
             case "--bridge-wait":
                 bridgeWait = Self.seconds(inlineValue ?? Self.popValue(&remaining))
-            case "--optimized":
-                optimized = true
             case "--full-rate":
                 fullRate = true
             case "--dock-art":

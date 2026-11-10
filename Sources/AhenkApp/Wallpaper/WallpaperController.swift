@@ -125,7 +125,7 @@ final class WallpaperScreen {
 ///
 /// Inputs: the settings (and the menu bar's Live Wallpaper switch), the
 /// followed song and its play state, the cover, power (lighter on battery,
-/// in Optimized Mode; the cover only in Low Power Mode), the displays, and
+/// the cover only in Low Power Mode), the displays, and
 /// whether each window can be seen (covered, asleep, locked, behind a
 /// full-screen app): hidden media pauses and is let go after ten minutes.
 @MainActor
@@ -255,7 +255,7 @@ final class WallpaperController {
         })
         observers.append(ChangeObserver({
             LightFrameInputs(
-                optimizedMode: settings.general.optimizedMode, lighterOnBattery: settings.general.lighterOnBattery,
+                lighterOnBattery: settings.general.lighterOnBattery,
                 isOnBattery: power.isOnBattery, isLowPowerMode: power.isLowPowerMode, isThermallyConstrained: power.isThermallyConstrained
             )
         }) { [weak self] _ in
@@ -674,7 +674,7 @@ final class WallpaperController {
 
     private var powerPlan: WallpaperPowerPlan {
         WallpaperPowerPolicy.plan(LightFrameInputs(
-            optimizedMode: settings.general.optimizedMode, lighterOnBattery: settings.general.lighterOnBattery,
+            lighterOnBattery: settings.general.lighterOnBattery,
             isOnBattery: power.isOnBattery, isLowPowerMode: power.isLowPowerMode, isThermallyConstrained: power.isThermallyConstrained
         ))
     }

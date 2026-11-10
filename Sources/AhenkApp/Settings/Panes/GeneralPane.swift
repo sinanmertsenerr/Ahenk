@@ -52,13 +52,8 @@ struct GeneralPane: View {
 
             Section("Performance".l10n) {
                 ToggleRow(
-                    title: "Optimized Mode".l10n,
-                    detail: "Uses less energy: fewer particles, lower frame rates and smaller videos.".l10n,
-                    isOn: $settings.general.optimizedMode
-                )
-                ToggleRow(
                     title: "Run lighter on battery".l10n,
-                    detail: "Also applies when Low Power Mode is on.".l10n,
+                    detail: "The edge light draws half as often on battery. In Low Power Mode only the cover moves.".l10n,
                     isOn: $settings.general.lighterOnBattery
                 )
             }

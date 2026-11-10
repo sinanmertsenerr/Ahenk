@@ -88,10 +88,10 @@ public struct WallpaperPowerPlan: Equatable, Sendable {
 
 /// - Low Power Mode (with "run lighter on battery") or a hot Mac → the
 ///   cover only, no video decoding;
-/// - Optimized Mode, or battery power with "run lighter on battery" →
-///   720p videos at a lower bit rate, motion at 20 fps;
 /// - otherwise 1080p, motion at 30 fps (a dimmed wallpaper gains nothing
-///   from more; 4K would only cost power).
+///   from more; 4K would only cost power). Battery power alone changes
+///   nothing here: measured, a 720p video costs as much to show as a
+///   1080p one (the cost is the full-screen frame, not its decoding).
 public enum WallpaperPowerPolicy {
     public static func plan(_ inputs: LightFrameInputs) -> WallpaperPowerPlan {
         if inputs.isThermallyConstrained {
@@ -99,12 +99,6 @@ public enum WallpaperPowerPolicy {
         }
         if inputs.lighterOnBattery, inputs.isLowPowerMode {
             return minimal(.lowPowerMode)
-        }
-        if inputs.optimizedMode {
-            return reduced(.optimizedMode)
-        }
-        if inputs.lighterOnBattery, inputs.isOnBattery {
-            return reduced(.battery)
         }
         return WallpaperPowerPlan(quality: .full, reason: .normal, maximumVideoSide: 1920, peakBitRate: 0, animationFrameRate: 30)
     }

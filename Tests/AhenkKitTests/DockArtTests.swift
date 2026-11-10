@@ -20,7 +20,6 @@ struct DockArtTests {
         #expect(DockArtPolicy.mode(DockArtInputs(beatRing: false)) == .still)
         #expect(DockArtPolicy.mode(DockArtInputs(isLowPowerMode: true)) == .still)
         #expect(DockArtPolicy.mode(DockArtInputs(isThermallyConstrained: true)) == .still)
-        #expect(DockArtPolicy.mode(DockArtInputs(optimizedMode: true)) == .animated(framesPerSecond: DockArtPolicy.lighterFramesPerSecond))
         #expect(DockArtPolicy.mode(DockArtInputs(isOnBattery: true)) == .animated(framesPerSecond: DockArtPolicy.lighterFramesPerSecond))
         #expect(DockArtPolicy.mode(DockArtInputs(lighterOnBattery: false, isOnBattery: true, isLowPowerMode: true)) == .animated(framesPerSecond: DockArtPolicy.normalFramesPerSecond),
                 "with \u{201C}run lighter on battery\u{201D} off, battery and Low Power Mode change nothing")

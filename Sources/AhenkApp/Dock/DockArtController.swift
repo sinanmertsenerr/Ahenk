@@ -81,7 +81,7 @@ final class DockArtController {
         return DockArtInputs(
             enabled: settings.dock.albumArtIcon, beatRing: settings.dock.beatRing,
             hasCover: song != nil && nowPlaying.artwork != nil, isPlaying: song?.isPlaying ?? false,
-            optimizedMode: settings.general.optimizedMode, lighterOnBattery: settings.general.lighterOnBattery,
+            lighterOnBattery: settings.general.lighterOnBattery,
             isOnBattery: power.isOnBattery, isLowPowerMode: power.isLowPowerMode, isThermallyConstrained: power.isThermallyConstrained
         )
     }

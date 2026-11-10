@@ -371,7 +371,7 @@ private struct FinishPage: View {
             }
             VStack(alignment: .leading, spacing: 9) {
                 NoteRow(symbol: "menubar.rectangle", text: "The menu bar icon holds quick switches, Clear Desk and Settings.".l10n)
-                NoteRow(symbol: "leaf", text: "On battery and in Low Power Mode Ahenk runs lighter by itself; Optimized Mode in Settings › General makes it lighter always.".l10n)
+                NoteRow(symbol: "leaf", text: "On battery and in Low Power Mode Ahenk runs lighter by itself.".l10n)
                 NoteRow(symbol: "questionmark.circle", text: "Open this guide again from the menu bar menu or Settings › General.".l10n)
             }
         }

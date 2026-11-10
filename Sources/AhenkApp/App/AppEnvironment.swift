@@ -166,9 +166,6 @@ final class AppEnvironment {
         if options.wallpaperSource == "off" {
             settings.wallpaper.enabled = false
         }
-        if options.optimized {
-            settings.general.optimizedMode = true
-        }
         if options.fullRate {
             settings.general.lighterOnBattery = false
         }

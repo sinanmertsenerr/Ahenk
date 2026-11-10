@@ -478,12 +478,11 @@ struct WallpaperSelectionTests {
                 "the user's own pick still plays")
     }
 
-    @Test("Power: lighter on battery and in Optimized Mode, the cover only in Low Power Mode or when hot")
+    @Test("Power: the video stays as it is on battery; the cover only in Low Power Mode or when hot")
     func power() {
         #expect(WallpaperPowerPolicy.plan(LightFrameInputs()).quality == .full)
-        #expect(WallpaperPowerPolicy.plan(LightFrameInputs(isOnBattery: true)).quality == .reduced)
+        #expect(WallpaperPowerPolicy.plan(LightFrameInputs(isOnBattery: true)).quality == .full, "battery alone keeps the video as it is")
         #expect(WallpaperPowerPolicy.plan(LightFrameInputs(lighterOnBattery: false, isOnBattery: true)).quality == .full)
-        #expect(WallpaperPowerPolicy.plan(LightFrameInputs(optimizedMode: true)).maximumVideoSide == 1280)
         let lowPower = WallpaperPowerPolicy.plan(LightFrameInputs(isLowPowerMode: true))
         #expect(lowPower.quality == .minimal && !lowPower.allowsVideo && lowPower.reason == .lowPowerMode)
         #expect(WallpaperPowerPolicy.plan(LightFrameInputs(isThermallyConstrained: true)).reason == .thermal)

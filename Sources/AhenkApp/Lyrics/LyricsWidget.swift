@@ -65,10 +65,10 @@ struct LyricsWidget: View {
         .environment(\.colorScheme, .dark)
     }
 
-    /// Lighter on battery, in Low Power Mode, in Optimized Mode and when hot.
+    /// Lighter on battery, in Low Power Mode and when hot.
     private var frameRate: Float {
         let general = settings.general
-        let lighter = general.optimizedMode || power.isLowPowerMode || power.isThermallyConstrained
+        let lighter = power.isLowPowerMode || power.isThermallyConstrained
             || (general.lighterOnBattery && power.isOnBattery)
         // 60, not the display's 120: every frame of the lyrics makes the
         // window server blend the whole screen again (the video behind,

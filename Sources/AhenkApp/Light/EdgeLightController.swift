@@ -6,7 +6,7 @@ import Observation
 /// every input that decides whether, where and how the light shines:
 ///
 /// - the settings (Settings › Edge Light, the menu bar's Edge Light switch,
-///   Optimized Mode and "run lighter on battery" in General);
+///   "run lighter on battery" in General);
 /// - the music: the followed player plays music, or the analysis hears it;
 /// - the cover's palette, crossfaded when the song changes;
 /// - power (battery, Low Power Mode, heat) for the frame rate and quality;
@@ -42,7 +42,6 @@ final class EdgeLightController {
     }
 
     private struct PowerInputs: Equatable, Sendable {
-        var optimizedMode: Bool
         var lighterOnBattery: Bool
         var isOnBattery: Bool
         var isLowPowerMode: Bool
@@ -100,7 +99,7 @@ final class EdgeLightController {
         })
         observers.append(ChangeObserver({
             PowerInputs(
-                optimizedMode: settings.general.optimizedMode, lighterOnBattery: settings.general.lighterOnBattery,
+                lighterOnBattery: settings.general.lighterOnBattery,
                 isOnBattery: power.isOnBattery, isLowPowerMode: power.isLowPowerMode, isHot: power.isThermallyConstrained
             )
         }) { [weak self] _ in
@@ -328,7 +327,7 @@ final class EdgeLightController {
 
     private func frameInputs(for screen: LightScreen) -> LightFrameInputs {
         LightFrameInputs(
-            optimizedMode: settings.general.optimizedMode, lighterOnBattery: settings.general.lighterOnBattery,
+            lighterOnBattery: settings.general.lighterOnBattery,
             isOnBattery: power.isOnBattery, isLowPowerMode: power.isLowPowerMode,
             isThermallyConstrained: power.isThermallyConstrained, isVisible: true,
             maximumFramesPerSecond: screen.maximumFramesPerSecond

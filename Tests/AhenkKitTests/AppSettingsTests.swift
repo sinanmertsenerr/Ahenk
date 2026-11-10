@@ -12,7 +12,6 @@ struct AppSettingsTests {
         s.general = {
             var g = GeneralSettings()
             g.language = .turkish
-            g.optimizedMode = true
             g.lighterOnBattery = false
             g.showSongTitleInMenuBar = true
             g.storefront = "TR"
@@ -60,8 +59,8 @@ struct AppSettingsTests {
             p.showSearch = false
             p.showPlayerBar = false
             p.listeningSource = .spotify
-            p.widgetsLocked = true
             p.startAtFifteenSeconds = true
+            p.widgetsLocked = true
             return p
         }()
         s.lyrics = {
@@ -187,7 +186,7 @@ struct AppSettingsTests {
         #expect(s.light.style == .glow && s.light.position == .allEdges && s.light.colorSource == .album)
         #expect(s.lyrics.style == .fisheye)
         #expect(!s.player.startAtFifteenSeconds)
-        #expect(!s.general.optimizedMode && s.general.lighterOnBattery)
+        #expect(s.general.lighterOnBattery)
         #expect(!s.effects.enabled && s.effects.equalizerBands == SoundEffectSettings.flatEqualizer)
         #expect(s.origin == .memory)
     }
