@@ -219,6 +219,13 @@ final class SpotifyRemoteSession: NSObject, WKNavigationDelegate, NSWindowDelega
         }
     }
 
+    /// The web player's session for a signed-in user (lyrics are asked
+    /// with it); `nil` without the sign-in.
+    func signedInSession() async -> SpotifyRemote.Session? {
+        guard isConnected else { return nil }
+        return await currentSession()
+    }
+
     // MARK: Liked Songs
 
     /// Whether the song is among the user's Liked Songs; `nil` when it

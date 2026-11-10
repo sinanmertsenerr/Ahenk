@@ -126,3 +126,45 @@ struct SpotifyRemoteTests {
         #expect(SpotifyRemote.session(fromJSON: #"{"username":"a b","session":{"accessToken":"abc"}}"#)?.username == nil)
     }
 }
+
+@Suite("Spotify's own lyrics")
+struct SpotifyLyricsProviderTests {
+    @Test("Timed lines are read, pauses and empty lines left out")
+    func synced() {
+        let json = #"{"lyrics":{"syncType":"LINE_SYNCED","lines":[{"startTimeMs":"25890","words":"First line"},{"startTimeMs":"27380","words":"♪"},{"startTimeMs":"29000","words":""},{"startTimeMs":"31250","words":"Second line"}]}}"#
+        guard case .synced(let lyrics) = SpotifyLyricsProvider.result(fromJSON: Data(json.utf8)) else {
+            Issue.record("not synced")
+            return
+        }
+        #expect(lyrics.lines.map(\.text) == ["First line", "Second line"])
+        #expect(lyrics.lines.map(\.start) == [25.89, 31.25])
+    }
+
+    @Test("Untimed lyrics come back as text; an answer without lines as nothing")
+    func plain() {
+        let json = #"{"lyrics":{"syncType":"UNSYNCED","lines":[{"startTimeMs":"0","words":"One"},{"startTimeMs":"0","words":"Two"}]}}"#
+        #expect(SpotifyLyricsProvider.result(fromJSON: Data(json.utf8)) == .plain("One\nTwo"))
+        #expect(SpotifyLyricsProvider.result(fromJSON: Data(#"{"lyrics":{"lines":[]}}"#.utf8)) == .notFound)
+        #expect(SpotifyLyricsProvider.result(fromJSON: Data("{}".utf8)) == .notFound)
+    }
+
+    @Test("One provider answers Spotify's songs, the other the rest; neither without the sign-in")
+    func whoAnswers() async throws {
+        let none: @Sendable () async -> SpotifyRemote.Session? = { nil }
+        let exact = SpotifyLyricsProvider(exactOnly: true, fetcher: OfflineLyricsFetcher(), session: none)
+        let other = SpotifyLyricsProvider(exactOnly: false, fetcher: OfflineLyricsFetcher(), session: none)
+        let spotifySong = LyricsQuery(title: "A", artist: "B", spotifyTrackID: "7hQJA50XrCWABAu5v6QZ4i")
+        let otherSong = LyricsQuery(title: "A", artist: "B")
+        #expect(try await exact.fetch(otherSong) == .notFound)
+        #expect(try await other.fetch(spotifySong) == .notFound)
+        #expect(try await exact.fetch(spotifySong) == .notFound, "no sign-in, nothing asked")
+        #expect(SpotifyLyricsProvider.request(session: SpotifyRemoteTests.session, trackID: "7hQJA50XrCWABAu5v6QZ4i")?.url?.path == "/color-lyrics/v2/track/7hQJA50XrCWABAu5v6QZ4i")
+        #expect(SpotifyLyricsProvider.request(session: SpotifyRemoteTests.session, trackID: "../x") == nil)
+        #expect(SpotifyLyricsProvider.length(inEmbedPage: #"{"name":"x","duration":183126,"isExplicit":true}"#) == 183.126)
+        #expect(SpotifyLyricsProvider.length(inEmbedPage: "<html></html>") == nil)
+    }
+}
+
+private struct OfflineLyricsFetcher: HTTPFetching {
+    func get(_ url: URL) async throws -> (data: Data, status: Int) { throw URLError(.notConnectedToInternet) }
+}

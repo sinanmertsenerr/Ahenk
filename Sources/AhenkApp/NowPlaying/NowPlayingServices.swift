@@ -107,7 +107,8 @@ final class NowPlayingServices {
         spotify: SpotifyProvider?, resolver: ResolverBox, storefront: StorefrontBox, diskCache: ArtworkDiskCache?,
         catalog: any MusicCatalog, catalogCache: CatalogCache?, spotifyFinder: (any SpotifyTrackFinding)?,
         scripts: (any ScriptRunning)?, presence: (any AppPresenceMonitoring)?, fetcher: any HTTPFetching,
-        bridgeServer: BrowserBridgeServer? = nil, siteLyrics: BrowserLyricsProvider? = nil
+        bridgeServer: BrowserBridgeServer? = nil, siteLyrics: BrowserLyricsProvider? = nil,
+        spotifyRemote: SpotifyRemoteSession? = nil
     ) {
         self.hub = hub
         self.artwork = artwork
@@ -125,7 +126,7 @@ final class NowPlayingServices {
         self.catalog = catalog
         self.catalogCache = catalogCache
         self.spotifyFinder = spotifyFinder
-        self.spotifyRemote = isDemo ? nil : SpotifyRemoteSession()
+        self.spotifyRemote = spotifyRemote
         self.scripts = scripts
         self.presence = presence
         self.fetcher = fetcher
@@ -173,8 +174,24 @@ final class NowPlayingServices {
         let lyricsFetcher = URLSessionFetcher(timeout: 10)
         // The sites' own lyrics first: they belong to the exact recording.
         let siteLyrics = BrowserLyricsProvider()
+        // Spotify's own lyrics for a signed-in user: first for songs from
+        // Spotify (the exact recording), last for the others (a Spotify ID
+        // found by title and artist may be another edit).
+        let remote = SpotifyRemoteSession()
+        let spotifyFinder = SpotifyFinderChain([
+            SpotifyPageFinder(reader: SpotifySearchWebReader(), cache: catalogCache),
+            ListenBrainzSpotifyFinder(fetcher: fetcher, cache: catalogCache),
+        ])
+        let signedIn: @Sendable () async -> SpotifyRemote.Session? = { await remote.signedInSession() }
+        let spotifyExact = SpotifyLyricsProvider(exactOnly: true, fetcher: lyricsFetcher, session: signedIn)
+        let spotifyOther = SpotifyLyricsProvider(exactOnly: false, fetcher: lyricsFetcher, session: signedIn) { query in
+            let song = SongQuery(title: query.title, artist: query.artist, album: query.album ?? "")
+            return await spotifyFinder.spotifyTrackIDs(for: [song])[song]
+        }
         let makeChain: @Sendable (Set<String>) -> LyricsChain = { disabled in
-            LyricsChain(providers: [siteLyrics] + LyricsChain.standard(http: lyricsFetcher, disabled: disabled).providers)
+            let own: [any LyricsProvider] = disabled.contains(SpotifyLyricsProvider.providerName) ? [] : [spotifyExact]
+            let last: [any LyricsProvider] = disabled.contains(SpotifyLyricsProvider.providerName) ? [] : [spotifyOther]
+            return LyricsChain(providers: [siteLyrics] + own + LyricsChain.standard(http: lyricsFetcher, disabled: disabled).providers + last)
         }
         let lyricsFinder = LyricsFinder(
             chain: makeChain(settings.lyrics.disabledProviders), cache: LyricsCache(),
@@ -196,12 +213,9 @@ final class NowPlayingServices {
             catalogCache: catalogCache,
             // Spotify's own search first (it knows every song it has); the
             // mapping service when its page cannot be read.
-            spotifyFinder: SpotifyFinderChain([
-                SpotifyPageFinder(reader: SpotifySearchWebReader(), cache: catalogCache),
-                ListenBrainzSpotifyFinder(fetcher: fetcher, cache: catalogCache),
-            ]),
+            spotifyFinder: spotifyFinder,
             scripts: runner, presence: presence, fetcher: fetcher,
-            bridgeServer: bridgeServer, siteLyrics: siteLyrics
+            bridgeServer: bridgeServer, siteLyrics: siteLyrics, spotifyRemote: remote
         )
     }
 
