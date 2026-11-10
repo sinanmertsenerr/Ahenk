@@ -2634,3 +2634,27 @@ Then, for a music video whose lyrics came seconds before the singing:
 
 Checks: `./Scripts/test.sh` 596/596 with the node tests (twice), `./Scripts/make-app.sh` signed, `./Scripts/smoke.sh`
 passed, build 198 installed with `./Scripts/install.sh --no-build`.
+
+Then, the same night, after the user saw the lyrics of a video move only as the song ended:
+
+- **A video's words are heard ten seconds at a time** (`LyricsAutoSync`). Seen live on build 198: the first video
+  with no captions was heard and its lyrics moved by +8.9 s (46 words in 30 s, 11 lines agreeing), but 92 s into a
+  105 s song. Two of the three 30 s windows were thrown away at their end because the song's position had jumped
+  (the page corrects where a new song stands a few seconds in; the other jump is not explained by the log). Now a
+  window is 10 s and the next one starts as the last one ends, while whisper reads (one at a time, oldest first; a
+  window of a song that is no longer playing is not read). Each adds to what was heard and the first that makes the
+  answer sure ends the listening; up to 12 windows per song and run (the same two minutes as before). A jump of a
+  second or more drops the running window at once (the onset windows too) and the log says how far the song moved;
+  a window of words bears a slip under 0.6 s and is timed from the middle of it (under 0.3 s as before for the
+  onsets). The estimator's thresholds (4 lines, 8 words, 1.5 times the rival) are unchanged: a new test feeds it
+  10 s windows and it is sure with the third. Seen live on build 200 (without the 0.6 s rule): a video with a 44.5 s
+  intro, three false starts dropped within 2 s of the song's start, lyrics moved 67 s in, about 20 s after the
+  singing began (two windows earlier it had 2 lines and 9 words for the same shift, which the thresholds refuse; one
+  window was lost to a 0.3 s slip, the reason for the 0.6 s rule). The cost: whisper runs once per window
+  (1.7–2.2 s each here) instead of once per 30 s, until the answer is sure. Not seen live on build 202: a window kept
+  by the 0.6 s rule, and a video settled from its start (one window of the right kind was read before the song was
+  skipped).
+
+Checks, in a worktree of the commit (another session's lyric lookup commit before it included): `./Scripts/test.sh`
+602/602 with the node tests (twice in the main tree before), `./Scripts/make-app.sh` signed, `./Scripts/smoke.sh`
+passed, build 202 installed with `./Scripts/install.sh --no-build`.
