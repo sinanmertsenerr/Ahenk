@@ -92,7 +92,7 @@ final class WallpaperScreen {
     /// Puts the strip behind the menu bar (again); the wallpaper window
     /// must be on screen. Tries once more when it has not been drawn yet.
     func showMenuBarStrip(retries: Int = 3) {
-        guard window.isVisible else { return }
+        guard window.isVisible, !Experiment.has("noStrip") else { return }
         if menuBarStrip.mirror(window, screenFrame: frame, height: menuBarStripHeight) || retries <= 0 { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.showMenuBarStrip(retries: retries - 1)

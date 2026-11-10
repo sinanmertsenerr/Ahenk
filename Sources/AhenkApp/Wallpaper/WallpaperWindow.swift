@@ -47,10 +47,14 @@ final class WallpaperWindow: NSWindow {
 /// draws its own copy of the user's wallpaper there, in a window above the
 /// desktop icons, so the wallpaper window (below the icons) cannot cover
 /// it and the wallpaper would seem to start under the menu bar. This strip
-/// sits just above that copy and shows the wallpaper window's own layers
-/// live (`CALayerHost`, the render server's mirror of another window's
-/// layer tree: no second player, no copying). Where the system does not
-/// offer that, there is no strip and the menu bar looks as it did.
+/// sits just above that copy and shows pictures of the wallpaper window's
+/// own top edge, taken a few times a second.
+///
+/// It used to show the wallpaper window's layers live (`CALayerHost`).
+/// Measured with a video playing, that made the window server draw the
+/// whole screen again for every frame: 60 % of the GPU against 19 % with
+/// no strip at all. Pictures of the edge cost next to nothing (20 % at one
+/// a second, 22 % at fifteen).
 final class WallpaperMenuBarWindow: NSWindow {
     /// Above the system's strip behind the menu bar (one above the desktop
     /// icons), below the widgets.
@@ -58,17 +62,31 @@ final class WallpaperMenuBarWindow: NSWindow {
     /// Nothing below the menu bar: desktop icons start right under it,
     /// and this window is above them (it would cut their tops off).
     static let reachBelowMenuBar: CGFloat = 0
+    /// Pictures a second while the wallpaper moves. The strip is a few
+    /// dozen points high and lies behind the menu bar's own material.
+    static let picturesPerSecond: Double = 10
 
-    private var host: CALayer?
-    private var hostedContext: UInt32 = 0
-    /// Keeps the strip drawn afresh on every frame. The window server
-    /// draws a window again only when its own layers change, and the
-    /// mirrored ones belong to the wallpaper window: without this the
-    /// strip kept the previous song's picture after a crossfade (until
-    /// something else, a screenshot for one, made the screen draw again).
-    /// An all but invisible layer over the whole strip whose opacity
-    /// never rests does it, in the render server, at no cost to Ahenk.
-    private let pulse = CALayer()
+    private let picture = CALayer()
+    private var timer: Timer?
+    private var sourceNumber: UInt32 = 0
+    private var captureRect: CGRect = .zero
+    private var failures = 0
+    private var taken = 0
+    private static let log = AhenkLogger(category: "wallpaper")
+
+    /// The window server's picture of one window. The SDK no longer
+    /// declares it (it points to ScreenCaptureKit, which asks for the
+    /// screen recording permission even for the app's own windows); the
+    /// function is still there and needs no permission for those.
+    private typealias Capture = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
+    private static let capture: Capture? = {
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImage") else { return nil }
+        return unsafeBitCast(symbol, to: Capture.self)
+    }()
+    /// `kCGWindowListOptionIncludingWindow`.
+    private static let onlyThisWindow: UInt32 = 1 << 3
+    /// `kCGWindowImageBoundsIgnoreFraming | kCGWindowImageBestResolution`.
+    private static let imageOptions: UInt32 = (1 << 0) | (1 << 3)
 
     init() {
         super.init(contentRect: NSRect(x: 0, y: 0, width: 10, height: 10), styleMask: [.borderless], backing: .buffered, defer: true)
@@ -90,6 +108,9 @@ final class WallpaperMenuBarWindow: NSWindow {
         view.layer?.masksToBounds = true
         view.setAccessibilityElement(false)
         contentView = view
+        picture.actions = ["contents": NSNull(), "bounds": NSNull(), "position": NSNull()]
+        picture.contentsGravity = .resize
+        view.layer?.addSublayer(picture)
     }
 
     override var canBecomeKey: Bool { false }
@@ -100,62 +121,82 @@ final class WallpaperMenuBarWindow: NSWindow {
     }
 
     /// Shows the top `height` points of `source` (a window that covers
-    /// `screenFrame`) over the same place. `false`: nothing to mirror yet
-    /// (the source has not been drawn) or no mirroring on this system.
+    /// `screenFrame`) over the same place. `false`: nothing to show yet
+    /// (the source has not been drawn) or no pictures on this system.
     @discardableResult
     func mirror(_ source: NSWindow, screenFrame: CGRect, height: CGFloat) -> Bool {
-        guard height > 0, let root = contentView?.layer,
-              let context = source.contentView?.layer?.value(forKey: "context") as? NSObject,
-              let contextID = context.value(forKey: "contextId") as? UInt32, contextID != 0,
-              let hostClass = NSClassFromString("CALayerHost") as? CALayer.Type
-        else {
-            orderOut(nil)
+        guard height > 0, source.windowNumber > 0, Self.capture != nil else {
+            hide()
             return false
         }
         let frame = CGRect(x: screenFrame.minX, y: screenFrame.maxY - height, width: screenFrame.width, height: height)
         if self.frame != frame { setFrame(frame, display: false) }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        if host == nil || hostedContext != contextID {
-            host?.removeFromSuperlayer()
-            let made = hostClass.init()
-            made.setValue(contextID, forKey: "contextId")
-            made.anchorPoint = .zero
-            root.addSublayer(made)
-            host = made
-            hostedContext = contextID
+        picture.frame = CGRect(x: 0, y: 0, width: frame.width, height: height)
+        // The window list counts from the top of the first display.
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? screenFrame.maxY
+        captureRect = CGRect(x: screenFrame.minX, y: primaryHeight - screenFrame.maxY, width: screenFrame.width, height: height)
+        sourceNumber = UInt32(source.windowNumber)
+        // Asked again while it runs (every plan change): the timer's next
+        // picture is soon enough.
+        if timer != nil, isVisible { return true }
+        guard refresh() else {
+            hide()
+            return false
         }
-        // The source's layers keep their own place: its top edge on ours.
-        host?.position = CGPoint(x: 0, y: height - screenFrame.height)
-        if pulse.superlayer == nil {
-            pulse.backgroundColor = NSColor.black.cgColor
-            pulse.opacity = 0.004
-            pulse.zPosition = 10
-            root.addSublayer(pulse)
+        if timer == nil {
+            let timer = Timer(timeInterval: 1 / Self.picturesPerSecond, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { _ = self?.refresh() }
+            }
+            timer.tolerance = 0.02
+            RunLoop.main.add(timer, forMode: .common)
+            self.timer = timer
         }
-        pulse.frame = CGRect(x: 0, y: 0, width: frame.width, height: height)
-        if pulse.animation(forKey: "pulse") == nil {
-            let beat = CABasicAnimation(keyPath: "opacity")
-            beat.fromValue = 0.004
-            beat.toValue = 0.008
-            beat.duration = 0.5
-            beat.autoreverses = true
-            beat.repeatCount = .infinity
-            beat.isRemovedOnCompletion = false
-            // A video has 24 to 30 pictures a second: drawing the strip
-            // more often only makes the whole screen draw more often.
-            beat.preferredFrameRateRange = CAFrameRateRange(minimum: 24, maximum: 30, preferred: 30)
-            pulse.add(beat, forKey: "pulse")
-        }
-        CATransaction.commit()
         if !isVisible { orderFrontRegardless() }
         return true
     }
 
+    private func refresh() -> Bool {
+        guard let capture = Self.capture, sourceNumber != 0,
+              let image = capture(captureRect, Self.onlyThisWindow, sourceNumber, Self.imageOptions)?.takeRetainedValue(),
+              image.width > 1, image.height > 1
+        else {
+            failures += 1
+            if failures == 30 {
+                Self.log.notice("No picture of the wallpaper's top edge; the menu bar shows the system's wallpaper")
+                hide()
+            }
+            return false
+        }
+        if failures != 0 || picture.contents == nil {
+            Self.log.info("Menu bar strip: pictures of the wallpaper's top edge (\(image.width)x\(image.height), mean colour \(Self.meanColour(of: image)))")
+        }
+        failures = 0
+        taken += 1
+        // Once more when the wallpaper has melted in (the first picture is
+        // of a wallpaper that is still clear).
+        if taken == 60 { Self.log.info("Menu bar strip: mean colour \(Self.meanColour(of: image)) after 60 pictures") }
+        picture.contents = image
+        return true
+    }
+
+    /// "r g b" (0–255) of the whole picture, for the log: a strip that
+    /// came out black or empty shows here.
+    private static func meanColour(of image: CGImage) -> String {
+        var pixel = [UInt8](repeating: 0, count: 4)
+        guard let context = CGContext(
+            data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return "?" }
+        context.interpolationQuality = .medium
+        context.draw(image, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        return "\(pixel[0]) \(pixel[1]) \(pixel[2]), alpha \(pixel[3])"
+    }
+
     func hide() {
+        timer?.invalidate()
+        timer = nil
+        picture.contents = nil
         if isVisible { orderOut(nil) }
-        // Ordered out, the animation is dropped; `mirror` adds it again.
-        pulse.removeAnimation(forKey: "pulse")
     }
 }
 
