@@ -30,7 +30,7 @@ struct OnboardingView: View {
             ScrollView {
                 page(model.page)
                     .padding(.horizontal, 36)
-                    .padding(.top, 34)
+                    .padding(.top, 20)
                     .padding(.bottom, 20)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -38,7 +38,10 @@ struct OnboardingView: View {
             Divider()
             footer
         }
-        .frame(width: OnboardingWindowController.size.width, height: OnboardingWindowController.size.height)
+        // The window's content runs under the title bar, so the guide fills
+        // the area below it rather than a fixed height that would be pushed
+        // down and cut off at the bottom.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .environment(\.locale, environment.settings.general.language.locale())
         .animation(.easeOut(duration: 0.2), value: model.page)
     }
@@ -73,8 +76,7 @@ struct OnboardingView: View {
             }
         }
         .controlSize(.large)
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
+        .padding(20)
     }
 }
 
