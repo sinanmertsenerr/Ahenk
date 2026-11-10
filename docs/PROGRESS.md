@@ -2559,6 +2559,31 @@ Not a plan step: fixes and changes asked for while using 1.0.0, one commit each 
   5 % / 28 %; top and bottom 10 % / 30 %. So the shader is free, the window is free, and one small strip costs
   WindowServer as much as all four: splitting the window into strips would gain nothing. MonoCode's own window takes
   about 30 % of the GPU while it streams, so these runs were made with the chat idle.
+- **Six lyric styles, Plain first** (`LyricStyle`, `LyricStylesPlain.swift`). The user found most of the eight styles
+  gimmicky (Fisheye, a trial Highlight) and wanted few, calm, "premium" ones. Now: Plain (new, the default: nothing but
+  the words, the next line dim below, no reaction to the beat), Glitch, Cinema, Karaoke, Typewriter and Drift (new:
+  italic words that surface, sway and float away). Fisheye, Spread, Neon and Echo are gone with their math and tests;
+  a stored style that no longer exists falls back to Plain. Six more were tried and dropped the same evening.
+- **Spotify's own lyrics** (`SpotifyLyricsProvider`). 33 of about 145 real lookups in the log had no timed lyrics. For
+  a signed-in user Spotify's `color-lyrics` answers by track ID with the web player's session: first in the chain for
+  songs from Spotify (the exact recording), last for other sources, where the ID is found by title and artist and the
+  answer is only taken when Spotify's recording is as long as the playing song (±2 s; a video with an intro would run
+  ahead). Seen in the log: 4 lookups answered by it.
+- **A following video catches up instead of jumping** (`VideoSync.step`). The log showed the embed 1.3–2.1 s behind
+  and re-seeked every 4 s: each seek buffers, so it landed behind again. Now compared every 2 s: off by more than
+  0.35 s it plays at 1.25× or 0.75× until within 0.12 s; beyond 3 s it jumps 0.9 s ahead of the song. Not yet seen in
+  the log after the change.
+- **A music video's captions as lyrics, and as timing** (extension 1.3.0: `captions` in `page/engine.js`,
+  `lib/lyrics.js`; `BrowserLyricsProvider.heardWords`, `LyricsController.timeWithHeardWords`). The catalogs time the
+  album's recording; a video with an intro runs ahead (DVD: catalog first line at 9.55 s, sung at 76 s in the video,
+  and LRCLIB has that album timing filed under the video's length). On YouTube and YouTube Music the extension reads
+  the player's caption tracks: one a person wrote, in the sung language, becomes the site's synced lyrics (seen live:
+  86 lines for one video); with only automatic captions, their words and times are sent as "heard" and the lyrics
+  found elsewhere are lined up with them by `LyricAligner` (plain lyrics get timing; timed ones are replaced only when
+  most lines were found and sit more than 1.5 s from the catalog's). Tried on DVD's real data outside the app: 46 of
+  48 lines found, every line +65.7 s. Of six videos looked at: two with written captions, two with automatic ones,
+  three with none (those still need another way). Not seen live for automatic captions: the Search browser's
+  extension socket did not connect that night (the same extension connected at once from a test Chromium).
 Checks on the final tree: `./Scripts/test.sh` 570/570 with the node tests (twice), `./Scripts/smoke.sh` passed (31
 subsystems), `./Scripts/make-app.sh` signed with the Apple Development identity, installed to /Applications with
 `./Scripts/install.sh --no-build`. Every commit builds with its tests (`swift build --build-tests` in a worktree); the
