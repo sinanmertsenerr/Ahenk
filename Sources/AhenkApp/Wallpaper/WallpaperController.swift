@@ -1008,7 +1008,7 @@ final class WallpaperController {
             let timer = Timer(timeInterval: VideoSync.checkInterval, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.syncFollowingVideos() }
             }
-            timer.tolerance = 1
+            timer.tolerance = 0.3
             RunLoop.main.add(timer, forMode: .common)
             syncTimer = timer
         } else if !active, let timer = syncTimer {
@@ -1031,8 +1031,16 @@ final class WallpaperController {
             view.position { time, length in
                 guard let time else { return }
                 let song = snapshot.elapsed(at: Date())
-                if let target = VideoSync.correction(songPosition: song, videoPosition: time, videoDuration: length ?? duration) {
-                    Self.log.info("The song's video was \(String(format: "%.1f", time - song)) s off; moved to \(String(format: "%.1f", target)) s")
+                let off = String(format: "%+.1f", time - song)
+                switch VideoSync.step(songPosition: song, videoPosition: time, videoDuration: length ?? duration, catchingUp: view.rate != 1) {
+                case .hold:
+                    if view.rate != 1 { Self.log.info("The song's video is in step again (\(off) s)") }
+                    view.setRate(1)
+                case .rate(let rate):
+                    if view.rate != rate { Self.log.info("The song's video was \(off) s off; catching up at \(rate)\u{00D7}") }
+                    view.setRate(rate)
+                case .jump(let target):
+                    Self.log.info("The song's video was \(off) s off; moved to \(String(format: "%.1f", target)) s")
                     view.seek(to: target)
                 }
             }

@@ -22,7 +22,55 @@ public enum VideoSync {
     /// small drift is left alone).
     public static let driftTolerance: TimeInterval = 1.2
     /// How often a following video is compared with the song.
-    public static let checkInterval: TimeInterval = 4
+    public static let checkInterval: TimeInterval = 2
+
+    /// What brings a following video back in step.
+    public enum Step: Equatable, Sendable {
+        /// Close enough: normal speed.
+        case hold
+        /// A little off: play faster or slower until it has caught up (no
+        /// jump, nothing to buffer).
+        case rate(Double)
+        /// Far off (a seek in the song, a stall): jump there.
+        case jump(TimeInterval)
+    }
+
+    /// Drift that starts a catch-up, and the drift at which it ends.
+    public static let catchUpStart: TimeInterval = 0.35
+    public static let catchUpEnd: TimeInterval = 0.12
+    /// Beyond this a catch-up would take too long: jump.
+    public static let jumpBeyond: TimeInterval = 3
+    /// A jump aims this far ahead: the player needs a moment to buffer,
+    /// and the song goes on meanwhile.
+    public static let jumpLead: TimeInterval = 0.9
+    /// The speeds YouTube's player has next to normal.
+    public static let fast = 1.25
+    public static let slow = 0.75
+
+    /// The step for a video at `videoPosition` while the song is at
+    /// `songPosition`; `catchingUp` says a faster or slower speed is on.
+    public static func step(
+        songPosition: TimeInterval, videoPosition: TimeInterval, videoDuration: TimeInterval?, catchingUp: Bool
+    ) -> Step {
+        guard songPosition.isFinite, videoPosition.isFinite else { return .hold }
+        var target = max(0, songPosition)
+        if let videoDuration, videoDuration > 1 {
+            // Past the video's end (a longer song) it holds its last moments.
+            guard target < videoDuration - 0.5 else { return .hold }
+            target = min(target, videoDuration - 1)
+        }
+        let drift = videoPosition - target
+        let size = abs(drift)
+        if size > jumpBeyond {
+            var landing = target + jumpLead
+            if let videoDuration, videoDuration > 1 { landing = min(landing, videoDuration - 1) }
+            return .jump(landing)
+        }
+        if size > catchUpStart || (catchingUp && size > catchUpEnd) {
+            return .rate(drift < 0 ? fast : slow)
+        }
+        return .hold
+    }
 
     public static func mode(isSongVideo: Bool, syncEnabled: Bool, songDuration: TimeInterval?, videoDuration: TimeInterval?) -> VideoSyncMode {
         guard isSongVideo, syncEnabled else { return .loops }

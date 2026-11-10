@@ -328,6 +328,14 @@ struct VideoSyncTests {
         #expect(VideoSync.correction(songPosition: 80, videoPosition: 70, videoDuration: 230) == 80)
         #expect(VideoSync.correction(songPosition: 229.8, videoPosition: 200, videoDuration: 230) == nil, "past the video's end it holds")
         #expect(VideoSync.correction(songPosition: 80, videoPosition: .nan, videoDuration: 230) == nil)
+        // A little behind: faster, until it has caught up; far off: a jump ahead of the song.
+        #expect(VideoSync.step(songPosition: 80, videoPosition: 79.9, videoDuration: 230, catchingUp: false) == .hold)
+        #expect(VideoSync.step(songPosition: 80, videoPosition: 78.6, videoDuration: 230, catchingUp: false) == .rate(VideoSync.fast))
+        #expect(VideoSync.step(songPosition: 80, videoPosition: 80.8, videoDuration: 230, catchingUp: false) == .rate(VideoSync.slow))
+        #expect(VideoSync.step(songPosition: 80, videoPosition: 79.8, videoDuration: 230, catchingUp: true) == .rate(VideoSync.fast), "keeps going until close")
+        #expect(VideoSync.step(songPosition: 80, videoPosition: 79.95, videoDuration: 230, catchingUp: true) == .hold)
+        #expect(VideoSync.step(songPosition: 80, videoPosition: 60, videoDuration: 230, catchingUp: false) == .jump(80.9))
+        #expect(VideoSync.step(songPosition: 229.8, videoPosition: 200, videoDuration: 230, catchingUp: false) == .hold)
     }
 }
 
