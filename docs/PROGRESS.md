@@ -2426,8 +2426,9 @@ Every item of the feature spec, checked against the code, the tests, the smoke r
   normal launch.
 - CPU numbers vary by ±0.5 point between runs; all were taken in one sitting on the power adapter (battery and Low Power
   Mode were simulated with `--power`, not real).
-- The test run's start-up standstill (Step 10's note) was not looked into further: both full runs passed (562/562,
-  9.3 s and 9.4 s), no new flake was seen.
+- The test run's start-up standstill (Step 10's note) was not looked into further. Four full runs of
+  `./Scripts/test.sh` passed: two before the closing-rule fix (562/562, 9.3 s and 9.4 s) and two after it (563/563,
+  9.3 s and 9.3 s), each with the 25 node tests; no flake was seen.
 
 ### What the user must do once (morning checklist)
 
