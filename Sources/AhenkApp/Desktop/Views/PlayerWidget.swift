@@ -75,6 +75,7 @@ struct PlayerWidget: View {
                 if model.canClearDesk {
                     ClearDeskButton(isOn: model.isDeskCleared, tint: theme.glass, accent: theme.accent) { model.toggleClearDesk() }
                 }
+                lockButton(theme: theme)
                 RoundGlassButton(symbol: "arrow.down.right.and.arrow.up.left", help: "Small Player".l10n, tint: theme.glass) {
                     model.setSize(.small)
                 }
@@ -96,11 +97,24 @@ struct PlayerWidget: View {
             if model.canClearDesk {
                 ClearDeskButton(isOn: model.isDeskCleared, tint: theme.glass, accent: theme.accent) { model.toggleClearDesk() }
             }
+            lockButton(theme: theme)
             RoundGlassButton(symbol: "arrow.up.left.and.arrow.down.right", help: "Large Player".l10n, tint: theme.glass) {
                 model.setSize(.large)
             }
         }
         .frame(height: PlayerLayout.accessoryHeight)
+    }
+
+    /// Locks the widgets in place, so clicks beside their buttons reach
+    /// the files behind them (also in the menu bar menu).
+    private func lockButton(theme: PlayerTheme) -> some View {
+        let isLocked = model.settings.player.widgetsLocked
+        return RoundGlassButton(
+            symbol: isLocked ? "lock.fill" : "lock.open", help: isLocked ? "Unlock Widgets".l10n : "Lock Widgets".l10n,
+            tint: theme.glass, isOn: isLocked, accent: theme.accent
+        ) {
+            model.settings.player.widgetsLocked.toggle()
+        }
     }
 
     @ViewBuilder

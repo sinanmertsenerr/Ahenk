@@ -60,6 +60,7 @@ struct AppSettingsTests {
             p.showSearch = false
             p.showPlayerBar = false
             p.listeningSource = .spotify
+            p.widgetsLocked = true
             p.startAtFifteenSeconds = true
             return p
         }()

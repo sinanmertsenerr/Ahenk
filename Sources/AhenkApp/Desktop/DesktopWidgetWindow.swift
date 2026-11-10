@@ -129,15 +129,30 @@ extension EnvironmentValues {
     }
 }
 
-/// Dragging this view's background moves the widget's window.
+private struct WidgetsLockedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// The widgets are locked in place (`PlayerSettings.widgetsLocked`).
+    var widgetsLocked: Bool {
+        get { self[WidgetsLockedKey.self] }
+        set { self[WidgetsLockedKey.self] = newValue }
+    }
+}
+
+/// Dragging this view's background moves the widget's window (not while
+/// the widgets are locked).
 private struct MovesWidget: ViewModifier {
     @Environment(\.widgetMover) private var mover
+    @Environment(\.widgetsLocked) private var isLocked
 
     func body(content: Content) -> some View {
         content.gesture(
             DragGesture(minimumDistance: 3, coordinateSpace: .global)
                 .onChanged { _ in mover?.changed() }
-                .onEnded { _ in mover?.ended() }
+                .onEnded { _ in mover?.ended() },
+            including: isLocked ? .subviews : .all
         )
     }
 }

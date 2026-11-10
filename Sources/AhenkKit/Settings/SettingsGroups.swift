@@ -163,6 +163,10 @@ public struct PlayerSettings: Codable, Equatable, Sendable {
     public var showSearch = true
     public var showPlayerBar = true
     /// Where picks from search, albums and lists play (the source picker at
+    /// The widgets stay where they are and let clicks through to the
+    /// desktop wherever they have no control: the clock and the lyrics
+    /// altogether, the others outside their panels.
+    public var widgetsLocked = false
     /// the left of the player). `nil` follows the source that plays.
     public var listeningSource: MusicSource?
     /// Start every song at 0:15.
@@ -182,6 +186,7 @@ public struct PlayerSettings: Codable, Equatable, Sendable {
         clockScale = c.lenient(.clockScale, d.clockScale, in: Self.clockScaleRange)
         showContinuePlaying = c.lenient(.showContinuePlaying, d.showContinuePlaying)
         showAlbums = c.lenient(.showAlbums, d.showAlbums)
+        widgetsLocked = c.lenient(.widgetsLocked, d.widgetsLocked)
         showSearch = c.lenient(.showSearch, d.showSearch)
         showPlayerBar = c.lenient(.showPlayerBar, d.showPlayerBar)
         listeningSource = c.lenientOptional(.listeningSource)

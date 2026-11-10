@@ -136,6 +136,13 @@ final class DesktopPlayerController {
         for widget in windows.keys where !wanted.contains(widget) {
             close(widget)
         }
+        if lockApplied != player.widgetsLocked {
+            // A window either lets every click through or none of its
+            // painted parts, for good: the clock and the lyrics are made
+            // again when the lock changes.
+            lockApplied = player.widgetsLocked
+            for widget in [DesktopWidget.clock, .lyrics] where windows[widget] != nil { close(widget) }
+        }
         var created: [DesktopWidget] = []
         for widget in DesktopWidget.allCases where wanted.contains(widget) && windows[widget] == nil {
             windows[widget] = makeWindow(widget)
@@ -199,8 +206,16 @@ final class DesktopPlayerController {
 
     // MARK: Windows
 
+    /// The lock the clock's and the lyrics' windows were made for.
+    private var lockApplied: Bool?
+
     private func makeWindow(_ widget: DesktopWidget) -> DesktopWidgetWindow {
         let window = DesktopWidgetWindow(widget: widget, frame: CGRect(x: visibleFrame.midX, y: visibleFrame.midY, width: 10, height: 10))
+        if settings.player.widgetsLocked, widget == .clock || widget == .lyrics {
+            // Locked, they are only looked at: every click goes to the
+            // desktop behind them (files, folders).
+            window.ignoresMouseEvents = true
+        }
         let mover = WidgetMover()
         mover.window = window
         mover.clamp = { [weak self] frame in
@@ -453,6 +468,7 @@ private struct WidgetRoot<Content: View>: View {
     var body: some View {
         content()
             .environment(\.locale, settings.general.language.locale())
+            .environment(\.widgetsLocked, settings.player.widgetsLocked)
     }
 }
 

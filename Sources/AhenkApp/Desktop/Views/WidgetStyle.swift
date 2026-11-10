@@ -28,7 +28,7 @@ extension View {
     /// should take clicks and drags (the clock, the cover flow) get a fill
     /// nobody can see.
     func hitArea() -> some View {
-        background(Color.white.opacity(0.006))
+        modifier(HitArea())
     }
 
     /// White text with a soft shadow, readable on any wallpaper.
@@ -46,6 +46,16 @@ extension View {
                 LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: bottom)
             }
         }
+    }
+}
+
+/// The invisible fill of `hitArea()`; left out while the widgets are
+/// locked, so clicks beside the controls reach the desktop.
+private struct HitArea: ViewModifier {
+    @Environment(\.widgetsLocked) private var isLocked
+
+    func body(content: Content) -> some View {
+        content.background(Color.white.opacity(isLocked ? 0 : 0.006))
     }
 }
 
@@ -392,7 +402,7 @@ enum DesktopSymbols {
         "checkmark", "checkmark.circle.fill", "chevron.down", "chevron.left", "e.square.fill", "ellipsis",
         "exclamationmark.triangle.fill", "eye.slash", "forward.fill", "gearshape", "globe", "heart", "heart.fill",
         "list.bullet", "magnifyingglass", "minus.circle", "minus.circle.fill", "moon", "moon.fill", "music.mic", "questionmark.circle.fill",
-        "music.note", "music.note.list", "pause.fill", "play.fill", "plus", "quote.bubble", "quote.bubble.fill",
+        "music.note", "music.note.list", "lock.fill", "lock.open", "pause.fill", "play.fill", "plus", "quote.bubble", "quote.bubble.fill",
         "rectangle.3.group", "repeat", "repeat.1", "shuffle", "sparkles", "speaker.slash.fill", "speaker.wave.1.fill",
         "speaker.wave.2.fill", "speaker.wave.3.fill", "square.stack", "text.append",
         "text.line.first.and.arrowtriangle.forward", "wifi.exclamationmark", "xmark", "xmark.circle.fill",

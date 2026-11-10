@@ -34,6 +34,18 @@ extension QuickToggle {
         }
     }
 
+    /// One plain line under the title: what the switch turns on.
+    @MainActor
+    var detail: String {
+        switch self {
+        case .edgeLight: "A light around the screen that moves with the music".l10n
+        case .desktopPlayer: "The playing song and its buttons on the desktop".l10n
+        case .lyrics: "The words, in time with the song".l10n
+        case .liveWallpaper: "The song's video as your wallpaper".l10n
+        case .dockArt: "The album cover as the Dock icon".l10n
+        }
+    }
+
     var symbolName: String {
         switch self {
         case .edgeLight: "light.max"
@@ -58,7 +70,7 @@ enum QuickMenu {
 
     /// Every SF Symbol the menus use (checked by `--smoke`).
     static var symbolNames: [String] {
-        QuickToggle.allCases.map(\.symbolName) + ["moon", "moon.fill", "gearshape", "power", "questionmark.circle", BrowserExtensionInstaller.symbolName]
+        QuickToggle.allCases.map(\.symbolName) + ["moon", "moon.fill", "lock", "lock.open", "gearshape", "power", "questionmark.circle", BrowserExtensionInstaller.symbolName]
     }
 
     static func populate(_ menu: NSMenu, environment: AppEnvironment, placement: Placement) {
@@ -112,15 +124,19 @@ enum QuickMenu {
             menu.addItem(.separator())
         }
 
+        // What Ahenk draws, one switch each, with a line that says what it is.
+        menu.addItem(NSMenuItem.sectionHeader(title: "Features".l10n))
         for toggle in QuickToggle.allCases {
             let item = ClosureMenuItem(title: toggle.title) { [weak settings] in
                 settings?.flip(toggle)
             }
             item.state = settings.isOn(toggle) ? .on : .off
             item.image = symbol(toggle.symbolName)
+            describe(item, toggle.detail, placement: placement)
             menu.addItem(item)
         }
         menu.addItem(.separator())
+        menu.addItem(NSMenuItem.sectionHeader(title: "Desktop".l10n))
 
         let desk = environment.clearDesk
         let clearDesk = ClosureMenuItem(title: "Clear Desk".l10n) { desk.toggle() }
@@ -129,29 +145,31 @@ enum QuickMenu {
         clearDesk.image = symbol(desk.isActive ? "moon.fill" : "moon")
         let deskDetail = desk.isActive
             ? "Click again to bring back the apps it hid".l10n
-            : "Hides every other app with one click and brings them back with another.".l10n
-        if #available(macOS 14.4, *), placement == .menuBar, desk.isActive {
-            clearDesk.subtitle = deskDetail
-        } else {
-            clearDesk.toolTip = deskDetail
-        }
+            : "Hides the other apps; click again to bring them back".l10n
+        describe(clearDesk, deskDetail, placement: placement)
         menu.addItem(clearDesk)
+
+        let isLocked = settings.player.widgetsLocked
+        let lock = ClosureMenuItem(title: "Lock Widgets".l10n) { [weak settings] in
+            settings?.player.widgetsLocked.toggle()
+        }
+        lock.state = isLocked ? .on : .off
+        lock.image = symbol(isLocked ? "lock" : "lock.open")
+        describe(lock, "The widgets cannot be moved by accident".l10n, placement: placement)
+        menu.addItem(lock)
 
         guard placement == .menuBar else { return }
         menu.addItem(.separator())
-        let install = ClosureMenuItem(title: "Install Browser Extension…".l10n) {
-            BrowserExtensionInstaller.present()
-        }
-        install.image = symbol(BrowserExtensionInstaller.symbolName)
-        if #available(macOS 14.4, *) {
-            install.subtitle = "For YouTube Music, Spotify, SoundCloud and other music sites".l10n
-        }
-        menu.addItem(install)
         let guide = ClosureMenuItem(title: "Getting Started…".l10n) { [weak environment] in
             environment?.showOnboarding()
         }
         guide.image = symbol("questionmark.circle")
         menu.addItem(guide)
+        let install = ClosureMenuItem(title: "Install Browser Extension…".l10n) {
+            BrowserExtensionInstaller.present()
+        }
+        install.image = symbol(BrowserExtensionInstaller.symbolName)
+        menu.addItem(install)
         let settingsItem = ClosureMenuItem(title: "Settings…".l10n, keyEquivalent: ",") { [weak environment] in
             environment?.showSettings()
         }
@@ -183,6 +201,16 @@ enum QuickMenu {
             items.append(item)
         }
         return items
+    }
+
+    /// The line under an item's title in the menu bar menu; a tooltip in
+    /// the Dock menu and before macOS 14.4, which show no subtitles.
+    private static func describe(_ item: NSMenuItem, _ detail: String, placement: Placement) {
+        if #available(macOS 14.4, *), placement == .menuBar {
+            item.subtitle = detail
+        } else {
+            item.toolTip = detail
+        }
     }
 
     private static func symbol(_ name: String) -> NSImage? {

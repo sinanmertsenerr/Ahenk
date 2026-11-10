@@ -17,7 +17,15 @@
 "Live Wallpaper" = "Canlı Duvar Kâğıdı";
 "Dock Art" = "Dock'ta Albüm Kapağı";
 "Clear Desk" = "Masayı Temizle";
-"Hides every other app with one click and brings them back with another." = "Tek tıkla diğer bütün uygulamaları gizler, ikinci tıkla hepsini geri getirir.";
+"Hides the other apps; click again to bring them back" = "Diğer uygulamaları gizler, yine tıklayınca geri getirir";
+"Features" = "Özellikler";
+"Desktop" = "Masaüstü";
+"A light around the screen that moves with the music" = "Ekranın çevresinde müzikle oynayan ışık";
+"The playing song and its buttons on the desktop" = "Çalan şarkı ve tuşları masaüstünde";
+"The words, in time with the song" = "Şarkıyla birlikte akan sözler";
+"The song's video as your wallpaper" = "Şarkının videosu duvar kâğıdı olur";
+"The album cover as the Dock icon" = "Dock simgesi albüm kapağı olur";
+"The widgets cannot be moved by accident" = "Araçlar yanlışlıkla yerinden oynamaz";
 "Settings…" = "Ayarlar…";
 "Quit Ahenk" = "Ahenk'ten Çık";
 "About Ahenk" = "Ahenk Hakkında";
@@ -600,7 +608,6 @@
 
 /* Step 7: browser bridge and extension */
 "Install Browser Extension…" = "Tarayıcı Eklentisini Kur…";
-"For YouTube Music, Spotify, SoundCloud and other music sites" = "YouTube Music, Spotify, SoundCloud ve diğer müzik siteleri için";
 "Install the Ahenk Browser Extension" = "Ahenk Tarayıcı Eklentisini Kurun";
 "Finder shows the extension's folders. In Chrome, Edge, Brave, Arc or another Chromium browser:" = "Finder eklentinin klasörlerini gösteriyor. Chrome, Edge, Brave, Arc ya da Chromium tabanlı başka bir tarayıcıda:";
 "1. Open the extensions page (chrome://extensions, edge://extensions, brave://extensions, arc://extensions)." = "1. Uzantılar sayfasını açın (chrome://extensions, edge://extensions, brave://extensions, arc://extensions).";
@@ -746,6 +753,8 @@
 "Reads what plays on macOS 15.4 and later. BSD 3-Clause License, included in Ahenk." = "macOS 15.4 ve sonrasında neyin çaldığını okur. BSD 3 Maddeli Lisans; Ahenk'le birlikte gelir.";
 "Times plain lyrics on this Mac. MIT License. Optional: you install it yourself (brew install whisper-cpp); Ahenk does not include it or any speech model." = "Zamansız şarkı sözlerini bu Mac'te şarkıya hizalar. MIT Lisansı. İsteğe bağlıdır: kendiniz kurarsınız (brew install whisper-cpp); Ahenk onu da, herhangi bir konuşma modelini de içermez.";
 "Covers, albums and search from Apple's public catalog; lyrics from LRCLIB, Musixmatch and NetEase; Spotify song IDs from ListenBrainz; music videos in YouTube's embedded player." = "Kapaklar, albümler ve arama için Apple'ın herkese açık kataloğu; şarkı sözleri için LRCLIB, Musixmatch ve NetEase; Spotify şarkı kimlikleri için ListenBrainz; müzik videoları için YouTube'un yerleştirilmiş oynatıcısı kullanılır.";
+"Lock Widgets" = "Araçları Kilitle";
+"Unlock Widgets" = "Araçların Kilidini Aç";
 "All" = "Tümü";
 "Artists" = "Sanatçılar";
 "Top Result" = "En İyi Sonuç";
