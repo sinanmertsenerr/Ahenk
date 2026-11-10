@@ -37,6 +37,9 @@ struct SourcesPane: View {
                     ForEach([MusicSource.appleMusic, .spotify]) { source in
                         MusicAppRow(source: source, services: services)
                     }
+                    if let remote = services.spotifyRemote {
+                        SpotifyRemoteRow(remote: remote)
+                    }
                 } header: {
                     Text("Music Apps".l10n)
                 } footer: {
@@ -222,6 +225,32 @@ struct MusicAppRow: View {
         case .appNotRunning, .unknown: parts.append("Checking…".l10n)
         }
         return parts.joined(separator: " \u{00B7} ")
+    }
+}
+
+/// The Spotify sign-in that lets songs start in the background (also on
+/// the first-run guide's Music Apps page).
+struct SpotifyRemoteRow: View {
+    let remote: SpotifyRemoteSession
+
+    var body: some View {
+        LabeledContent {
+            if remote.isConnected {
+                Button("Sign Out".l10n) { remote.signOut() }
+            } else {
+                Button("Connect Spotify…".l10n) { remote.signIn() }
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Spotify in the background".l10n)
+                Text(remote.isConnected
+                    ? "Connected: songs start without bringing Spotify to the front.".l10n
+                    : "Sign in once, and songs start without bringing Spotify to the front.".l10n)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.leading, 32)
+        }
     }
 }
 

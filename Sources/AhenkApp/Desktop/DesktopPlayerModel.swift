@@ -282,6 +282,9 @@ final class DesktopPlayerModel {
         if current != previous, settings.sources.pauseOthersOnSwitch, !router.isDemo {
             services.pausePlayers(otherThan: current)
         }
+        // Spotify starts songs in the background only for a signed-in
+        // user: picking it asks for the sign-in.
+        if source == .spotify, let remote = services.spotifyRemote, !remote.isConnected { remote.signIn() }
     }
 
     private func sourceChanged() {

@@ -138,6 +138,15 @@ guide or in Settings):
   can ask only while that app is open. Without it Ahenk still shows what
   plays.
 
+Optional: **signing in to Spotify** (Ahenk offers it when you pick Spotify
+in the player; also Settings › Sources). Spotify brings itself to the front
+when another app tells it to play a song. Signed in, Ahenk sends the song
+the way Spotify's own remote does (like picking a song on your phone), and
+Spotify stays in the background. You sign in on Spotify's own page; Ahenk
+never sees your password, and the sign-in stays on this Mac until you press
+Sign Out. This uses the web player's interface, not a published one: if
+Spotify changes it, songs start the old way again.
+
 What leaves your Mac: to find covers, albums and search results, a song's
 title and artist (or what you type into the search) go to Apple's public
 catalog, and Spotify's public page is asked for a track's cover; to play a

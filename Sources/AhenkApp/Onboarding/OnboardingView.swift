@@ -272,6 +272,9 @@ private struct MusicAppsPage: View {
                 ForEach([MusicSource.appleMusic, .spotify]) { source in
                     MusicAppRow(source: source, services: services)
                 }
+                if let remote = services.spotifyRemote, services.apps.isInstalled(KnownApps.spotify) {
+                    SpotifyRemoteRow(remote: remote)
+                }
             }
             VStack(alignment: .leading, spacing: 9) {
                 NoteRow(symbol: "info.circle", text: "macOS can ask only while the app is open. Open it, then press Allow Access here or later in Settings › Sources.".l10n)

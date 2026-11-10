@@ -68,6 +68,8 @@ final class NowPlayingServices {
     @ObservationIgnored let catalog: any MusicCatalog
     /// Spotify track IDs for catalog songs (live only).
     @ObservationIgnored let spotifyFinder: (any SpotifyTrackFinding)?
+    /// The Spotify sign-in that starts songs in the background (live only).
+    @ObservationIgnored let spotifyRemote: SpotifyRemoteSession?
     /// Runs the desktop player's AppleScript (live only).
     @ObservationIgnored let scripts: (any ScriptRunning)?
     @ObservationIgnored let presence: (any AppPresenceMonitoring)?
@@ -123,6 +125,7 @@ final class NowPlayingServices {
         self.catalog = catalog
         self.catalogCache = catalogCache
         self.spotifyFinder = spotifyFinder
+        self.spotifyRemote = isDemo ? nil : SpotifyRemoteSession()
         self.scripts = scripts
         self.presence = presence
         self.fetcher = fetcher
@@ -318,6 +321,7 @@ final class NowPlayingServices {
         }
 
         hub.start()
+        spotifyRemote?.warmUp()
         mediaRemote?.start()
         appleMusic?.start()
         spotify?.start()

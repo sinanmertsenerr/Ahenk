@@ -347,6 +347,13 @@
 "This song could not be found on Spotify. Spotify shows its search results instead." = "Bu şarkı Spotify'da bulunamadı. Spotify bunun yerine arama sonuçlarını gösteriyor.";
 "Allow Ahenk to control Spotify in System Settings › Privacy & Security › Automation." = "Sistem Ayarları › Gizlilik ve Güvenlik › Otomasyon bölümünde Ahenk'in Spotify'ı denetlemesine izin verin.";
 "Spotify did not start the song." = "Spotify şarkıyı başlatmadı.";
+"Connect Spotify" = "Spotify'a Bağlan";
+"Connect Spotify…" = "Spotify'a Bağlan…";
+"Sign Out" = "Çıkış Yap";
+"Spotify in the background" = "Spotify arka planda";
+"Connected: songs start without bringing Spotify to the front." = "Bağlı: şarkılar Spotify öne gelmeden başlar.";
+"Sign in once, and songs start without bringing Spotify to the front." = "Bir kez giriş yapın; şarkılar Spotify öne gelmeden başlar.";
+"Sign in once so Ahenk can start songs in Spotify without bringing Spotify to the front. Ahenk never sees your password." = "Ahenk'in şarkıları Spotify'ı öne getirmeden başlatabilmesi için bir kez giriş yapın. Ahenk parolanızı asla görmez.";
 "Playing in the browser needs the Ahenk browser extension." = "Tarayıcıda çalmak için Ahenk tarayıcı eklentisi gerekir.";
 "The site did not find this song." = "Site bu şarkıyı bulamadı.";
 "Open the site in your browser first." = "Önce siteyi tarayıcınızda açın.";
