@@ -333,6 +333,9 @@ final class LyricsController {
         let lines = lyrics?.lines.count ?? plainLines.count
         let how = origin.map { " (\($0.rawValue))" } ?? ""
         log.info("Lyrics: \(Self.describe(phase)), \(lines) lines from \(response.source)\(how)")
+        // Lyrics from the catalogs again (the song was looked up anew):
+        // the video's captions time them again.
+        if BrowserLyricsProvider.site(ofSource: response.source) == nil { timedByCaptions = nil }
         timeWithHeardWords()
     }
 
