@@ -186,7 +186,9 @@ public struct LRCLIBProvider: LyricsProvider {
                 URLQueryItem(name: "track_name", value: query.title),
                 URLQueryItem(name: "artist_name", value: query.artist),
             ]
-            if let album = query.album, scored { items.append(URLQueryItem(name: "album_name", value: album)) }
+            // Never the album: the search then returns only rows filed
+            // under that very album, and uploads often name it "Unknown" or
+            // after the single. The score rewards a matching album instead.
         }
         guard let request = makeRequest(path: "/api/search", queryItems: items) else { return [] }
         let (data, status) = try await http.send(request)
