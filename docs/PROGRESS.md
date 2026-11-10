@@ -96,7 +96,7 @@ ranges). `AppSettings(defaults:)` persists, `AppSettings()` and
 
 | Group | Settings | Feature step |
 |---|---|---|
-| `general` | language, optimizedMode, lighterOnBattery, showSongTitleInMenuBar, storefront, onboardingCompleted, verboseLogging | 1, 2, 5, 11 |
+| `general` | language, lighterOnBattery, showSongTitleInMenuBar, storefront, onboardingCompleted, verboseLogging | 1, 2, 5, 11 |
 | `sources` | selection (automatic / pinned source), askWhenSeveralPlay, pauseOthersOnSwitch, ignoredSources, browserBridgeEnabled, browserBridgePort | 2, 7 |
 | `light` | enabled, style (22), position, thickness, glow, intensity, speed, colorSource, customColors, disabledDisplays, onlyOnDesktop, stepAsideInFullScreen | 4 |
 | `player` | enabled, size, displayID, showClock, showDate, clockFormat, showContinuePlaying, showAlbums, showSearch, startAtFifteenSeconds | 2, 5 |
@@ -2448,3 +2448,33 @@ Every item of the feature spec, checked against the code, the tests, the smoke r
 8. **Align Lyrics on a real song** (Beta): a song with plain or no lyrics, the wand button beside the lyrics, **Align to
    the Song** (for another app it listens to the rest of the song). Say how far off the lines land.
 9. **Clear Desk** with a few apps open: the moon button hides them, a second click brings exactly those back.
+
+## After 1.0 — changes from daily use (2026-11-10)
+
+Not a plan step: fixes and changes asked for while using 1.0.0, one commit each (`64f63bd`…`44c54c2`).
+
+- **Optimized Mode is gone** (the switch in Settings › General, `--optimized`, `general.optimizedMode`, its strings and
+  README rows). It only did by hand what Ahenk does by itself on battery, in Low Power Mode and when hot. An old
+  `optimizedMode` key in stored settings is ignored. Mentions of it in the steps above describe 1.0.0 as it was.
+- **On battery the wallpaper's video stays as it is** (no 720p): measured, the cost is the full-screen frame, not its
+  decoding. Low Power Mode and heat still show only the cover.
+- **The source chosen in the player's picker is followed** while it has a song (`HubConfiguration.preferredSource`; an
+  automatic selection becomes pinned to it). A demo or smoke run leaves the choice out
+  (`NowPlayingServices.configuration(_:isDemo:)`): with Spotify chosen, the demo song was never followed and five smoke
+  checks failed.
+- **Search** goes through Apple Music's own catalog search (`AppleMusicSearchCatalog`: top result, artists with
+  pictures, tabs), with the iTunes Search API as the base and fallback; source badges show the source's icon.
+- **Spotify**: everyone on a song is named (`SpotifyTrackArtists`), a picked song is asked for again until it plays, and
+  the Automation permission is read with a script when macOS does not answer.
+- **Wallpaper**: YouTube Music's own match first, uploads and session videos after it, only the picture of the embedded
+  player, a strip behind the menu bar, kept for ten minutes while hidden, not paused under app windows.
+- **Widgets**: Lock Widgets (menu and player), the menu's switches described, no hover bar over the lyrics (60 fps),
+  position corrections of a tenth of a second reach the lyrics.
+- Also: LRCLIB is searched without the album, Clear Desk no longer trusts `hide()`'s answer, one Recently Played row per
+  song across an app and a browser, the guide fits below its title bar, `-AhenkExperiment` measurement switches.
+
+Checks on the final tree: `./Scripts/test.sh` 570/570 with the node tests (twice), `./Scripts/smoke.sh` passed (31
+subsystems), `./Scripts/make-app.sh` signed with the Apple Development identity, installed to /Applications with
+`./Scripts/install.sh --no-build`. Every commit builds with its tests (`swift build --build-tests` in a worktree); the
+tests and the smoke check ran on the last one only. None of these changes was measured against the performance budget
+again.
