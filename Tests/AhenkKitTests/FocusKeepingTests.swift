@@ -3,27 +3,37 @@ import Testing
 
 @Suite("Keeping a music app in the background")
 struct FocusKeepingTests {
-    @Test("A music app that was hidden is hidden again first")
-    func hidden() {
-        #expect(FocusKeeping.steps(wasHidden: true, previousIsRegularApp: true, previousIsFinder: false) == [.hide, .activatePrevious, .reopenPrevious])
-        #expect(FocusKeeping.steps(wasHidden: true, previousIsRegularApp: true, previousIsFinder: true) == [.hide, .activatePrevious])
+    typealias Before = FocusKeeping.Before
+
+    @Test("A music app without a window on screen is hidden again, whatever was in front")
+    func notVisible() {
+        for cover in [true, false] {
+            for reopen in [true, false] {
+                for previous in [true, false] {
+                    let before = Before(musicAppWasVisible: false, hasCover: cover, coverCanReopen: reopen, coverIsPrevious: previous)
+                    #expect(FocusKeeping.steps(before) == [.hide, .activatePrevious])
+                }
+            }
+        }
     }
 
-    @Test("A visible one stays visible if the front can be given back")
-    func visible() {
-        #expect(FocusKeeping.steps(wasHidden: false, previousIsRegularApp: true, previousIsFinder: false) == [.activatePrevious, .reopenPrevious, .hide])
+    @Test("A visible one goes back under the window that was on top")
+    func covered() {
+        #expect(FocusKeeping.steps(Before(musicAppWasVisible: true, hasCover: true, coverCanReopen: true, coverIsPrevious: true))
+            == [.activateCover, .reopenCover, .hideIfStillInFront])
+        #expect(FocusKeeping.steps(Before(musicAppWasVisible: true, hasCover: true, coverCanReopen: true, coverIsPrevious: false))
+            == [.activateCover, .reopenCover, .hideIfStillInFront, .activatePrevious],
+            "typed in Ahenk's search with another app's window on top: that window first, then Ahenk is active again")
     }
 
     @Test("Finder and apps without a Dock icon are never reopened")
     func neverReopened() {
-        #expect(FocusKeeping.steps(wasHidden: false, previousIsRegularApp: true, previousIsFinder: true) == [.activatePrevious, .hide])
-        #expect(FocusKeeping.steps(wasHidden: false, previousIsRegularApp: false, previousIsFinder: false) == [.activatePrevious, .hide])
-        for hidden in [true, false] {
-            for regular in [true, false] {
-                let steps = FocusKeeping.steps(wasHidden: hidden, previousIsRegularApp: regular, previousIsFinder: true)
-                #expect(!steps.contains(.reopenPrevious))
-                #expect(steps.contains(.hide), "hiding always remains as a way out")
-            }
-        }
+        #expect(FocusKeeping.steps(Before(musicAppWasVisible: true, hasCover: true, coverCanReopen: false, coverIsPrevious: true))
+            == [.activateCover, .hideIfStillInFront])
+    }
+
+    @Test("A visible one with nothing over it keeps its place; only the active app changes back")
+    func nothingOver() {
+        #expect(FocusKeeping.steps(Before(musicAppWasVisible: true, hasCover: false, coverCanReopen: false, coverIsPrevious: false)) == [.activatePrevious])
     }
 }
