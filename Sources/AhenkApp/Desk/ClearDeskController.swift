@@ -100,8 +100,11 @@ final class ClearDeskController: DeskClearing {
         isActive = true
         store.save(state)
         if !plan.toHide.isEmpty { workspace.activateAhenk() }
-        for app in plan.toHide where !workspace.hide(app.pid) {
-            state.noteRefused(pid: app.pid)
+        // `hide()` answers false on this macOS even when the app does hide,
+        // so its answer is not trusted: the check a second later tells which
+        // apps really stayed visible.
+        for app in plan.toHide {
+            workspace.hide(app.pid)
         }
         let skipped = plan.skipped.filter { $0.reason == .fullScreen }.map(\.app.name)
         log.notice("Clear Desk: hid \(plan.toHide.count) apps (\(workspace.label))\(skipped.isEmpty ? "" : "; full screen, left alone: \(skipped.joined(separator: ", "))")")
