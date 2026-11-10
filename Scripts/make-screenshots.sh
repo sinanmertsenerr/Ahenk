@@ -24,4 +24,8 @@ open -W -n "$APP" --args --smoke --smoke-only nowPlaying,lyrics,onboarding,setti
 [ -f "$REPORT" ] || { echo "ERROR: $REPORT was not written." >&2; exit 1; }
 /usr/bin/plutil -p "$REPORT" | grep -B2 -A1 '"gallery"' || true
 [ "$(/usr/bin/plutil -extract ok raw -o - "$REPORT")" = "true" ] || { echo "ERROR: the gallery run failed (see $REPORT)." >&2; exit 1; }
+# The app icon, as make-app.sh drew it.
+if [ -f dist/.icon/AppIcon.png ]; then
+  sips -z 256 256 dist/.icon/AppIcon.png --out "$OUT/icon.png" >/dev/null
+fi
 ls -l "$OUT"
