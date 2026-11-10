@@ -2612,3 +2612,25 @@ with `./Scripts/install.sh --no-build`. Live, `--demo --wallpaper-song` with a r
 over 0.15 s, no sync line in the log until the demo song started again (one jump to its start), and the picture went on
 after the log's "Desktop covered by app windows". Not seen yet: a real switch to a full-screen Space with the user's
 own music, and a jump's landing after a seek in a real song. CPU and GPU were not measured again.
+
+Then, for a music video whose lyrics came seconds before the singing:
+
+- **A video without captions is heard for its words** (`LyricShiftEstimator`, `LyricsAutoSync`). The user's video
+  (99 s, official, on YouTube Music) has no caption track at all, written or automatic, so the lyrics kept the album's
+  timing (93 s recording; LRCLIB files the same timing under the video's length too) and ran about six seconds early.
+  The onset windows look two seconds either way and could not see it. Now, with "Sync automatically" on, a video on
+  YouTube or YouTube Music (the page says official video or upload; an art track is the album's recording and is left
+  alone) first lends 30 s of its sound to whisper, when the tool and a model are on this Mac and the Mac is not in Low
+  Power Mode or hot. Every heard word votes for each place the lyrics have it; the shift most votes agree on is
+  believed only with 4 lines and 8 words behind it and 1.5 times the votes of the best other shift (a refrain alone
+  fits several of its turns and is refused). Over 1.5 s apart, the lyrics moved by the shift become the song's, kept
+  like lyrics aligned on this Mac (so "use the lyrics Ahenk found" drops them, and any length of intro fits, where a
+  measured offset is held to ±10 s); under it, the onset windows take over. Up to four windows per song and run, each
+  adding to what was heard. Tried outside the app on a real song's 30 s public preview: whisper heard 49 words in
+  3.9 s, and the estimator gave the same shift (within 0.07 s) from the whole clip and from four of five 10–15 s cuts
+  of it, refusing the one cut that held only the refrain. Settings › Lyrics now says "Nothing is kept or sent
+  anywhere" (a window is a temporary file while whisper reads it). Not seen live: no video played after the install,
+  and whisper's cost per new video (a few seconds, once per song) was not measured in the app.
+
+Checks: `./Scripts/test.sh` 596/596 with the node tests (twice), `./Scripts/make-app.sh` signed, `./Scripts/smoke.sh`
+passed, build 198 installed with `./Scripts/install.sh --no-build`.
