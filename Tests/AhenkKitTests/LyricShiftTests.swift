@@ -69,6 +69,25 @@ struct LyricShiftTests {
         #expect(abs(fuzzy.seconds - 6.5) < 0.05 && fuzzy.isConfident)
     }
 
+    @Test("Ten seconds at a time: sure as soon as enough lines were sung")
+    func shortWindows() throws {
+        // A video 6.5 s later: its first line is sung at 16.5 s.
+        var words: [RecognizedWord] = []
+        var sure: [Bool] = []
+        var last: LyricShift?
+        for window in 0..<4 {
+            words += Self.heard(shift: 6.5, from: Double(window) * 10, to: Double(window + 1) * 10)
+            last = LyricShiftEstimator.estimate(lines: Self.lyrics, words: words)
+            sure.append(last?.isConfident == true)
+        }
+        #expect(sure == [false, false, true, true], "the intro and two lines say nothing yet; the third window does")
+        #expect(abs(try #require(last).seconds - 6.5) < 0.05)
+        // Windows from the middle of the song, one of them lost to a seek.
+        let middle = Self.heard(shift: 6.5, from: 40, to: 50) + Self.heard(shift: 6.5, from: 60, to: 70)
+        let shift = try #require(LyricShiftEstimator.estimate(lines: Self.lyrics, words: middle))
+        #expect(abs(shift.seconds - 6.5) < 0.05 && shift.isConfident)
+    }
+
     @Test("The same recording as the catalog's: no shift")
     func none() throws {
         let shift = try #require(LyricShiftEstimator.estimate(lines: Self.lyrics, words: Self.heard(shift: 0, to: 40)))

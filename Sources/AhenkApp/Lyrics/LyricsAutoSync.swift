@@ -13,12 +13,17 @@ import AppKit
 /// A music video on YouTube or YouTube Music is another recording than the
 /// one the catalogs time: after an intro every line is seconds early, far
 /// more than the onsets can tell (they look two seconds either way). So a
-/// video is first heard for its words: half a minute goes to whisper (when
-/// the tool and a model are on this Mac), and where the words fall says how
-/// far the video runs from the lyrics (`LyricShiftEstimator`). More than a
+/// video is first heard for its words: ten seconds at a time go to whisper
+/// (when the tool and a model are on this Mac), one window straight after
+/// the other, and where the words fall says how far the video runs from the
+/// lyrics (`LyricShiftEstimator`). Each window adds to what was heard, and
+/// the first that makes the answer sure ends the listening: more than a
 /// second and a half, and the lyrics moved by that much become the song's,
 /// kept like lyrics aligned on this Mac; less, and the onsets take over. Up
-/// to four such windows per song and run, each adding to what was heard.
+/// to twelve such windows per song and run (two minutes of the video).
+///
+/// A window the song jumped in is not used: after a seek it is dropped at
+/// once and the next one starts there; a stall shows at the window's end.
 ///
 /// Never runs on a tap that hears every app (the fallback), never for
 /// lyrics a provider proved for the exact recording, never over the user's
@@ -43,8 +48,10 @@ final class LyricsAutoSync {
     var mayRecognize: () -> Bool = { true }
     /// What was heard of a video's words, per song and timeline.
     private var hearings: [String: Hearing] = [:]
-    /// whisper is reading a window.
+    /// whisper is reading a window…
     private var isRecognizing = false
+    /// …and these wait for it, oldest first.
+    private var readings: [Reading] = []
     private let work = DispatchQueue(label: "com.sinanmertsener.Ahenk.lyrics-sync", qos: .utility)
     private let log = AhenkLogger(category: "lyrics-sync")
 
@@ -61,23 +68,48 @@ final class LyricsAutoSync {
         var words: (lyrics: SyncedLyrics, query: LyricsQuery, runner: WhisperRunner)?
     }
 
+    /// A window of a video's sound on its way to whisper.
+    private struct Reading {
+        let samples: [Float]
+        let rate: Double
+        /// The song's position at the first sample.
+        let position: Double
+        let context: Context
+    }
+
     /// A video's words so far.
     private struct Hearing {
         /// Windows begun (a seek or a pause spoils one)…
         var attempts = 0
+        /// …windows collected that whisper has not read yet…
+        var waiting = 0
         /// …and windows whisper read.
         var windows = 0
         /// At the song's own positions.
         var words: [RecognizedWord] = []
-        /// Answered, or given up.
+        /// No further window is begun.
         var isSettled = false
+        /// The words said how the video runs; nothing more is read.
+        var isAnswered = false
     }
 
-    /// A window for a video's words, and how many of them at most.
-    static let hearingSeconds = 30.0
-    static let shortestHearing = 15.0
-    static let maximumHearings = 4
-    static let maximumHearingAttempts = 12
+    /// A window for a video's words, and how many of them at most. Short
+    /// windows: the answer comes with the first few sung lines, and a jump
+    /// in the song costs ten seconds.
+    static let hearingSeconds = 10.0
+    static let shortestHearing = 6.0
+    static let maximumHearings = 12
+    static let maximumHearingAttempts = 30
+    /// A song's position this far from where a window expected it has
+    /// jumped: the window's sound no longer says when it played.
+    static let largestSlip = 0.3
+    /// Words are looked up three quarters of a second either way, so their
+    /// window bears twice the slip, timed from the middle of it: no further
+    /// off than an onset window may be.
+    static let largestHearingSlip = 0.6
+    /// A slip this large is a seek (or the page correcting where a new
+    /// song stands): the window is dropped without waiting for its end.
+    static let seekSlip = 1.0
     /// A video this close to the lyrics' timing is left to the onsets.
     static let smallestShift = 1.5
 
@@ -130,7 +162,7 @@ final class LyricsAutoSync {
         guard settings.lyrics.autoSync, lyrics.phase == .synced, let synced = lyrics.lyrics, let query = lyrics.query,
               lyrics.timingAuthority.allowsAutomaticCorrection, lyrics.manualOffset == nil, lyrics.autoOffset == nil,
               let snapshot = nowPlaying.snapshot, snapshot.isPlaying, abs(snapshot.playbackRate - 1) < 0.01,
-              audio.hearsFollowedPlayer, !isSuspended(), !isRecognizing
+              audio.hearsFollowedPlayer, !isSuspended()
         else {
             cancel()
             return
@@ -139,6 +171,15 @@ final class LyricsAutoSync {
         let fingerprint = synced.timingFingerprint
         let sessionKey = key + "\u{1}" + fingerprint
         if let context, context.session != sessionKey || context.snapshot.track.id != snapshot.track.id { cancel() }
+        // A seek is seen as it happens: the rest of the window is not waited for.
+        if let context, capture != nil {
+            let now = Date()
+            let slip = snapshot.elapsed(at: now) - context.snapshot.elapsed(at: now)
+            if abs(slip) >= Self.seekSlip {
+                log.info("The song moved \(String(format: "%+.1f", slip)) s during a sync window; the window is dropped")
+                cancel()
+            }
+        }
         var session = sessions[sessionKey] ?? LyricsSyncSession(key: key, fingerprint: fingerprint)
         if sessions[sessionKey] == nil {
             if sessions.count > 64 { sessions = [:] }
@@ -152,12 +193,13 @@ final class LyricsAutoSync {
                 var context = Context(session: sessionKey, trackID: snapshot.track.id, starts: starts, fingerprint: fingerprint, key: key, snapshot: snapshot)
                 context.words = (synced, query, runner)
                 begin(seconds: seconds, context: context)
-                let window = (hearings[sessionKey]?.windows ?? 0) + 1
+                let window = (hearings[sessionKey]?.windows ?? 0) + (hearings[sessionKey]?.waiting ?? 0) + 1
                 log.info("Listening for \(Int(seconds.rounded())) s to hear where the video's words fall (window \(window) of \(Self.maximumHearings))")
                 return
             }
         }
-        guard !session.isFinished else { return }
+        // The onsets wait while whisper reads.
+        guard !isRecognizing, !session.isFinished else { return }
         guard let seconds = LyricsSyncPlan.window(starts: starts, from: position, songEnd: snapshot.track.duration > 0 ? snapshot.track.duration : nil) else {
             return
         }
@@ -210,15 +252,19 @@ final class LyricsAutoSync {
         let startDate = Date().addingTimeInterval(start - AudioClock.now())
         let position = context.snapshot.elapsed(at: startDate)
         let now = snapshot.elapsed(at: startDate)
-        guard abs(position - now) < 0.3 else {
-            log.info("The song moved during a sync window; it is not measured")
+        let slip = now - position
+        guard abs(slip) < (context.words == nil ? Self.largestSlip : Self.largestHearingSlip) else {
+            log.info("The song moved \(String(format: "%+.1f", slip)) s during a sync window; it is not measured")
             evaluate()
             return
         }
         let samples = capture.samples
         let rate = capture.sampleRate
         if context.words != nil {
-            recognize(samples, rate: rate, position: position, context: context)
+            hearings[context.session, default: Hearing()].waiting += 1
+            recognize(Reading(samples: samples, rate: rate, position: position + slip / 2, context: context))
+            // The next window follows at once, while whisper reads this one.
+            evaluate()
             return
         }
         let starts = context.starts
@@ -268,7 +314,10 @@ final class LyricsAutoSync {
         defer { hearings[session] = hearing }
         let duration = snapshot.track.duration
         let seconds = duration > 0 ? min(Self.hearingSeconds, duration - position - 1) : Self.hearingSeconds
-        guard hearing.windows < Self.maximumHearings, hearing.attempts < Self.maximumHearingAttempts, seconds >= Self.shortestHearing else {
+        guard hearing.windows + hearing.waiting < Self.maximumHearings, hearing.attempts < Self.maximumHearingAttempts,
+              seconds >= Self.shortestHearing
+        else {
+            // (What whisper still reads is counted when it is heard.)
             hearing.isSettled = true
             return nil
         }
@@ -284,10 +333,17 @@ final class LyricsAutoSync {
         return (seconds, WhisperRunner(executable: executable, model: model))
     }
 
-    /// whisper reads the window; what it heard goes to `heard`.
-    private func recognize(_ samples: [Float], rate: Double, position: Double, context: Context) {
+    /// whisper reads the window, after the ones before it; what it heard
+    /// goes to `heard`.
+    private func recognize(_ reading: Reading) {
+        guard !isRecognizing else {
+            readings.append(reading)
+            return
+        }
+        let context = reading.context
         guard let runner = context.words?.runner else { return }
         isRecognizing = true
+        let (samples, rate, position) = (reading.samples, reading.rate, reading.position)
         let seconds = Double(samples.count) / max(1, rate)
         Task { [weak self] in
             let wav = FileManager.default.temporaryDirectory.appendingPathComponent("ahenk-sync-\(UUID().uuidString).wav")
@@ -309,8 +365,14 @@ final class LyricsAutoSync {
     /// told yet.
     private func heard(_ transcript: WhisperTranscript?, seconds: Double, took: Double, position: Double, context: Context) {
         isRecognizing = false
+        defer { readNext() }
         guard let words = context.words else { return }
         var hearing = hearings[context.session] ?? Hearing()
+        hearing.waiting = max(0, hearing.waiting - 1)
+        guard !hearing.isAnswered else {
+            hearings[context.session] = hearing
+            return
+        }
         hearing.windows += 1
         // Counts only: words are never written to the log.
         let found = transcript?.words ?? []
@@ -321,19 +383,22 @@ final class LyricsAutoSync {
         var moved: Double?
         if let shift, shift.isConfident {
             hearing.isSettled = true
+            hearing.isAnswered = true
             if abs(shift.seconds) > Self.smallestShift {
                 moved = shift.seconds
                 log.notice("\(about): the video runs \(String(format: "%+.1f", shift.seconds)) s from the lyrics' timing (\(evidence)); the lyrics are moved for this song")
             } else {
                 log.info("\(about): the lyrics' timing fits the video (\(evidence))")
             }
-        } else if hearing.windows >= Self.maximumHearings {
+        } else if hearing.windows >= Self.maximumHearings || (hearing.isSettled && hearing.waiting == 0) {
             hearing.isSettled = true
             log.info("\(about): \(evidence); not enough to tell after \(hearing.windows) windows, the lyrics keep their own timing")
         } else {
             log.info("\(about): \(evidence); not enough to tell yet")
         }
         hearings[context.session] = hearing
+        // Nothing more is heard for a song that is settled.
+        if hearing.isSettled, self.context?.words != nil, self.context?.session == context.session { cancel() }
         // The lyrics the words were looked up in must still be the ones shown.
         guard let moved, lyrics.query == words.query, lyrics.lyrics?.timingFingerprint == context.fingerprint else {
             evaluate()
@@ -341,5 +406,19 @@ final class LyricsAutoSync {
         }
         let lyrics = self.lyrics
         Task { await lyrics.adoptAligned(words.lyrics.shifted(by: moved), for: words.query) }
+    }
+
+    /// Hands whisper the oldest window still worth reading: one of the
+    /// playing song, whose words have not answered yet.
+    private func readNext() {
+        while !isRecognizing, !readings.isEmpty {
+            let next = readings.removeFirst()
+            let session = next.context.session
+            if hearings[session]?.isAnswered == true || nowPlaying.snapshot?.track.id != next.context.trackID {
+                if let waiting = hearings[session]?.waiting { hearings[session]?.waiting = max(0, waiting - 1) }
+                continue
+            }
+            recognize(next)
+        }
     }
 }
