@@ -260,12 +260,19 @@ final class EdgeLightRenderLoop: @unchecked Sendable {
         }
     }
 
+    private var experimentStart = 0.0
+
     private func tick(_ link: CADisplayLink, id: String) {
         guard let target = targets[id], target.link === link, target.isRunning else {
             link.isPaused = true
             return
         }
         let time = link.targetTimestamp
+        // Measurement: the window stays, nothing is drawn after 4 seconds.
+        if Experiment.has("lightFrozen") {
+            if experimentStart == 0 { experimentStart = time }
+            if time - experimentStart > 4 { return }
+        }
         advanceShared(to: time)
         target.presence.advance(to: time)
         let opacity = music.value * target.presence.value

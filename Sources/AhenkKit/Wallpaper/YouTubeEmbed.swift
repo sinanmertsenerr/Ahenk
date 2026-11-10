@@ -81,7 +81,10 @@ public enum YouTubeEmbed {
                 onStateChange: function (event) {
                   if (!event.target.isMuted()) event.target.mute();
                   if (event.data === 1) noCaptions(event.target);
-                  if (event.data === 0 && loops) {
+                  // The end never stays on screen (the player would show
+                  // its own "watch next" page): a looping video goes
+                  // round, a following one too, until the next song.
+                  if (event.data === 0) {
                     event.target.seekTo(0, true);
                     event.target.playVideo();
                   }

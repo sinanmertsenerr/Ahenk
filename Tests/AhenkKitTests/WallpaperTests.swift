@@ -175,6 +175,16 @@ struct VideoRankingTests {
         #expect(ranked[0].score > ranked[1].score && ranked[1].score > ranked[2].score)
     }
 
+    @Test("Another artist's official channel does not make its mashup the song's video")
+    func foreignArtistChannel() {
+        let results = [
+            F.video("ahenkVid030", "Mirela Stoica x Deren Kovar x Olan - LANTERNS UNDER ICE (prod.vesko)", channel: "vesko", duration: 227, artistChannel: true, views: 280_000),
+            F.video("ahenkVid031", "Mirela Stoica - Lanterns Under Ice (Live at the Harbor)", channel: "Mirela Stoica", duration: 238, artistChannel: true),
+        ]
+        let ranked = VideoRanking.songVideos(results, title: "Lanterns Under Ice", artist: "Mirela Stoica", duration: 223)
+        #expect(ranked.map(\.video.id) == ["ahenkVid031"])
+    }
+
     @Test("Featured artists, VEVO channels, decorations and Turkish letters still match")
     func names() {
         #expect(VideoRanking.artistNames("Kestrel & Vale feat. Orchid Telemetry") == ["kestrel and vale feat orchid telemetry", "kestrel", "vale", "orchid telemetry"])
@@ -386,18 +396,21 @@ struct WallpaperStageTests {
         var inputs = WallpaperStage.Inputs(music: .playing, wanted: "a", ready: ["a"])
         _ = stage.update(inputs, now: t0)
         inputs.isVisible = false
+        let release = WallpaperStage.releaseAfterHidden
         var plan = stage.update(inputs, now: t0 + 1)
-        #expect(plan.playback == .pause && plan.opacity == 1 && plan.wakeAt == t0 + 21)
+        #expect(plan.playback == .pause && plan.opacity == 1 && plan.wakeAt == t0 + 1 + release)
         inputs.wanted = "b"
         #expect(stage.update(inputs, now: t0 + 2).keep == ["a"], "nothing new loads while hidden")
-        plan = stage.update(inputs, now: t0 + 21)
+        plan = stage.update(inputs, now: t0 + release - 1)
+        #expect(plan.isUp && plan.opacity == 1 && plan.keep == ["a"], "kept for a quick return to the desktop")
+        plan = stage.update(inputs, now: t0 + 1 + release)
         #expect(!plan.isUp && plan.keep.isEmpty, "let go")
         inputs.isVisible = true
         inputs.ready = []
-        plan = stage.update(inputs, now: t0 + 30)
+        plan = stage.update(inputs, now: t0 + release + 10)
         #expect(plan.isUp && plan.opacity == 0 && plan.keep == ["b"], "loads again under a clear layer")
         inputs.ready = ["b"]
-        #expect(stage.update(inputs, now: t0 + 31).opacity == 1)
+        #expect(stage.update(inputs, now: t0 + release + 11).opacity == 1)
     }
 
     @Test("Turning it off melts back; nothing wanted keeps what shows")

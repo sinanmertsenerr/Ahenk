@@ -46,7 +46,8 @@ public enum VideoRanking {
             guard contains(words: core, in: text) else { continue }
             let channel = channelMatch(video.channel, names: names)
             let artistInTitle = names.contains { contains(words: $0, in: text) }
-            guard artistInTitle || channel.isArtist else { continue }
+            let ownChannel = channel.isOwn(official: video.isOfficialArtistChannel)
+            guard artistInTitle || ownChannel else { continue }
             guard !video.isArtTrack, !video.isLive, !channel.isTopic else { continue }
             // What the title says beyond the song and the artist.
             let rest = remainder(of: text, removing: [core] + names)
@@ -55,13 +56,17 @@ public enum VideoRanking {
             // An artist channel's upload named only after the track is
             // YouTube's art track without its description.
             if marker == 0, text == core { continue }
-            let official = video.isOfficialArtistChannel || channel.isVEVO
+            // YouTube's official artist badge counts for this artist's
+            // channel only: a producer's or another artist's channel has
+            // the badge too, and its mashup of the song is not the video.
+            let officialOwn = video.isOfficialArtistChannel && (channel.isArtist || channel.sharesName)
+            let official = officialOwn || channel.isVEVO
             guard marker > 0 || official || isVisualizer(rest) else { continue }
             if let length = video.duration, length < 45 { continue }
 
             var score = 2.0 + marker
-            if channel.isArtist { score += 1.5 }
-            if video.isOfficialArtistChannel { score += 1.5 }
+            if ownChannel { score += 1.5 }
+            if officialOwn { score += 1.5 }
             if channel.isVEVO { score += 1.5 }
             if video.isVerifiedChannel, !video.isOfficialArtistChannel { score += 0.3 }
             if artistInTitle { score += 0.5 }
@@ -70,6 +75,76 @@ public enum VideoRanking {
             score += viewBonus(video.viewCount, weight: 0.1)
             guard score >= songVideoThreshold else { continue }
             ranked.append((RankedVideo(video: video, score: score), index))
+        }
+        return ordered(ranked)
+    }
+
+    /// Words that only say "this upload is the recording, not a clip":
+    /// fine for `songUploads`.
+    static let recordingWords: Set<String> = [
+        "official audio", "audio", "audio only", "lyric", "lyrics", "lyric video", "sozleri", "letra", "paroles", "testo",
+    ]
+
+    /// The song's own uploads when it has no video of its own: the label's
+    /// art track, an "official audio", a lyric video. A still picture of
+    /// the right song is better than a video of another one. Same song and
+    /// artist as `songVideos`; other takes (covers, karaoke, sped-up or
+    /// slowed edits, live) stay out. Best first.
+    public static func songUploads(_ videos: [YouTubeVideo], title: String, artist: String, duration: TimeInterval?) -> [RankedVideo] {
+        let core = TrackMatching.coreTitle(title)
+        let names = artistNames(artist)
+        guard !core.isEmpty, !names.isEmpty else { return [] }
+        let songWords = Set(core.split(separator: " ").map(String.init))
+        var ranked: [(RankedVideo, Int)] = []
+        for (index, video) in unique(videos).enumerated() {
+            let text = TrackMatching.normalized(video.title)
+            guard contains(words: core, in: text), !video.isLive else { continue }
+            let channel = channelMatch(video.channel, names: names)
+            let artistInTitle = names.contains { contains(words: $0, in: text) }
+            let ownChannel = channel.isOwn(official: video.isOfficialArtistChannel) || channel.isTopic
+            guard artistInTitle || ownChannel else { continue }
+            let rest = remainder(of: text, removing: [core] + names)
+            guard !hasHardNegative(rest, allowedWords: songWords.union(recordingWords)) else { continue }
+            if let length = video.duration {
+                guard length >= 45 else { continue }
+                // Another cut or a mix, not this recording.
+                if let duration, duration > 0, abs(length - duration) > 45 { continue }
+            }
+            var score = durationScore(video: video.duration, song: duration)
+            // The artist's own upload first, a fan's copy last.
+            if ownChannel { score += 3 }
+            if video.isOfficialArtistChannel { score += 1.5 }
+            if video.isArtTrack { score += 1 }
+            if artistInTitle { score += 0.5 }
+            score += softPenalty(rest, allowedWords: songWords)
+            score += viewBonus(video.viewCount, weight: 0.1)
+            ranked.append((RankedVideo(video: video, score: score), index))
+        }
+        return ordered(ranked)
+    }
+
+    /// The song's video under another name: a session or a series titles
+    /// its upload after itself ("Artist | Some Session"), not after the
+    /// song. Among the first results of a search for the song, a video that
+    /// names the artist, is watched a lot and runs exactly as long as the
+    /// song is that recording. Videos that do name the song are left to
+    /// `songVideos` and `songUploads`.
+    public static func songVideosByLength(
+        _ videos: [YouTubeVideo], title: String, artist: String, duration: TimeInterval?, among first: Int = 4
+    ) -> [RankedVideo] {
+        let core = TrackMatching.coreTitle(title)
+        let names = artistNames(artist)
+        guard let duration, duration > 30, !core.isEmpty, !names.isEmpty else { return [] }
+        var ranked: [(RankedVideo, Int)] = []
+        for (index, video) in unique(videos).prefix(max(0, first)).enumerated() {
+            let text = TrackMatching.normalized(video.title)
+            guard !contains(words: core, in: text), !video.isLive, !video.isArtTrack else { continue }
+            guard let length = video.duration, abs(length - duration) <= 6 else { continue }
+            guard (video.viewCount ?? 0) >= 50_000 else { continue }
+            let channel = channelMatch(video.channel, names: names)
+            guard names.contains(where: { contains(words: $0, in: text) }) || channel.isArtist || channel.sharesName else { continue }
+            guard !hasHardNegative(remainder(of: text, removing: names), allowedWords: []) else { continue }
+            ranked.append((RankedVideo(video: video, score: 3 + viewBonus(video.viewCount, weight: 0.2) - Double(index) * 0.2), index))
         }
         return ordered(ranked)
     }
@@ -98,7 +173,11 @@ public enum VideoRanking {
             let official = video.isOfficialArtistChannel || channel.isVEVO
             // A title that is only a track name is an art track.
             guard marker > 0 || artistInTitle else { continue }
-            guard channel.isArtist || (artistInTitle && marker > 0) else { continue }
+            // On another channel the artist has to be the one performing
+            // ("Artist - Song", "… feat. Artist"), not a word of the song's
+            // name: an artist called "Jefe" is not in "Someone - El Jefe".
+            let ownChannel = channel.isOwn(official: video.isOfficialArtistChannel)
+            guard ownChannel || (marker > 0 && isPerformer(names, inTitle: video.title)) else { continue }
             guard marker > 0 || official || isVisualizer(rest) else { continue }
             if let length = video.duration, !(60...900).contains(length) { continue }
             // One upload per title (re-uploads, regional copies).
@@ -108,12 +187,31 @@ public enum VideoRanking {
             var score = marker
             if video.isOfficialArtistChannel { score += 1.5 }
             if channel.isVEVO { score += 1.5 }
-            if channel.isArtist { score += 1 }
+            if ownChannel { score += 1 }
             score += softPenalty(rest, allowedWords: [])
             score += viewBonus(video.viewCount, weight: 0.2)
             ranked.append((RankedVideo(video: video, score: score), index))
         }
         return Array(ordered(ranked).prefix(max(0, limit)))
+    }
+
+    /// Whether one of `names` performs in a video titled `title`: named
+    /// before the dash ("Artist - Song", "A, Artist & B - Song") or as a
+    /// guest ("Song (feat. Artist)").
+    static func isPerformer(_ names: [String], inTitle title: String) -> Bool {
+        var head: String?
+        for separator in [" - ", " \u{2013} ", " \u{2014} ", " | ", ": "] {
+            if let range = title.range(of: separator) {
+                let candidate = String(title[..<range.lowerBound])
+                if head == nil || candidate.count < (head?.count ?? .max) { head = candidate }
+            }
+        }
+        let text = TrackMatching.normalized(title)
+        let performers = head.map(TrackMatching.normalized) ?? ""
+        return names.contains { name in
+            if !performers.isEmpty, contains(words: name, in: performers) { return true }
+            return ["feat", "ft", "featuring", "with", "x"].contains { contains(words: "\($0) \(name)", in: text) }
+        }
     }
 
     // MARK: Names
@@ -138,6 +236,16 @@ public enum VideoRanking {
         var isVEVO = false
         /// "Artist - Topic": YouTube's art tracks.
         var isTopic = false
+        /// The channel's name holds the artist's ("EL NAME", "ABC and
+        /// Artist Name"): theirs when YouTube also marks it as an
+        /// official artist channel.
+        var sharesName = false
+
+        /// The artist's own channel, for a video YouTube marks (or not)
+        /// as from an official artist channel.
+        func isOwn(official: Bool) -> Bool {
+            isArtist || (sharesName && official)
+        }
     }
 
     /// Whether `channel` is one of the artist's own: "Artist", "ArtistVEVO",
@@ -149,6 +257,7 @@ public enum VideoRanking {
         var match = ChannelMatch()
         for name in names {
             let tight = name.replacingOccurrences(of: " ", with: "")
+            if name.count >= 3, contains(words: name, in: normalized) { match.sharesName = true }
             if normalized == name || squeezed == tight {
                 match.isArtist = true
             } else if squeezed == tight + "vevo" {
@@ -182,6 +291,8 @@ public enum VideoRanking {
         "1 hour", "one hour", "10 hours", "hour version", "loop", "reaction", "reacts", "tutorial", "lesson", "how to play",
         "piano cover", "guitar cover", "drum cover", "cover by", "fan made", "fanmade", "teaser", "trailer", "snippet",
         "preview", "full album", "album stream", "shorts",
+        // Translations and instrumentals of the song, in Turkish and English.
+        "ceviri", "cevirisi", "translation", "beat", "type beat",
     ]
 
     /// Another take of the song: shown, but after the real one.

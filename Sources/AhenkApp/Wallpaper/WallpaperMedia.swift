@@ -184,7 +184,8 @@ final class SharedVideoPlayer {
     }
 
     private func reachedEnd() {
-        guard loops else { return }
+        // A following video goes round as well: its last frame would
+        // otherwise stand still until the next song.
         player.seek(to: .zero) { [weak self] finished in
             guard finished else { return }
             Task { @MainActor in self?.player.play() }

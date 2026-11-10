@@ -13,9 +13,9 @@ import WebKit
 /// Nothing is stored: the web view uses a private, in-memory data store.
 @MainActor
 final class YouTubeMediaView: WallpaperMediaView {
-    /// The player's title and channel fade a few seconds after it starts;
-    /// the layer waits for that before it shows the video.
-    static let settleDelay: TimeInterval = 2.5
+    /// A moment for the first frames after the player says it plays (its
+    /// own title and buttons are hidden, see `pictureOnlyScript`).
+    static let settleDelay: TimeInterval = 0.4
     /// A video that has not started by then counts as failed.
     static let startTimeout: TimeInterval = 20
 
@@ -62,6 +62,26 @@ final class YouTubeMediaView: WallpaperMediaView {
           ['play', 'playing', 'volumechange', 'loadedmetadata'].forEach(function (name) {
             document.addEventListener(name, hush, true);
           });
+        })();
+        """,
+        injectionTime: .atDocumentStart, forMainFrameOnly: false
+    )
+
+    /// Inside the player's own frame, only the picture shows: its title,
+    /// logo, "more videos" and end screen come back whenever it pauses,
+    /// seeks or starts again, and a wallpaper has no use for them. Whatever
+    /// is not the video (or does not hold it) is hidden, so a redesigned
+    /// player needs no new list of names.
+    private static let pictureOnlyScript = WKUserScript(
+        source: """
+        (function () {
+          var host = location.hostname || '';
+          if (!/(^|\\.)youtube(-nocookie)?\\.com$/.test(host)) return;
+          var style = document.createElement('style');
+          style.textContent =
+            'body *:not(video):not(:has(video)) { visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }' +
+            'html, body { background: #000 !important; }';
+          (document.head || document.documentElement).appendChild(style);
         })();
         """,
         injectionTime: .atDocumentStart, forMainFrameOnly: false
@@ -114,6 +134,7 @@ final class YouTubeMediaView: WallpaperMediaView {
         let proxy = MessageProxy(owner: self)
         configuration.userContentController.add(proxy, name: YouTubeEmbed.messageHandler)
         configuration.userContentController.addUserScript(Self.muteScript)
+        configuration.userContentController.addUserScript(Self.pictureOnlyScript)
         messages = proxy
         let webView = WKWebView(frame: canvas.bounds, configuration: configuration)
         webView.navigationDelegate = proxy
@@ -140,6 +161,12 @@ final class YouTubeMediaView: WallpaperMediaView {
         guard playing != wantsPlaying else { return }
         wantsPlaying = playing
         run(playing ? "window.ahenk && window.ahenk.play()" : "window.ahenk && window.ahenk.pause()")
+        // Measurement: the video stays on screen, stopped on one frame.
+        if playing, Experiment.has("videoPaused") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+                self?.run("window.ahenk && window.ahenk.pause()")
+            }
+        }
     }
 
     override func seek(to seconds: TimeInterval) {

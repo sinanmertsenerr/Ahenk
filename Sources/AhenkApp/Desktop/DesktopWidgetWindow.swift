@@ -11,8 +11,10 @@ import SwiftUI
 /// first click). Only a window with a text field (the player's search) may
 /// become key, and only when that field is clicked.
 final class DesktopWidgetWindow: NSPanel {
-    /// One above the desktop icons; app windows (level 0) stay on top.
-    static let level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
+    /// Just above the desktop icons, the system's strip behind the menu
+    /// bar (one above the icons) and the wallpaper's own strip over that
+    /// (``WallpaperMenuBarWindow``); app windows (level 0) stay on top.
+    static let level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 3)
 
     /// `nil` for the queue panel, which moves with the player.
     let widget: DesktopWidget?

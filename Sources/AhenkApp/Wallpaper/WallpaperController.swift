@@ -10,6 +10,10 @@ struct WallpaperLookups {
     let videos: YouTubeVideoSearch?
     let motion: MotionArtworkFinder?
     let store: WallpaperSongStore
+    /// Everyone on a Spotify song (the app names only the first artist).
+    var spotifyArtists: SpotifyTrackArtists?
+    /// The song's video as YouTube itself files it (asked first).
+    var musicMatcher: YouTubeMusicMatcher?
 
     var isOffline: Bool { catalog == nil && videos == nil && motion == nil }
 
@@ -22,7 +26,9 @@ struct WallpaperLookups {
             catalog: services.catalog,
             videos: YouTubeVideoSearch(fetcher: fetcher, region: { storefront.code }, cache: cache),
             motion: MotionArtworkFinder(fetcher: fetcher, storefront: { storefront.code }, cache: cache),
-            store: WallpaperSongStore(fileURL: WallpaperSongStore.standardURL)
+            store: WallpaperSongStore(fileURL: WallpaperSongStore.standardURL),
+            spotifyArtists: SpotifyTrackArtists(fetcher: fetcher, cache: cache),
+            musicMatcher: YouTubeMusicMatcher(fetcher: fetcher, region: { storefront.code }, cache: cache)
         )
     }
 
@@ -53,6 +59,11 @@ final class WallpaperScreen {
     /// CoreGraphics' coordinates (top-left origin), as window lists use.
     var usableArea: CGRect = .zero
     let window: WallpaperWindow
+    /// The wallpaper's top edge again, behind the menu bar.
+    let menuBarStrip = WallpaperMenuBarWindow()
+    /// How much of the top the strip covers (the menu bar and the shadow
+    /// the system draws under it).
+    var menuBarStripHeight: CGFloat = 0
     var stage = WallpaperStage()
     var media: [String: WallpaperMediaView] = [:]
     var ready: Set<String> = []
@@ -75,6 +86,17 @@ final class WallpaperScreen {
     func move(to frame: CGRect) {
         self.frame = frame
         if window.frame != frame { window.setFrame(frame, display: false) }
+        if menuBarStrip.isVisible { showMenuBarStrip() }
+    }
+
+    /// Puts the strip behind the menu bar (again); the wallpaper window
+    /// must be on screen. Tries once more when it has not been drawn yet.
+    func showMenuBarStrip(retries: Int = 3) {
+        guard window.isVisible else { return }
+        if menuBarStrip.mirror(window, screenFrame: frame, height: menuBarStripHeight) || retries <= 0 { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.showMenuBarStrip(retries: retries - 1)
+        }
     }
 
     func close() {
@@ -86,6 +108,8 @@ final class WallpaperScreen {
         }
         media = [:]
         ready = []
+        menuBarStrip.orderOut(nil)
+        menuBarStrip.close()
         window.orderOut(nil)
         window.close()
     }
@@ -103,7 +127,7 @@ final class WallpaperScreen {
 /// followed song and its play state, the cover, power (lighter on battery,
 /// in Optimized Mode; the cover only in Low Power Mode), the displays, and
 /// whether each window can be seen (covered, asleep, locked, behind a
-/// full-screen app): hidden media pauses and is let go after 20 s.
+/// full-screen app): hidden media pauses and is let go after ten minutes.
 @MainActor
 @Observable
 final class WallpaperController {
@@ -530,26 +554,83 @@ final class WallpaperController {
         }
         var songIDs: Set<String> = []
         if let tabID = request.tabVideoID { songIDs.insert(tabID) }
+        // Search with everyone on the song: Spotify's app names only the
+        // first artist, and the video is often on another one's channel.
+        // (A name the user typed for the artist stays as typed.)
+        let asked = request
+        var request = request
+        if asked.source == .spotify || asked.source == .spotifyWeb, asked.artist == asked.reportedArtist,
+           let names = await lookups.spotifyArtists?.artists(of: asked.trackID), names.count > 1 {
+            request.artist = SpotifyTrackArtists.credit(names)
+            Self.log.info("The song's artists on Spotify: \(request.artist)")
+        }
+        guard !Task.isCancelled else { return }
+        // First what YouTube itself says is this song's video (or, with no
+        // video, its recording); ranking a plain search is the fallback.
+        let length = request.duration > 0 ? request.duration : nil
+        var recording: YouTubeMusicEntry?
+        var hasOfficialVideo = false
+        if let filed = await lookups.musicMatcher?.match(title: request.title, artist: request.artist, duration: length) {
+            guard !Task.isCancelled else { return }
+            if filed.kind == .officialVideo {
+                Self.log.info("YouTube files \u{201C}\(filed.title)\u{201D} as the song's official video")
+                if !songIDs.contains(filed.id) { add([.youtube(filed.video, kind: .songVideo)], for: asked) }
+                songIDs.insert(filed.id)
+                hasOfficialVideo = true
+            } else {
+                recording = filed
+            }
+        }
         do {
+            guard !hasOfficialVideo else { throw CancellationError() }
             let results = try await search.search(request.songQuery)
             guard !Task.isCancelled else { return }
-            let ranked = VideoRanking.songVideos(results, title: request.title, artist: request.artist, duration: request.duration > 0 ? request.duration : nil)
+            var ranked = VideoRanking.songVideos(results, title: request.title, artist: request.artist, duration: length)
+            if ranked.isEmpty, let recording {
+                // No video anywhere: the label's own recording of the song.
+                Self.log.info("The song has no video; using its recording \u{201C}\(recording.title)\u{201D}")
+                ranked = [RankedVideo(video: recording.video, score: 0)]
+            }
+            if ranked.isEmpty {
+                // No video of its own: the song's own upload (often a still
+                // picture) rather than a video of another song.
+                let uploads = VideoRanking.songUploads(results, title: request.title, artist: request.artist, duration: length)
+                let sameLength = VideoRanking.songVideosByLength(results, title: request.title, artist: request.artist, duration: length)
+                // The artist's own upload, else the song under another
+                // name (a session), else somebody's copy of it.
+                if let own = uploads.first, own.score >= 3 {
+                    ranked = [own]
+                } else if let session = sameLength.first {
+                    ranked = [session]
+                } else {
+                    ranked = Array(uploads.prefix(1))
+                }
+                if let upload = ranked.first {
+                    Self.log.info("The song has no video named after it; using \u{201C}\(upload.video.title)\u{201D}")
+                }
+            }
             let videos = ranked.prefix(2).filter { !songIDs.contains($0.video.id) }.map { WallpaperCandidate.youtube($0.video, kind: .songVideo) }
             songIDs.formUnion(ranked.map(\.video.id))
-            add(videos, for: request)
+            add(videos, for: asked)
+        } catch is CancellationError {
+            // The official video is known: nothing to rank.
         } catch {
             Self.log.info("Video search for the song failed: \(String(describing: error))")
+            if let recording, !songIDs.contains(recording.id) {
+                add([.youtube(recording.video, kind: .songVideo)], for: asked)
+                songIDs.insert(recording.id)
+            }
         }
-        finish(.songVideo, for: request)
+        finish(.songVideo, for: asked)
         do {
-            let results = try await search.search(request.artistQuery)
+            let results = try await search.search(asked.artistQuery)
             guard !Task.isCancelled else { return }
             let ranked = VideoRanking.artistVideos(results, artist: request.artist, excluding: songIDs, songTitle: request.title, limit: 4)
-            add(ranked.map { WallpaperCandidate.youtube($0.video, kind: .artistVideo) }, for: request)
+            add(ranked.map { WallpaperCandidate.youtube($0.video, kind: .artistVideo) }, for: asked)
         } catch {
             Self.log.info("Video search for the artist failed: \(String(describing: error))")
         }
-        finish(.artistVideo, for: request)
+        finish(.artistVideo, for: asked)
     }
 
     private func add(_ candidates: [WallpaperCandidate], for request: WallpaperRequest) {
@@ -653,13 +734,18 @@ final class WallpaperController {
             guard let id = DisplayIdentity.stableID(of: nsScreen), let displayID = DisplayIdentity.displayID(of: nsScreen) else { continue }
             seen.insert(id)
             let usable = Self.quartzRect(of: nsScreen.visibleFrame)
+            // A hidden menu bar still slides in with its strip.
+            let menuBar = max(nsScreen.frame.maxY - nsScreen.visibleFrame.maxY, nsScreen.safeAreaInsets.top, NSStatusBar.system.thickness)
+            let stripHeight = min(nsScreen.frame.height, menuBar + WallpaperMenuBarWindow.reachBelowMenuBar)
             if let existing = screens[id] {
+                existing.menuBarStripHeight = stripHeight
                 existing.move(to: nsScreen.frame)
                 existing.usableArea = usable
                 continue
             }
             let screen = WallpaperScreen(id: id, displayID: displayID, frame: nsScreen.frame)
             screen.usableArea = usable
+            screen.menuBarStripHeight = stripHeight
             screen.occlusion = NotificationCenter.default.addObserver(
                 forName: NSWindow.didChangeOcclusionStateNotification, object: screen.window, queue: .main
             ) { [weak self, weak screen] _ in
@@ -691,10 +777,11 @@ final class WallpaperController {
     }
 
     private func isVisible(_ screen: WallpaperScreen) -> Bool {
-        if screensAsleep || sessionLocked { return false }
-        if desktop.fullScreenDisplays.contains(screen.displayID) { return false }
-        if Self.drawsWhenCovered { return true }
-        return !screen.isOccluded && !coveredDisplays.contains(screen.displayID)
+        // Only a dark or locked screen stops the wallpaper. It used to
+        // pause under app windows and full-screen apps too, and coming
+        // back showed a video that jumped to catch up with the song; it
+        // now runs on whatever is in front of it.
+        return !(screensAsleep || sessionLocked)
     }
 
     /// AppKit's coordinates (bottom-left origin) → CoreGraphics' (top-left).
@@ -722,26 +809,17 @@ final class WallpaperController {
         guard covered != coveredDisplays else { return }
         coveredDisplays = covered
         Self.log.info("Desktop covered by app windows on \(covered.count) display(s)")
+        // A video that stood still while covered catches up at once.
+        needsSync = true
         refresh()
     }
 
-    /// Windows move and resize without telling anyone: while music plays,
-    /// look every 2 s (a millisecond of work).
+    /// App windows no longer pause the wallpaper (see `isVisible`), so
+    /// nothing watches how much of the desktop they cover.
     private func updateCoverageWatch() {
-        let watching = music == .playing && settings.wallpaper.enabled && !Self.drawsWhenCovered
-        if watching, coverageTimer == nil {
-            let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated { self?.readCoverage() }
-            }
-            timer.tolerance = 0.5
-            RunLoop.main.add(timer, forMode: .common)
-            coverageTimer = timer
-            readCoverage()
-        } else if !watching, let timer = coverageTimer {
-            timer.invalidate()
-            coverageTimer = nil
-            if !coveredDisplays.isEmpty { coveredDisplays = [] }
-        }
+        coverageTimer?.invalidate()
+        coverageTimer = nil
+        if !coveredDisplays.isEmpty { coveredDisplays = [] }
     }
 
     // MARK: Applying
@@ -809,8 +887,11 @@ final class WallpaperController {
         if plan.isUp, !screen.window.isVisible {
             screen.window.alphaValue = 1
             screen.window.orderFrontRegardless()
+            screen.showMenuBarStrip()
         }
         screen.window.content.setOpacity(plan.opacity, duration: fade)
+        // The strip behind the menu bar follows every change of picture.
+        if plan.isUp { screen.showMenuBarStrip(retries: 0) }
         // The front one on top: at once for the first picture (the whole
         // layer fades in), crossfading over the one before otherwise.
         if let front = plan.front, let view = screen.media[front] {
@@ -840,6 +921,7 @@ final class WallpaperController {
             view.setPlaying(plan.playback == .play)
         }
         if !plan.isUp, screen.window.isVisible {
+            screen.menuBarStrip.hide()
             screen.window.orderOut(nil)
         }
     }
@@ -942,6 +1024,8 @@ final class WallpaperController {
     private func syncFollowingVideos() {
         guard let snapshot = nowPlaying.snapshot else { return }
         for screen in screens.values {
+            // A paused video (nobody sees it) is left alone.
+            guard isVisible(screen) else { continue }
             guard let front = screen.front, let view = screen.media[front], syncMode(of: view.candidate) == .followsSong else { continue }
             let duration = view.candidate.duration
             view.position { time, length in

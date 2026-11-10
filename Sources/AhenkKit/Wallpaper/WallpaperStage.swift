@@ -82,7 +82,9 @@ public struct WallpaperStage: Equatable, Sendable {
     /// A pause shorter than this keeps the layer.
     public static let pauseGrace: TimeInterval = 3
     /// Hidden this long, media is let go.
-    public static let releaseAfterHidden: TimeInterval = 20
+    /// Long: coming back to the desktop must find the wallpaper there,
+    /// not the user's own for the seconds a video takes to load again.
+    public static let releaseAfterHidden: TimeInterval = 600
 
     public private(set) var front: String?
     public private(set) var back: String?

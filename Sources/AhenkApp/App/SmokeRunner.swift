@@ -702,8 +702,8 @@ final class SmokeRunner {
         window.allowsKeyboard = true
         defer { window.close() }
         let desktopIcons = Int(CGWindowLevelForKey(.desktopIconWindow))
-        guard window.level.rawValue == desktopIcons + 1, window.level < .normal else {
-            throw SmokeFailure("widget window level \(window.level.rawValue), expected \(desktopIcons + 1)")
+        guard window.level.rawValue == desktopIcons + 3, window.level < .normal else {
+            throw SmokeFailure("widget window level \(window.level.rawValue), expected \(desktopIcons + 3)")
         }
         guard window.collectionBehavior.contains(.canJoinAllSpaces), window.collectionBehavior.contains(.stationary),
               window.styleMask.contains(.nonactivatingPanel), !window.canBecomeMain, window.becomesKeyOnlyIfNeeded
