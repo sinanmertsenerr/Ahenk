@@ -27,7 +27,10 @@ struct LyricsWidget: View {
     var body: some View {
         let theme = player.theme
         ZStack(alignment: .bottom) {
-            LyricsStage(lyrics: lyrics, nowPlaying: lyrics.nowPlaying, settings: settings.lyrics, maximumFrameRate: frameRate)
+            LyricsStage(
+                lyrics: lyrics, nowPlaying: lyrics.nowPlaying, settings: settings.lyrics, maximumFrameRate: frameRate,
+                soundDelay: effects?.soundDelay ?? 0
+            )
                 .opacity(lyrics.panel == nil ? 1 : 0)
                 .accessibilityLabel("Lyrics".l10n)
             if let panel = lyrics.panel {
@@ -81,6 +84,9 @@ struct LyricsStage: NSViewRepresentable {
     let nowPlaying: NowPlayingModel
     let settings: LyricsSettings
     let maximumFrameRate: Float
+    /// Seconds the sound effects hold the sound back (wall-clock time);
+    /// the lines wait as long.
+    var soundDelay: TimeInterval = 0
 
     func makeNSView(context: Context) -> LyricsStageView {
         LyricsStageView(frame: .zero)
@@ -106,9 +112,12 @@ struct LyricsStage: NSViewRepresentable {
         )
         view.cover = nowPlaying.artwork?.image
         view.clock = snapshot.map {
-            LyricsStageClock(
+            // The delay is wall-clock time; the song moves `playbackRate`
+            // song seconds per second (a sped-up file or tab).
+            let held = soundDelay * ($0.playbackRate > 0 ? $0.playbackRate : 1)
+            return LyricsStageClock(
                 elapsed: $0.elapsedTime, anchor: $0.timestamp, rate: $0.playbackRate,
-                offset: lyrics.offset, duration: $0.track.duration
+                offset: lyrics.offset - held, duration: $0.track.duration
             )
         }
     }

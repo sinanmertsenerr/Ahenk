@@ -30,6 +30,10 @@ final class SoundEffectsController {
     private(set) var isApplied = false
     /// The effects engine for song files could not be made.
     private(set) var localFailure: String?
+    /// Seconds the effects hold the sound back (the pitch stage), so what
+    /// is heard lags the player's position by this much; the light waits
+    /// as long and the lyrics are shown as much later.
+    private(set) var soundDelay = 0.0
 
     @ObservationIgnored let settings: AppSettings
     @ObservationIgnored private let nowPlaying: NowPlayingModel
@@ -45,7 +49,6 @@ final class SoundEffectsController {
     @ObservationIgnored private var externalTarget: AudioTapTarget?
     @ObservationIgnored private var ratedTab: (key: String, rate: Double)?
     @ObservationIgnored private var rateWatch: Timer?
-    @ObservationIgnored private var appliedDelay = 0.0
     private let log = AhenkLogger(category: "effects")
 
     init(settings: AppSettings, nowPlaying: NowPlayingModel, audio: AudioTapEngine, localPlayer: LocalPlayer, bridge: BrowserBridgeServer?) {
@@ -202,8 +205,8 @@ final class SoundEffectsController {
         } else if case .tap = route, audio.status.playsEffects, chain.shiftsPitch, audio.status.sampleRate > 0 {
             delay = Double(EffectsGraph.pitchDelayFrames) / audio.status.sampleRate
         }
-        guard delay != appliedDelay else { return }
-        appliedDelay = delay
+        guard delay != soundDelay else { return }
+        soundDelay = delay
         audio.setEffectsDelay(delay)
     }
 
