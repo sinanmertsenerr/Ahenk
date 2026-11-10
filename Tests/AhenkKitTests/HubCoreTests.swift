@@ -110,6 +110,21 @@ struct HubCoreTests {
         #expect(hub.state.conflict == nil && hub.state.players.count == 1)
     }
 
+    @Test("The source chosen in the player's picker is followed while it has a song")
+    func preferredSource() {
+        var hub = core(HubConfiguration(preferredSource: .spotify))
+        hub.ingest([snapshot(.spotify, "Song", bundle: KnownApps.spotify)], from: "spotify", now: t0)
+        hub.ingest([snapshot(.otherApp, "Video", bundle: KnownApps.search)], from: "mediaremote", now: t0 + 10)
+        #expect(hub.state.activeID == spotifyID, "a video in the browser does not take over")
+        hub.tick(now: t0 + 30)
+        #expect(hub.state.conflict == nil, "and nothing is asked")
+        hub.ingest([snapshot(.spotify, "Song", bundle: KnownApps.spotify, playing: false)], from: "spotify", now: t0 + 40)
+        #expect(hub.state.activeID == spotifyID, "even paused")
+        hub.ingest([], from: "spotify", now: t0 + 50)
+        hub.tick(now: t0 + 60)
+        #expect(hub.state.activeID == webID, "Spotify gone: the one that plays")
+    }
+
     @Test("Pinned follows only its source")
     func pinned() {
         var hub = core(HubConfiguration(selection: .pinned(.spotify)))

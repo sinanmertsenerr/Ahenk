@@ -209,7 +209,7 @@ final class NowPlayingServices {
         if let second { inputs.append(.provider(second, id: "demo-b", priority: HubInput.dedicatedPriority)) }
         let makeChain: @Sendable (Set<String>) -> LyricsChain = { _ in LyricsChain(providers: [demo]) }
         let services = NowPlayingServices(
-            hub: NowPlayingHub(inputs: inputs, configuration: configuration(settings)),
+            hub: NowPlayingHub(inputs: inputs, configuration: configuration(settings, isDemo: true)),
             artwork: RoutingArtworkProvider(routes: [.demo: demo], fallback: ArtworkPipeline(disk: nil, fetcher: OfflineFetcher(), catalog: nil)),
             lyricsFinder: LyricsFinder(chain: makeChain([]), cache: nil, songs: LyricsSongStore(fileURL: nil)),
             makeLyricsChain: makeChain, features: features,
@@ -253,8 +253,13 @@ final class NowPlayingServices {
         return store
     }
 
-    static func configuration(_ settings: AppSettings) -> HubConfiguration {
-        HubConfiguration(sources: settings.sources, player: settings.player)
+    /// A demo run has only the demo's own players, so the source chosen in
+    /// the player's picker for real use (which pins the hub) is left out:
+    /// it would leave the demo with nothing to follow.
+    static func configuration(_ settings: AppSettings, isDemo: Bool = false) -> HubConfiguration {
+        var player = settings.player
+        if isDemo { player.listeningSource = nil }
+        return HubConfiguration(sources: settings.sources, player: player)
     }
 
     // MARK: Lifecycle
@@ -262,7 +267,8 @@ final class NowPlayingServices {
     func start(settings: AppSettings) {
         guard !isStarted else { return }
         isStarted = true
-        observers.append(ChangeObserver({ Self.configuration(settings) }) { [weak self] configuration in
+        let isDemo = self.isDemo
+        observers.append(ChangeObserver({ Self.configuration(settings, isDemo: isDemo) }) { [weak self] configuration in
             self?.hub.setConfiguration(configuration)
         })
         let storefront = self.storefront

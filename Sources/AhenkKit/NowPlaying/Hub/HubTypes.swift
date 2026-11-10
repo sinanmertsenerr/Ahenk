@@ -30,6 +30,11 @@ public struct HubConfiguration: Sendable, Equatable {
     public var askWhenSeveralPlay: Bool
     public var pauseOthersOnSwitch: Bool
     public var ignoredSources: Set<MusicSource>
+    /// The source the user chose in the player's source picker ("Play
+    /// Songs In"). While it has a song, Ahenk follows it and nothing else
+    /// takes over: a video opened in a browser does not replace Spotify.
+    /// `nil` (Automatic): the most recent one wins.
+    public var preferredSource: MusicSource?
     public var startAtFifteenSeconds: Bool
     /// How long two sources must play together before Ahenk asks.
     public var conflictDelay: TimeInterval
@@ -39,6 +44,7 @@ public struct HubConfiguration: Sendable, Equatable {
         askWhenSeveralPlay: Bool = true,
         pauseOthersOnSwitch: Bool = true,
         ignoredSources: Set<MusicSource> = [],
+        preferredSource: MusicSource? = nil,
         startAtFifteenSeconds: Bool = false,
         conflictDelay: TimeInterval = 3
     ) {
@@ -46,16 +52,22 @@ public struct HubConfiguration: Sendable, Equatable {
         self.askWhenSeveralPlay = askWhenSeveralPlay
         self.pauseOthersOnSwitch = pauseOthersOnSwitch
         self.ignoredSources = ignoredSources
+        self.preferredSource = preferredSource
         self.startAtFifteenSeconds = startAtFifteenSeconds
         self.conflictDelay = conflictDelay
     }
 
     public init(sources: SourceSettings, player: PlayerSettings) {
+        // A source chosen in the player's picker is the only one Ahenk
+        // follows: a video in a browser never replaces it, playing or not.
+        var selection = sources.selection
+        if selection == .automatic, let chosen = player.listeningSource { selection = .pinned(chosen) }
         self.init(
-            selection: sources.selection,
+            selection: selection,
             askWhenSeveralPlay: sources.askWhenSeveralPlay,
             pauseOthersOnSwitch: sources.pauseOthersOnSwitch,
             ignoredSources: sources.ignoredSources,
+            preferredSource: player.listeningSource,
             startAtFifteenSeconds: player.startAtFifteenSeconds
         )
     }

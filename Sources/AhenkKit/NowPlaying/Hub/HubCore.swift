@@ -220,7 +220,9 @@ public struct HubCore: Sendable {
         // Several at once?
         conflictDeadline = nil
         var conflict: PlaybackConflict?
-        if playing.count >= 2, configuration.selection == .automatic, configuration.askWhenSeveralPlay {
+        // The player of the source the user chose, while it has a song.
+        let preferred = configuration.preferredSource.flatMap { source in players.first { $0.id.source == source }?.id }
+        if playing.count >= 2, configuration.selection == .automatic, configuration.askWhenSeveralPlay, preferred == nil {
             let signature = Self.signature(of: playing)
             let overlapSince = playing.compactMap(\.playingSince).max() ?? now
             let answered = answeredOverlap == signature
@@ -243,6 +245,8 @@ public struct HubCore: Sendable {
         case .automatic:
             if let choice = override, playing.contains(where: { $0.id == choice.player }) {
                 active = choice.player
+            } else if let preferred {
+                active = preferred
             } else if let newest = playing.first {
                 active = newest.id
             } else if let previous = state.activeID, present.contains(previous) {
