@@ -123,6 +123,118 @@ final class CoverImageStore {
         return decoded.map { NSImage(cgImage: $0.image, size: .zero) }
     }
 
+    // MARK: Sources
+
+    /// The source's own icon: the installed app's (as the Dock shows it),
+    /// or the site's for a source that plays in a browser. `nil` when
+    /// neither can be had; the badge then keeps its plain colour.
+    func sourceIcon(_ source: MusicSource, pixelSize: Int) async -> NSImage? {
+        let key = "source:\(source.rawValue)@\(pixelSize)"
+        if let image = cache.object(forKey: key as NSString) { return image }
+        var image: NSImage?
+        if let app = Self.appBundleIdentifiers[source]?.lazy.compactMap({ NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }).first {
+            let icon = NSWorkspace.shared.icon(forFile: app.path)
+            icon.size = NSSize(width: pixelSize, height: pixelSize)
+            image = icon
+        } else if disk != nil, let host = Self.siteHosts[source],
+                  let url = URL(string: "https://www.google.com/s2/favicons?sz=128&domain=\(host)") {
+            image = await remote(url: url, pixelSize: pixelSize)
+        }
+        if let image {
+            cache.setObject(image, forKey: key as NSString, cost: pixelSize * pixelSize * 4)
+        }
+        return image
+    }
+
+    func cachedSourceIcon(_ source: MusicSource, pixelSize: Int) -> NSImage? {
+        cache.object(forKey: "source:\(source.rawValue)@\(pixelSize)" as NSString)
+    }
+
+    private static let appBundleIdentifiers: [MusicSource: [String]] = [
+        .appleMusic: ["com.apple.Music"],
+        .spotify: ["com.spotify.client"],
+        .deezer: ["com.deezer.deezer-desktop"],
+        .tidal: ["com.tidal.desktop"],
+    ]
+
+    private static let siteHosts: [MusicSource: String] = [
+        .spotifyWeb: "open.spotify.com",
+        .youtubeMusic: "music.youtube.com",
+        .youtube: "youtube.com",
+        .soundCloud: "soundcloud.com",
+        .amazonMusic: "music.amazon.com",
+        .deezer: "deezer.com",
+        .tidal: "tidal.com",
+    ]
+
+    // MARK: Artists
+
+    /// The artist's own picture, from their catalog page (the page names it
+    /// for link previews); `nil` when the page has none or cannot be read.
+    /// The picture's address is kept on disk, so the page is read once.
+    func artistPhoto(_ artist: CatalogArtist, pixelSize: Int) async -> NSImage? {
+        let key = "artist:\(artist.id)@\(pixelSize)"
+        if let image = cache.object(forKey: key as NSString) { return image }
+        if let artwork = artist.artwork {
+            // The search already named the picture.
+            let image = await load(Request(artwork: artwork, pixelSize: pixelSize))
+            if let image { cache.setObject(image, forKey: key as NSString, cost: pixelSize * pixelSize * 4) }
+            return image
+        }
+        // The demo stays offline (it has no disk cache either).
+        guard disk != nil, let page = artist.url, page.scheme == "https" else { return nil }
+        if let running = inFlight[key] { return await running.value }
+        let task = Task { () -> NSImage? in
+            guard let address = await self.artistPhotoAddress(artistID: artist.id, page: page),
+                  let url = Self.squarePicture(address, pixelSize: pixelSize)
+            else { return nil }
+            return await self.remote(url: url, pixelSize: pixelSize)
+        }
+        inFlight[key] = task
+        let image = await task.value
+        inFlight[key] = nil
+        if let image {
+            cache.setObject(image, forKey: key as NSString, cost: pixelSize * pixelSize * 4)
+        }
+        return image
+    }
+
+    func cachedArtistPhoto(_ artist: CatalogArtist, pixelSize: Int) -> NSImage? {
+        cache.object(forKey: "artist:\(artist.id)@\(pixelSize)" as NSString)
+    }
+
+    private func artistPhotoAddress(artistID: String, page: URL) async -> String? {
+        let key = "artist-picture:" + artistID
+        if let stored = disk?.data(forKey: key), let text = String(data: stored, encoding: .utf8), !text.isEmpty { return text }
+        var request = URLRequest(url: page, timeoutInterval: 12)
+        request.setValue("text/html", forHTTPHeaderField: "Accept")
+        guard let (body, status) = try? await fetcher.send(request), status == 200, body.count < 8_000_000,
+              let html = String(data: body, encoding: .utf8), let address = Self.previewPicture(in: html)
+        else { return nil }
+        disk?.store(Data(address.utf8), forKey: key)
+        return address
+    }
+
+    /// The link-preview picture a page names (`og:image`), if it is one of
+    /// the catalog's own resizable pictures.
+    nonisolated static func previewPicture(in html: String) -> String? {
+        guard let tag = html.range(of: #"<meta[^>]+property="og:image"[^>]*>"#, options: .regularExpression),
+              let content = html[tag].range(of: #"content="([^"]+)""#, options: .regularExpression)
+        else { return nil }
+        let address = String(html[content].dropFirst(9).dropLast())
+        guard address.hasPrefix("https://"), address.contains("mzstatic.com/"), address.contains("ArtistImages") else { return nil }
+        return address
+    }
+
+    /// The same picture as a square of `pixelSize`, cropped round its centre.
+    nonisolated static func squarePicture(_ address: String, pixelSize: Int) -> URL? {
+        let side = max(60, min(1200, pixelSize))
+        let resized = address.replacingOccurrences(
+            of: #"/\d+x\d+[a-z]*\.(jpg|png|webp)$"#, with: "/\(side)x\(side)cc.jpg", options: .regularExpression
+        )
+        return URL(string: resized)
+    }
+
     /// Drops decoded covers (memory pressure, the player turned off).
     func trim() {
         cache.removeAllObjects()
@@ -185,6 +297,15 @@ struct CoverArt: View {
         .task(id: request) {
             guard store?.cached(request) == nil else { return }
             loaded = await store?.load(request)
+            // A song that has just started has no stored cover yet: look
+            // again while it is being fetched.
+            guard loaded == nil, request.artwork == nil, request.origin != nil else { return }
+            for wait in [1.5, 3, 6, 12] {
+                try? await Task.sleep(for: .seconds(wait))
+                if Task.isCancelled { return }
+                loaded = await store?.load(request)
+                if loaded != nil { return }
+            }
         }
         .accessibilityHidden(true)
     }
@@ -200,5 +321,41 @@ struct CoverArt: View {
                 .font(.system(size: side * 0.32, weight: .light))
                 .foregroundStyle(.white.opacity(0.45))
         }
+    }
+}
+
+/// An artist's own picture in a circle; their initials on the album's
+/// colours until it arrives, or when there is none.
+struct ArtistPhoto: View {
+    let artist: CatalogArtist
+    let side: CGFloat
+    let palette: Palette
+
+    @Environment(\.coverImages) private var store
+    @State private var loaded: NSImage?
+
+    private var pixelSize: Int { Int(side * 2) }
+
+    var body: some View {
+        ZStack {
+            if let image = loaded ?? store?.cachedArtistPhoto(artist, pixelSize: pixelSize) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: side, height: side)
+                    .clipShape(Circle())
+                    .overlay(Circle().strokeBorder(.white.opacity(0.12), lineWidth: 0.5))
+                    .transition(.opacity)
+            } else {
+                ArtistMonogram(name: artist.name, side: side, palette: palette)
+            }
+        }
+        .frame(width: side, height: side)
+        .animation(.easeOut(duration: 0.2), value: loaded != nil)
+        .task(id: artist.id) {
+            loaded = await store?.artistPhoto(artist, pixelSize: pixelSize)
+        }
+        .accessibilityHidden(true)
     }
 }

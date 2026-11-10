@@ -83,9 +83,36 @@ struct SourceBadge: View {
     var demoColor: Color = .accentColor
     var side: CGFloat = 30
 
+    @Environment(\.coverImages) private var store
+    @State private var icon: NSImage?
+
     var body: some View {
+        Group {
+            if let icon = icon ?? store?.cachedSourceIcon(source, pixelSize: pixelSize) {
+                // The source's own icon, in its own shape.
+                Image(nsImage: icon)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: side, height: side)
+                    .shadow(color: .black.opacity(0.3), radius: 4, y: 1)
+                    .contentShape(Rectangle())
+            } else {
+                plain
+            }
+        }
+        .task(id: source) {
+            icon = await store?.sourceIcon(source, pixelSize: pixelSize)
+        }
+    }
+
+    private var pixelSize: Int { Int(side * 3) }
+
+    /// A plain coloured badge: the demo, files, and sources whose icon
+    /// cannot be had.
+    private var plain: some View {
         let color = source == .demo ? demoColor : source.badgeColor
-        Circle()
+        return Circle()
             .fill(color.gradient)
             .overlay(Circle().strokeBorder(.white.opacity(0.22), lineWidth: 0.5))
             .overlay {
@@ -256,10 +283,13 @@ private struct BarActions: View {
                     symbol: model.lyricsOn ? "quote.bubble.fill" : "quote.bubble", pointSize: 14, side: 32,
                     isOn: model.lyricsOn, accent: accent, help: model.lyricsOn ? "Hide Lyrics".l10n : "Show Lyrics".l10n
                 ) { model.toggleLyrics() }
-                WidgetIconButton(
-                    symbol: "list.bullet", pointSize: 14, side: 32, isOn: model.isQueueOpen, accent: accent,
-                    help: model.isQueueOpen ? "Hide the Queue".l10n : "Show the Queue".l10n
-                ) { model.isQueueOpen.toggle() }
+                // Only while there is a queue to show (or the panel is open).
+                if model.hasQueueToShow || model.isQueueOpen {
+                    WidgetIconButton(
+                        symbol: "list.bullet", pointSize: 14, side: 32, isOn: model.isQueueOpen, accent: accent,
+                        help: model.isQueueOpen ? "Hide the Queue".l10n : "Show the Queue".l10n
+                    ) { model.isQueueOpen.toggle() }
+                }
                 WidgetIconButton(
                     symbol: model.isLiked ? "heart.fill" : "heart", pointSize: 14, side: 32, isOn: model.isLiked, accent: accent,
                     isEnabled: model.canLike, help: likeHelp

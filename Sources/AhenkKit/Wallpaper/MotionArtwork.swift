@@ -191,6 +191,19 @@ public actor MotionArtworkFinder {
 
     static let tokenKey = "motion-artwork-token:v1"
 
+    /// The web player's anonymous catalog token (for the catalog's search
+    /// as well); `nil` when it cannot be read right now.
+    public func catalogToken() async -> String? {
+        await currentToken()
+    }
+
+    /// The catalog refused the token (it rotated): the next ask reads a
+    /// fresh one.
+    public func catalogTokenRefused() {
+        token = nil
+        cache.store(StoredToken(value: "", expires: .distantPast), forKey: Self.tokenKey, onDisk: true, now: clock())
+    }
+
     private func currentToken() async -> String? {
         let now = clock()
         if let token, token.expires > now.addingTimeInterval(3_600) { return token.value }

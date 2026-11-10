@@ -46,12 +46,15 @@ public struct CatalogArtist: Hashable, Sendable, Codable, Identifiable {
     public var genre: String?
     /// The artist's page (music.apple.com for the iTunes catalog).
     public var url: URL?
+    /// The artist's own picture, when the catalog gave one with the search.
+    public var artwork: CatalogArtwork?
 
-    public init(id: String, name: String, genre: String? = nil, url: URL? = nil) {
+    public init(id: String, name: String, genre: String? = nil, url: URL? = nil, artwork: CatalogArtwork? = nil) {
         self.id = id
         self.name = name
         self.genre = genre
         self.url = url
+        self.artwork = artwork
     }
 }
 
@@ -154,16 +157,26 @@ public struct CatalogSong: Hashable, Sendable, Codable, Identifiable {
     }
 }
 
+/// The one result a catalog puts above all others for a search.
+public enum CatalogTopResult: Hashable, Sendable, Codable {
+    case artist(CatalogArtist)
+    case song(CatalogSong)
+    case album(CatalogAlbum)
+}
+
 /// What a search found, in the catalog's order of relevance.
 public struct CatalogSearchResults: Hashable, Sendable, Codable {
     public var songs: [CatalogSong]
     public var albums: [CatalogAlbum]
     public var artists: [CatalogArtist]
+    /// The catalog's best match, when it names one.
+    public var top: CatalogTopResult?
 
-    public init(songs: [CatalogSong] = [], albums: [CatalogAlbum] = [], artists: [CatalogArtist] = []) {
+    public init(songs: [CatalogSong] = [], albums: [CatalogAlbum] = [], artists: [CatalogArtist] = [], top: CatalogTopResult? = nil) {
         self.songs = songs
         self.albums = albums
         self.artists = artists
+        self.top = top
     }
 
     public var isEmpty: Bool { songs.isEmpty && albums.isEmpty && artists.isEmpty }

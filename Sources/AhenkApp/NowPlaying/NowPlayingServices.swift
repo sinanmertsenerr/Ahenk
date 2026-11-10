@@ -184,7 +184,12 @@ final class NowPlayingServices {
             recentlyPlayed: RecentlyPlayedStore(fileURL: RecentlyPlayedStore.standardURL),
             isDemo: false, mediaRemote: mediaRemote, appleMusic: appleMusic, spotify: spotify,
             resolver: resolver, storefront: storefront, diskCache: disk,
-            catalog: ITunesCatalog(fetcher: fetcher, storefront: { storefront.code }, cache: catalogCache),
+            catalog: AppleMusicSearchCatalog(
+                base: ITunesCatalog(fetcher: fetcher, storefront: { storefront.code }, cache: catalogCache),
+                fetcher: fetcher, storefront: { storefront.code },
+                tokens: MotionArtworkFinder(fetcher: fetcher, storefront: { storefront.code }, cache: catalogCache),
+                cache: catalogCache
+            ),
             catalogCache: catalogCache,
             spotifyFinder: ListenBrainzSpotifyFinder(fetcher: fetcher, cache: catalogCache),
             scripts: runner, presence: presence, fetcher: fetcher,

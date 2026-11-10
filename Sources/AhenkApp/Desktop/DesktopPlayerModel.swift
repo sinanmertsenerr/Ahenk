@@ -299,6 +299,14 @@ final class DesktopPlayerModel {
     /// Ahenk starts each song itself, so the transport acts on its queue.
     var drivesQueue: Bool { conductor.isActive }
 
+    /// There is a queue the panel can show: Ahenk's own (started from a
+    /// list, an album or "Play Next"), its player's for song files, or the
+    /// playing site's. A music app such as Spotify keeps its queue to
+    /// itself, so the queue button is hidden while one plays by itself.
+    var hasQueueToShow: Bool {
+        conductor.isActive || isLocalCurrent || snapshot?.track.source.isSite == true
+    }
+
     /// The song that is starting (the bar shows it while it loads).
     var startingSong: CatalogSong? { conductor.startingSong }
 
@@ -598,6 +606,11 @@ final class DesktopPlayerModel {
             services.perform(.pause)
             return
         }
+        // A paused song of this list resumes, wherever it was started.
+        if isListSongCurrent, snapshot != nil {
+            services.perform(.play)
+            return
+        }
         if case .folder(let folder) = listSelection, !isListCurrent {
             playFolder(folder)
             return
@@ -632,8 +645,17 @@ final class DesktopPlayerModel {
         return drivesQueue && conductor.queue.context == listContext
     }
 
-    /// The list is what plays right now.
-    var isListPlaying: Bool { isPlaying && isListCurrent }
+    /// The song that plays (or is paused) is one of the list's rows, even
+    /// when it was started in the music app and not from this list.
+    private var isListSongCurrent: Bool {
+        guard let track = snapshot?.track else { return false }
+        return listSongs.contains { SongMatching.matches($0, track) }
+    }
+
+    /// The list is what plays right now: started from it, or the playing
+    /// song is one of its rows. The round button then shows pause, in step
+    /// with the player bar.
+    var isListPlaying: Bool { isPlaying && (isListCurrent || isListSongCurrent) }
 
     /// The row of a list that plays.
     func isPlaying(_ song: CatalogSong) -> Bool {
@@ -828,28 +850,6 @@ final class DesktopPlayerModel {
         return albums.value?.first { $0.id == id }
     }
 
-    // MARK: Search
-
-    func requestSearchFocus() {
-        isSearchOpen = true
-        focusRequest += 1
-    }
-
-    /// Empties the field, closes what it opened and gives the keyboard back.
-    func clearSearch() {
-        query = ""
-        pages = []
-        if settings.player.size == .small { isSearchOpen = false }
-        onReleaseKeyboard?()
-    }
-
-    /// Return in the field: plays the first song found.
-    func submitSearch() {
-        guard let first = search.value?.songs.first else { return }
-        play([first], at: 0, context: .search)
-        onReleaseKeyboard?()
-    }
-
     // MARK: The song's artists
 
     /// Everyone on the playing Spotify song, by track ID ("A, B, C"); the
@@ -878,6 +878,28 @@ final class DesktopPlayerModel {
         }
     }
 
+    // MARK: Search
+
+    func requestSearchFocus() {
+        isSearchOpen = true
+        focusRequest += 1
+    }
+
+    /// Empties the field, closes what it opened and gives the keyboard back.
+    func clearSearch() {
+        query = ""
+        pages = []
+        if settings.player.size == .small { isSearchOpen = false }
+        onReleaseKeyboard?()
+    }
+
+    /// Return in the field: plays the first song found.
+    func submitSearch() {
+        guard let first = search.value?.songs.first else { return }
+        play([first], at: 0, context: .search)
+        onReleaseKeyboard?()
+    }
+
     /// A song picked from the results plays alone; songs the user queued
     /// follow it.
     func playFromSearch(_ song: CatalogSong) {
@@ -898,7 +920,7 @@ final class DesktopPlayerModel {
             guard !Task.isCancelled, let self else { return }
             if self.search.value == nil { self.search = .loading }
             do {
-                let results = try await catalog.search(term, limit: 12)
+                let results = try await catalog.search(term, limit: 50)
                 guard !Task.isCancelled else { return }
                 self.search = .loaded(results)
             } catch {

@@ -80,6 +80,13 @@ struct PageArea: View {
 struct SearchResultsView: View {
     let model: DesktopPlayerModel
 
+    /// What the results show: everything at a glance, or one kind in full.
+    enum Filter: Hashable {
+        case all, songs, artists, albums
+    }
+
+    @State private var filter: Filter = .all
+
     var body: some View {
         switch model.search {
         case .idle, .loading:
@@ -94,52 +101,260 @@ struct SearchResultsView: View {
                 text: L10n.format("Nothing found for \u{201C}%@\u{201D}. Check the spelling or try fewer words.", model.query.trimmingCharacters(in: .whitespaces))
             )
         case .loaded(let results):
-            ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: 14) {
-                    if !results.artists.isEmpty {
-                        ArtistChips(model: model, artists: results.artists)
-                    }
-                    if !results.songs.isEmpty {
-                        HStack {
-                            WidgetSectionTitle(title: "Songs".l10n)
-                            if results.songs.count > songLimit {
-                                Button(showsAllSongs ? "Show Fewer".l10n : "Show All".l10n) {
-                                    withAnimation(.smooth(duration: 0.22)) { showsAllSongs.toggle() }
-                                }
-                                .buttonStyle(.plain)
-                                .font(.system(size: 11.5, weight: .semibold))
-                                .foregroundStyle(model.theme.accent)
-                            }
-                        }
-                        LazyVGrid(columns: columns, alignment: .leading, spacing: 2) {
-                            ForEach(showsAllSongs ? results.songs : Array(results.songs.prefix(songLimit))) { song in
-                                SearchSongRow(model: model, song: song)
-                            }
+            let shown = available(in: results).contains(filter) ? filter : .all
+            VStack(spacing: 8) {
+                filterBar(results, shown: shown)
+                ScrollView(.vertical) {
+                    Group {
+                        switch shown {
+                        case .all: overview(results)
+                        case .songs: songGrid(results.songs)
+                        case .artists: artistGrid(results.artists)
+                        case .albums: albumGrid(results.albums)
                         }
                     }
-                    if !results.albums.isEmpty {
-                        WidgetSectionTitle(title: "Albums".l10n)
-                        AlbumShelf(model: model, albums: results.albums)
-                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
+                    .padding(.bottom, 18)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 2)
-                .padding(.bottom, 18)
+                .scrollIndicators(.never)
+                .fadesScrollEdges()
+                .id(shown)
             }
-            .scrollIndicators(.never)
-            .fadesScrollEdges()
-            .onChange(of: model.query) { showsAllSongs = false }
+            .onChange(of: model.query) { filter = .all }
         }
     }
 
-    @State private var showsAllSongs = false
+    // MARK: Filters
 
-    /// Two rows' worth of songs in the small player, four in the large.
-    private var songLimit: Int { model.size == .large ? 8 : 4 }
+    private func available(in results: CatalogSearchResults) -> [Filter] {
+        var filters: [Filter] = [.all]
+        if !results.songs.isEmpty { filters.append(.songs) }
+        if !results.artists.isEmpty { filters.append(.artists) }
+        if !results.albums.isEmpty { filters.append(.albums) }
+        return filters
+    }
+
+    private func title(of filter: Filter) -> String {
+        switch filter {
+        case .all: "All".l10n
+        case .songs: "Songs".l10n
+        case .artists: "Artists".l10n
+        case .albums: "Albums".l10n
+        }
+    }
+
+    private func filterBar(_ results: CatalogSearchResults, shown: Filter) -> some View {
+        HStack(spacing: 6) {
+            ForEach(available(in: results), id: \.self) { item in
+                let isOn = item == shown
+                Button {
+                    withAnimation(.smooth(duration: 0.2)) { filter = item }
+                } label: {
+                    Text(title(of: item))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(isOn ? Color.black.opacity(0.85) : .white.opacity(0.9))
+                        .padding(.horizontal, 12)
+                        .frame(height: 26)
+                        .background(Capsule().fill(isOn ? model.theme.accent : .white.opacity(0.1)))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isOn ? .isSelected : [])
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+    }
+
+    // MARK: Everything at a glance
+
+    @ViewBuilder
+    private func overview(_ results: CatalogSearchResults) -> some View {
+        let isLarge = model.size == .large
+        let leading = Array(results.songs.prefix(4))
+        VStack(alignment: .leading, spacing: 16) {
+            if isLarge, let top = results.top {
+                HStack(alignment: .top, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        WidgetSectionTitle(title: "Top Result".l10n)
+                        TopResultCard(model: model, top: top)
+                    }
+                    .frame(width: 236)
+                    if !leading.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            songsHeader(results)
+                            VStack(spacing: 2) {
+                                ForEach(leading) { SearchSongRow(model: model, song: $0) }
+                            }
+                        }
+                    }
+                }
+            } else if !leading.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    songsHeader(results)
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 2) {
+                        ForEach(isLarge ? Array(results.songs.prefix(8)) : leading) { SearchSongRow(model: model, song: $0) }
+                    }
+                }
+            }
+            if !results.artists.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    WidgetSectionTitle(title: "Artists".l10n)
+                    ScrollView(.horizontal) {
+                        LazyHStack(alignment: .top, spacing: 14) {
+                            ForEach(results.artists) { ArtistTile(model: model, artist: $0, side: 78) }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .scrollIndicators(.never)
+                }
+            }
+            if !results.albums.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    WidgetSectionTitle(title: "Albums".l10n)
+                    AlbumShelf(model: model, albums: results.albums)
+                }
+            }
+        }
+    }
+
+    private func songsHeader(_ results: CatalogSearchResults) -> some View {
+        HStack {
+            WidgetSectionTitle(title: "Songs".l10n)
+            if results.songs.count > 4 {
+                Button("Show All".l10n) {
+                    withAnimation(.smooth(duration: 0.2)) { filter = .songs }
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundStyle(model.theme.accent)
+            }
+        }
+    }
+
+    // MARK: One kind in full
+
+    private func songGrid(_ songs: [CatalogSong]) -> some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 2) {
+            ForEach(songs) { SearchSongRow(model: model, song: $0) }
+        }
+    }
+
+    private func artistGrid(_ artists: [CatalogArtist]) -> some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 12, alignment: .top)], alignment: .leading, spacing: 16) {
+            ForEach(artists) { ArtistTile(model: model, artist: $0, side: 88) }
+        }
+    }
+
+    private func albumGrid(_ albums: [CatalogAlbum]) -> some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 14, alignment: .top)], alignment: .leading, spacing: 16) {
+            ForEach(albums) { AlbumTile(model: model, album: $0, side: 104) }
+        }
+    }
 
     private var columns: [GridItem] {
         let count = model.size == .large ? 2 : 1
         return Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .leading), count: count)
+    }
+}
+
+/// The catalog's best match, large: an artist opens their page, an album
+/// its songs, a song plays.
+private struct TopResultCard: View {
+    let model: DesktopPlayerModel
+    let top: CatalogTopResult
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: act) {
+            VStack(alignment: .leading, spacing: 10) {
+                picture
+                    .shadow(color: .black.opacity(0.35), radius: 8, y: 4)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(name)
+                        .font(.system(size: 19, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    Text(detail)
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .lineLimit(1)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 176, alignment: .topLeading)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.white.opacity(isHovering ? 0.14 : 0.08)))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: isHovering)
+        .accessibilityLabel("\(name), \(detail)")
+    }
+
+    @ViewBuilder
+    private var picture: some View {
+        switch top {
+        case .artist(let artist): ArtistPhoto(artist: artist, side: 84, palette: model.theme.palette)
+        case .song(let song): CoverArt(song: song, side: 84, cornerRadius: 10)
+        case .album(let album): CoverArt(artwork: album.artwork, side: 84, cornerRadius: 10)
+        }
+    }
+
+    private var name: String {
+        switch top {
+        case .artist(let artist): artist.name
+        case .song(let song): song.title
+        case .album(let album): album.title
+        }
+    }
+
+    private var detail: String {
+        switch top {
+        case .artist: "Artist".l10n
+        case .song(let song): ["Song".l10n, song.artistName].filter { !$0.isEmpty }.joined(separator: " \u{00B7} ")
+        case .album(let album): ["Album".l10n, album.artistName].filter { !$0.isEmpty }.joined(separator: " \u{00B7} ")
+        }
+    }
+
+    private func act() {
+        switch top {
+        case .artist(let artist): model.open(.artist(artist))
+        case .song(let song): model.playFromSearch(song)
+        case .album(let album): model.open(.album(album))
+        }
+    }
+}
+
+/// An artist in the results: their picture in a circle over their name.
+private struct ArtistTile: View {
+    let model: DesktopPlayerModel
+    let artist: CatalogArtist
+    let side: CGFloat
+
+    var body: some View {
+        Button {
+            model.open(.artist(artist))
+        } label: {
+            VStack(spacing: 6) {
+                ArtistPhoto(artist: artist, side: side, palette: model.theme.palette)
+                    .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+                Text(artist.name)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text("Artist".l10n)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1)
+            }
+            .frame(width: side + 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(artist.name)
     }
 }
 
@@ -197,33 +412,7 @@ struct AlbumShelf: View {
     var body: some View {
         ScrollView(.horizontal) {
             LazyHStack(alignment: .top, spacing: 14) {
-                ForEach(albums) { album in
-                    Button {
-                        model.open(.album(album))
-                    } label: {
-                        VStack(alignment: .leading, spacing: 5) {
-                            CoverArt(artwork: album.artwork, side: side, cornerRadius: 10)
-                                .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
-                            Text(album.title)
-                                .font(.system(size: 11.5, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
-                            Text(album.yearAndKind)
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(.white.opacity(0.55))
-                                .lineLimit(1)
-                        }
-                        .frame(width: side)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button("Play".l10n, systemImage: "play.fill") { model.playAlbum(album) }
-                        Button("Play Next".l10n, systemImage: "text.line.first.and.arrowtriangle.forward") { model.playAlbum(album, mode: .playNext) }
-                        Button("Add to Queue".l10n, systemImage: "text.append") { model.playAlbum(album, mode: .addToQueue) }
-                    }
-                    .accessibilityLabel("\(album.title), \(album.yearAndKind)")
-                }
+                ForEach(albums) { AlbumTile(model: model, album: $0, side: side) }
             }
             .padding(.vertical, 2)
         }
@@ -231,44 +420,38 @@ struct AlbumShelf: View {
     }
 }
 
-private struct ArtistChips: View {
+/// An album's cover over its title, year and kind; opens its songs.
+struct AlbumTile: View {
     let model: DesktopPlayerModel
-    let artists: [CatalogArtist]
+    let album: CatalogAlbum
+    var side: CGFloat = 104
 
     var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(artists) { artist in
-                    Button {
-                        model.open(.artist(artist))
-                    } label: {
-                        HStack(spacing: 8) {
-                            ArtistMonogram(name: artist.name, side: 26, palette: model.theme.palette)
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text(artist.name)
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                    .lineLimit(1)
-                                if let genre = artist.genre, !genre.isEmpty {
-                                    Text(genre)
-                                        .font(.system(size: 10.5))
-                                        .foregroundStyle(.white.opacity(0.55))
-                                        .lineLimit(1)
-                                }
-                            }
-                        }
-                        .padding(.leading, 5)
-                        .padding(.trailing, 12)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(.white.opacity(0.1)))
-                        .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(artist.name)
-                }
+        Button {
+            model.open(.album(album))
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                CoverArt(artwork: album.artwork, side: side, cornerRadius: 10)
+                    .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+                Text(album.title)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text(album.yearAndKind)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1)
             }
+            .frame(width: side)
+            .contentShape(Rectangle())
         }
-        .scrollIndicators(.never)
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("Play".l10n, systemImage: "play.fill") { model.playAlbum(album) }
+            Button("Play Next".l10n, systemImage: "text.line.first.and.arrowtriangle.forward") { model.playAlbum(album, mode: .playNext) }
+            Button("Add to Queue".l10n, systemImage: "text.append") { model.playAlbum(album, mode: .addToQueue) }
+        }
+        .accessibilityLabel("\(album.title), \(album.yearAndKind)")
     }
 }
 
@@ -469,7 +652,7 @@ struct ArtistPageView: View {
         let content = model.artistContent[artist.id]
         HStack(alignment: .top, spacing: 18) {
             VStack(alignment: .leading, spacing: 10) {
-                ArtistMonogram(name: artist.name, side: model.size == .large ? 120 : 100, palette: theme.palette)
+                ArtistPhoto(artist: artist, side: model.size == .large ? 120 : 100, palette: theme.palette)
                     .shadow(color: .black.opacity(0.35), radius: 10, y: 5)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(artist.name)
