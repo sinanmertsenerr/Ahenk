@@ -20,7 +20,14 @@ final class PowerMonitor {
 
     @ObservationIgnored private var source: CFRunLoopSource?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    /// `--power` (demo only): acts as if the Mac were in this state, for
+    /// measurements; the Mac's own settings are never touched.
+    @ObservationIgnored private let simulated: LaunchOptions.SimulatedPower?
     private static let log = AhenkLogger(category: "power")
+
+    init(simulated: LaunchOptions.SimulatedPower? = nil) {
+        self.simulated = simulated
+    }
 
     func start() {
         guard source == nil else { return }
@@ -50,12 +57,18 @@ final class PowerMonitor {
     }
 
     private func refresh() {
-        let battery = Self.readIsOnBattery()
-        let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        var battery = Self.readIsOnBattery()
+        var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
         let thermal = ProcessInfo.processInfo.thermalState
-        let hot = thermal == .serious || thermal == .critical
+        var hot = thermal == .serious || thermal == .critical
+        switch simulated {
+        case .battery: battery = true
+        case .lowPower: lowPower = true
+        case .hot: hot = true
+        case nil: break
+        }
         if battery != isOnBattery || lowPower != isLowPowerMode || hot != isThermallyConstrained {
-            Self.log.info("Power: \(battery ? "battery" : "power adapter"), Low Power Mode \(lowPower ? "on" : "off"), thermal \(thermal.rawValue)")
+            Self.log.info("Power: \(battery ? "battery" : "power adapter"), Low Power Mode \(lowPower ? "on" : "off"), thermal \(thermal.rawValue)\(simulated.map { " (acting as \($0.rawValue), --power)" } ?? "")")
         }
         if battery != isOnBattery { isOnBattery = battery }
         if lowPower != isLowPowerMode { isLowPowerMode = lowPower }

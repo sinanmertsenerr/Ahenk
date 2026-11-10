@@ -15,7 +15,7 @@ final class AppEnvironment {
     /// Listening and the audio features (`audio.store` is `services.features`).
     let audio: AudioTapEngine
     /// Battery, Low Power Mode and heat (lighter drawing).
-    let power = PowerMonitor()
+    let power: PowerMonitor
     /// Present in `--demo` and `--smoke`.
     let demo: DemoProvider?
     /// Ahenk plays song files itself (the Local source).
@@ -116,6 +116,7 @@ final class AppEnvironment {
         self.settings = settings
         self.demo = demo
         self.nowPlaying = NowPlayingModel()
+        power = PowerMonitor(simulated: options.mode == .demo ? options.simulatedPower : nil)
         deskController = options.mode == .normal
             ? ClearDeskController(workspace: SystemDeskWorkspace(), store: ClearDeskStore(fileURL: ClearDeskStore.standardURL))
             : ClearDeskController(workspace: InventedDeskWorkspace.demo(), store: ClearDeskStore(fileURL: nil))

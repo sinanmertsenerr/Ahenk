@@ -52,6 +52,9 @@ import Foundation
 ///   checks and measurements (the folder is temporary and deleted on quit).
 /// - `--demo-desk-cleared`: in demo mode, Clear Desk is switched on at
 ///   launch, on the demo's invented apps (nothing on the Mac is hidden).
+/// - `--power <battery|low-power|hot>`: in demo mode, act as if the Mac ran
+///   on battery, in Low Power Mode or hot (measurements of the lighter mode
+///   without touching the Mac's own power settings).
 /// - `--settings [pane]` / `--settings=pane`: open Settings at launch.
 /// - `--allow-multiple`: skip the single-instance hand-off (development).
 ///
@@ -113,6 +116,15 @@ public struct LaunchOptions: Equatable, Sendable {
     public var demoLocal = false
     /// Demo only: the invented desk starts cleared (`--demo-desk-cleared`).
     public var demoDeskCleared = false
+    /// Demo only: the power state to act as if (`--power`).
+    public var simulatedPower: SimulatedPower?
+
+    /// `--power`: what the demo acts as if the Mac were doing.
+    public enum SimulatedPower: String, Equatable, Sendable {
+        case battery
+        case lowPower = "low-power"
+        case hot
+    }
 
     /// Demo content is used in both `--demo` and `--smoke`.
     public var usesDemoContent: Bool { mode != .normal }
@@ -177,6 +189,8 @@ public struct LaunchOptions: Equatable, Sendable {
                 demoLocal = true
             case "--demo-desk-cleared":
                 demoDeskCleared = true
+            case "--power":
+                simulatedPower = (inlineValue ?? Self.popValue(&remaining)).flatMap { SimulatedPower(rawValue: $0.lowercased()) }
             case "--wallpaper-song":
                 wallpaperSongArgument = inlineValue ?? Self.popValue(&remaining)
             case "--wallpaper-source":

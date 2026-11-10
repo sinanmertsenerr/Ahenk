@@ -118,4 +118,13 @@ struct LaunchOptionsTests {
         let optimized = LaunchOptions(arguments: ["Ahenk", "--demo", "--optimized"])
         #expect(optimized.optimized && optimized.usesDetachedSettings)
     }
+
+    @Test("Launch options for the power state of a measurement")
+    func power() {
+        #expect(LaunchOptions(arguments: ["Ahenk", "--demo", "--power", "Low-Power"]).simulatedPower == .lowPower)
+        #expect(LaunchOptions(arguments: ["Ahenk", "--power=battery"]).simulatedPower == .battery)
+        #expect(LaunchOptions(arguments: ["Ahenk", "--power", "hot"]).simulatedPower == .hot)
+        #expect(LaunchOptions(arguments: ["Ahenk", "--power", "solar"]).simulatedPower == nil, "an unknown state is ignored")
+        #expect(LaunchOptions(arguments: ["Ahenk"]).simulatedPower == nil)
+    }
 }
