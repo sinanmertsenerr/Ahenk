@@ -2493,6 +2493,21 @@ Not a plan step: fixes and changes asked for while using 1.0.0, one commit each 
   window stayed on top, because Ahenk's windows lie on the desktop. Not checked here: the hand-back itself (it needs a
   real start in Spotify); the log line "put back in … ms" names the steps taken and what was in front afterwards.
 
+- **Spotify starts songs in the background for a signed-in user** (`SpotifyRemote`, `SpotifyRemoteSession`). The
+  hand-back above still showed Spotify for 30–140 ms. Other Spotify front ends (openclaw/spogo) send the web player's
+  own remote command instead (`connect-state/v1/player/command`), the same thing a phone does; the desktop app takes it
+  where it is. Measured first from a browser tab: the song changed and Spotify never came forward in 25 s. In Ahenk: a
+  sign-in window with Spotify's page (WebKit's default store; offered on picking Spotify in the player, once on the
+  first Spotify pick of a user who never saw it, in the guide's Music Apps page and in Settings › Sources, with Sign
+  Out); the web player's session is read from a web view that is never shown and let go right after (a hook on
+  `fetch` keeps the answer of `/api/token` and the client token; the page passes a `URL` object, not a string, which the
+  first hook missed and cost 12 s per pick); read at launch and again five minutes before it ends. The route (message
+  socket for a connection ID, registering a hidden device, the device list) is kept ready while Spotify runs. The song
+  only goes to the Spotify app on this Mac (a computer named like the Mac, or the only one; never a phone). Any
+  failure falls back to AppleScript with the hand-back. Seen in the log on this Mac: first pick 1639 ms (route built
+  then), the next 356 ms; the route kept ready afterwards was not timed. Not checked: signing in with Google, Apple or
+  Facebook inside the window, an account with two computers, a free account. 588 tests pass; the smoke check was not
+  run again.
 Checks on the final tree: `./Scripts/test.sh` 570/570 with the node tests (twice), `./Scripts/smoke.sh` passed (31
 subsystems), `./Scripts/make-app.sh` signed with the Apple Development identity, installed to /Applications with
 `./Scripts/install.sh --no-build`. Every commit builds with its tests (`swift build --build-tests` in a worktree); the
