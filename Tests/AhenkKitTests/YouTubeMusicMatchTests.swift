@@ -66,4 +66,46 @@ struct YouTubeMusicMatchTests {
         #expect(entries == [YouTubeMusicEntry(id: "off00000001", title: "Glass Harbor", artists: ["Nova Atlas", "Mira Sol"], duration: 214, kind: .officialVideo)])
         #expect(YouTubeMusicMatcher.seconds("1:02:03") == 3723 && YouTubeMusicMatcher.seconds("views") == nil)
     }
+
+    @Test("An official video far from the song's length gives way to the song's video on the label's channel")
+    func closerUpload() {
+        let entries = [
+            YouTubeMusicEntry(id: "lab00000001", title: "Kaya X Deniz X Mira - Last Light", artists: ["North Records"], duration: 262, kind: .userUpload),
+            YouTubeMusicEntry(id: "omv00000001", title: "Last Light (feat. Deniz)", artists: ["Mira", "Kaya"], duration: 293, kind: .officialVideo),
+            YouTubeMusicEntry(id: "lyr00000001", title: "Kaya X Deniz X Mira - Last Light LYRICS", artists: ["someone"], duration: 262, kind: .userUpload),
+        ]
+        let found = YouTubeMusicMatcher.officialVideo(among: entries, title: "Last Light", artist: "Mira, Kaya, Deniz", duration: 245)
+        #expect(found?.id == "lab00000001")
+        #expect(found?.kind == .officialVideo)
+        // Close enough in length: YouTube's word stands.
+        #expect(YouTubeMusicMatcher.officialVideo(among: entries, title: "Last Light", artist: "Mira, Kaya, Deniz", duration: 280)?.id == "omv00000001")
+        // A shortened release: the real, longer video stays, although a
+        // cut-down copy far below it fits the length.
+        let cut = [
+            YouTubeMusicEntry(id: "omv00000002", title: "Last Light (feat. Deniz)", artists: ["Mira", "Kaya"], duration: 285, kind: .officialVideo),
+            YouTubeMusicEntry(id: "cut00000001", title: "Mira, Kaya, Deniz - Last Light (Clean)", artists: ["somebody"], duration: 226, kind: .userUpload),
+        ]
+        #expect(YouTubeMusicMatcher.officialVideo(among: cut, title: "Last Light", artist: "Mira, Kaya, Deniz", duration: 229)?.id == "omv00000002")
+        // A lyric video or a copy that names one artist of three is not it.
+        let weak = [entries[1], entries[2], YouTubeMusicEntry(id: "fan00000001", title: "Mira - Last Light", artists: ["fan"], duration: 262, kind: .userUpload)]
+        #expect(YouTubeMusicMatcher.officialVideo(among: weak, title: "Last Light", artist: "Mira, Kaya, Deniz", duration: 245)?.id == "omv00000001")
+    }
+
+    @Test("An official video that is a lyric video by its real title gives way to the video's re-upload above it")
+    func uploadAbove() {
+        let official = YouTubeMusicEntry(id: "omv00000003", title: "Amber (feat. Deniz & Kaya)", artists: ["Mira", "Ada"], duration: 285, kind: .officialVideo)
+        let entries = [
+            YouTubeMusicEntry(id: "reu00000001", title: "Mira - Amber ft Ada - Deniz - Kaya [KLİP] 2023", artists: ["a fan"], duration: 284, kind: .userUpload),
+            YouTubeMusicEntry(id: "rmx00000001", title: "Mira & Ada - Amber (Flute remix)", artists: ["x"], duration: 319, kind: .userUpload),
+            official,
+            YouTubeMusicEntry(id: "low00000001", title: "Amber - Mira x Ada x Deniz (Official Music Video)", artists: ["y"], duration: 284, kind: .userUpload),
+        ]
+        #expect(YouTubeMusicMatcher.isNotTheVideo("Mira & Ada & Deniz - Amber (Sözleri/Lyrics)", songTitle: "Amber"))
+        #expect(!YouTubeMusicMatcher.isNotTheVideo("Mira - Amber (Official Video)", songTitle: "Amber"))
+        let found = YouTubeMusicMatcher.uploadAbove(official, among: entries, title: "Amber", artist: "Mira, Ada, Deniz, Kaya", duration: 229)
+        #expect(found?.id == "reu00000001")
+        #expect(found?.kind == .officialVideo)
+        // Nothing above it: nothing to hand back.
+        #expect(YouTubeMusicMatcher.uploadAbove(official, among: Array(entries.dropFirst(2)), title: "Amber", artist: "Mira, Ada, Deniz, Kaya", duration: 229) == nil)
+    }
 }

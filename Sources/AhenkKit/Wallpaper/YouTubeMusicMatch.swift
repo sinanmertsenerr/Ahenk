@@ -56,6 +56,9 @@ public struct YouTubeMusicMatch: Hashable, Sendable, Codable {
 ///    after the song, or (for a song with several artists) by at least two
 ///    of them and exactly as long as the song: a session or a series
 ///    titles its video after itself.
+///    When that video is far from the song's length and an upload named
+///    after the song and its artists is much closer, the upload is the
+///    video (`closerUpload`).
 /// 2. Else the **label's recording** of the song (its cover as a still):
 ///    the right song without a video beats another song's video.
 /// 3. Else nothing: the caller falls back to ranking a plain search.
@@ -93,7 +96,7 @@ public final class YouTubeMusicMatcher: Sendable {
         let names = VideoRanking.artistNames(artist)
         let core = TrackMatching.coreTitle(title)
         guard !core.isEmpty, let whole = names.first else { return nil }
-        let key = "ytm-match:v1:\(whole)|\(core)|\(Int((duration ?? 0).rounded()))"
+        let key = "ytm-match:v4:\(whole)|\(core)|\(Int((duration ?? 0).rounded()))"
         if let stored = cache.value(YouTubeMusicMatch.self, forKey: key, maxAge: Self.lifetime, now: clock()) {
             if let entry = stored.entry { return entry }
             if cache.value(YouTubeMusicMatch.self, forKey: key, maxAge: Self.missLifetime, now: clock()) != nil { return nil }
@@ -111,8 +114,28 @@ public final class YouTubeMusicMatcher: Sendable {
                 found = video
             }
         }
+        // An "official" video far from the song's length is looked at
+        // once more: YouTube Music files some lyric videos and copies as
+        // official and shows them under the song's own name, while the
+        // upload's real title says what it is.
+        if let official = found, official.kind == .officialVideo, let song = duration, let length = official.duration,
+           abs(length - song) > Self.doubtfulDifference,
+           let real = await realTitle(of: official.id), Self.isNotTheVideo(real, songTitle: title) {
+            Self.log.info("YouTube's official video for the song is \u{201C}\(real)\u{201D}; looking past it")
+            found = Self.uploadAbove(official, among: videos, title: title, artist: artist, duration: duration)
+                ?? Self.officialVideo(among: videos.filter { $0.id != official.id }, title: title, artist: artist, duration: duration)
+        }
         cache.store(YouTubeMusicMatch(entry: found), forKey: key, onDisk: true, now: clock())
         return found
+    }
+
+    /// The upload's title on YouTube itself (its public oEmbed answer).
+    private func realTitle(of id: String) async -> String? {
+        guard let url = URL(string: "https://www.youtube.com/oembed?format=json&url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D\(id)"),
+              let (data, status) = try? await fetcher.get(url), status == 200,
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return object["title"] as? String
     }
 
     // MARK: The rules
@@ -135,6 +158,46 @@ public final class YouTubeMusicMatcher: Sendable {
         let takes = ["live", "canli", "konser", "concert", "remix", "akustik", "acoustic", "cover", "slowed", "sped up", "speed up",
                      "nightcore", "karaoke", "instrumental", "beat", "reverb", "8d"]
         return takes.contains { VideoRanking.contains(words: $0, in: text) && !VideoRanking.contains(words: $0, in: song) }
+    }
+
+    /// Words of an upload that is about the song but is not its video.
+    static let extras = ["lyrics", "lyric", "sozleri", "sozler", "ceviri", "translation", "reaction", "tepki video"]
+
+    /// A title that says the upload is another take, a lyric video or the
+    /// like, when the song's own title does not say so.
+    static func isNotTheVideo(_ videoTitle: String, songTitle: String) -> Bool {
+        if isAnotherTake(videoTitle, songTitle: songTitle) { return true }
+        let text = TrackMatching.normalized(videoTitle)
+        let song = TrackMatching.normalized(songTitle)
+        return extras.contains { VideoRanking.contains(words: $0, in: text) && !VideoRanking.contains(words: $0, in: song) }
+    }
+
+    /// Named after the song and its artists (two of them, or the only
+    /// one) and not another take or a lyric video.
+    static func isNamedVideo(_ entry: YouTubeMusicEntry, title: String, artist: String) -> Bool {
+        let names = VideoRanking.artistNames(artist)
+        let parts = names.count > 1 ? Array(names.dropFirst()) : names
+        let text = TrackMatching.normalized(entry.title)
+        return VideoRanking.contains(words: TrackMatching.coreTitle(title), in: text)
+            && parts.filter({ VideoRanking.contains(words: $0, in: text) }).count >= min(2, parts.count)
+            && !isNotTheVideo(entry.title, songTitle: title)
+    }
+
+    /// With the official video ruled out: the first upload YouTube ranks
+    /// above it that is named after the song and its artists and is not
+    /// far longer than the song (a re-upload of a video whose own upload
+    /// is gone). Handed back as the song's video.
+    static func uploadAbove(
+        _ official: YouTubeMusicEntry, among entries: [YouTubeMusicEntry], title: String, artist: String, duration: TimeInterval?
+    ) -> YouTubeMusicEntry? {
+        guard let index = entries.firstIndex(where: { $0.id == official.id }) else { return nil }
+        for entry in entries.prefix(upTo: index) where entry.kind == .userUpload && isNamedVideo(entry, title: title, artist: artist) {
+            if let song = duration, let length = entry.duration, abs(length - song) > 120 { continue }
+            var stand = entry
+            stand.kind = .officialVideo
+            return stand
+        }
+        return nil
     }
 
     /// Rule 1.
@@ -161,7 +224,42 @@ public final class YouTubeMusicMatcher: Sendable {
             let distance = (named ? 0 : 1_000) + (difference ?? 60)
             if best == nil || distance < best!.distance { best = (entry, distance) }
         }
+        if let official = best?.entry, let stand = closerUpload(than: official, among: entries, title: title, artist: artist, duration: duration) {
+            return stand
+        }
         return best?.entry
+    }
+
+    /// An official video this far from the song's length may be another
+    /// take that its title does not announce (a live cut filed under the
+    /// artists' own channel, while the real video sits on the label's).
+    static let doubtfulDifference: TimeInterval = 30
+
+    /// The upload that is the song's video after all, when YouTube's
+    /// "official" one is far from the song's length: named after the song
+    /// and its artists (two of them, or the only one), not another take or
+    /// a lyric video, within an intro's length of the song and much closer
+    /// to it than the official one, and ranked above the official one by
+    /// YouTube. It is handed back as the song's video.
+    static func closerUpload(
+        than official: YouTubeMusicEntry, among entries: [YouTubeMusicEntry], title: String, artist: String, duration: TimeInterval?
+    ) -> YouTubeMusicEntry? {
+        guard let song = duration, let officialLength = official.duration, abs(officialLength - song) > doubtfulDifference else { return nil }
+        // Only what YouTube itself ranks above its official video: the
+        // song's real video on a label's channel is the top result, while
+        // a cut-down copy with a few views (which fits a shortened release
+        // better than the real, longer video does) comes far below it.
+        let above = entries.firstIndex(of: official).map { entries.prefix(upTo: $0) } ?? []
+        for entry in above where entry.kind == .userUpload {
+            guard let length = entry.duration else { continue }
+            let difference = abs(length - song)
+            guard difference <= 25, difference + 20 <= abs(officialLength - song), isNamedVideo(entry, title: title, artist: artist)
+            else { continue }
+            var stand = entry
+            stand.kind = .officialVideo
+            return stand
+        }
+        return nil
     }
 
     /// Rule 2.
