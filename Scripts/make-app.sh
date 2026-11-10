@@ -24,7 +24,7 @@ cd "$(dirname "$0")/.."
 
 APP_NAME="Ahenk"
 CONFIG="${CONFIG:-release}"
-VERSION="${VERSION:-0.1.0}"
+VERSION="${VERSION:-1.0.0}"
 DIST="dist"
 APP="$DIST/$APP_NAME.app"
 CONTENTS="$APP/Contents"
