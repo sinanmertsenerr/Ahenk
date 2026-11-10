@@ -343,7 +343,10 @@ public final class NowPlayingHub: NowPlayingProvider, Sendable {
         let snapshotChanged: Bool
         switch (oldSnapshot, newSnapshot) {
         case (nil, nil): snapshotChanged = false
-        case let (a?, b?): snapshotChanged = b.differsNoticeably(from: a, at: now) || old.activeID != new.activeID
+        // The providers already drop reads that change nothing; a position
+        // they do correct (by a tenth of a second or more) must reach the
+        // lyrics.
+        case let (a?, b?): snapshotChanged = b.differsNoticeably(from: a, at: now, tolerance: 0.1) || old.activeID != new.activeID
         default: snapshotChanged = true
         }
         if snapshotChanged {

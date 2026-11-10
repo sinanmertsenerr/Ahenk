@@ -356,7 +356,17 @@ public final class ScriptedPlayerProvider<Player: ScriptedPlayer>: NowPlayingPro
                 snapshot.processIdentifier = presence.processIdentifier(of: Player.bundleIdentifier)
                 snapshot.capabilities = Player.capabilities
                 await attachArtwork(to: &snapshot, available: hasArtwork)
-                apply(snapshot, sampledAt: sampledAt, force: false)
+                // A quick answer places the song precisely (the error is at
+                // most half the round trip).
+                let roundTrip = max(0, finishedAt.timeIntervalSince(startedAt))
+                let tolerance = min(0.4, max(Self.preciseTolerance, roundTrip * 0.75))
+                if let old = state.withLock({ $0.current }), old.isPlaying, snapshot.isPlaying, old.track.id == snapshot.track.id {
+                    let drift = old.elapsed(at: finishedAt) - snapshot.elapsed(at: finishedAt)
+                    if abs(drift) > 0.05 {
+                        log.info("Position check: shown \(String(format: "%+.2f", drift)) s from the player (read took \(Int(roundTrip * 1000)) ms)\(abs(drift) > tolerance ? "; corrected" : "")")
+                    }
+                }
+                apply(snapshot, sampledAt: sampledAt, force: false, tolerance: tolerance)
             }
         case .failure(let error):
             handle(error)
@@ -415,7 +425,14 @@ public final class ScriptedPlayerProvider<Player: ScriptedPlayer>: NowPlayingPro
 
     // MARK: Publishing
 
-    private func apply(_ snapshot: NowPlayingSnapshot?, sampledAt: Date, force: Bool) {
+    /// A quick read replaces a position that is off by more than this (a
+    /// slower read is trusted less: three quarters of its round trip, up to
+    /// 0.4 s). Without it a position read slowly (while Ahenk starts, or
+    /// the Mac is busy) stayed up to 0.4 s off until the next seek, and the
+    /// lyrics ran that much early or late.
+    static var preciseTolerance: TimeInterval { 0.1 }
+
+    private func apply(_ snapshot: NowPlayingSnapshot?, sampledAt: Date, force: Bool, tolerance: TimeInterval = 0.4) {
         let now = clock()
         let (value, continuations) = state.withLock { state -> (NowPlayingSnapshot??, [AsyncStream<NowPlayingSnapshot?>.Continuation]) in
             // A read that started before the last applied update is stale.
@@ -424,7 +441,8 @@ public final class ScriptedPlayerProvider<Player: ScriptedPlayer>: NowPlayingPro
             let different: Bool
             switch (state.current, snapshot) {
             case (nil, nil): different = false
-            case let (old?, new?): different = new.differsNoticeably(from: old, at: now, tolerance: 0.4)
+            case let (old?, new?):
+                different = new.differsNoticeably(from: old, at: now, tolerance: tolerance)
             default: different = true
             }
             guard different else { return (nil, []) }
