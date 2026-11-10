@@ -2484,11 +2484,14 @@ Not a plan step: fixes and changes asked for while using 1.0.0, one commit each 
   reading of its site.
 
 - **Spotify stays in the background when a song starts** (`FocusKeeping`, `AppFocusKeeper`). Spotify's `play track`
-  brings Spotify to the front by itself (Spotify's doing since late 2024; other tools report the same). The router notes
-  the app in front, watches activations during the start and 1.5 s after it, and gives the front back: a Spotify that
-  was hidden is hidden again, a visible one stays visible if activating or reopening the app before works, else it is
-  hidden. Finder is never reopened. Not checked here: the hand-back itself (it needs a real start in Spotify); the log
-  line "the front went back to …" names the step that worked and how long Spotify was in front.
+  brings Spotify to the front and shows its window by itself (Spotify's doing since late 2024; other tools report the
+  same). The router notes what the user sees before the start (the active app, whether Spotify has a window on this
+  screen, whose window is on top), watches activations during the start and 1.5 s after it, and puts things back: a
+  Spotify without a window on screen is hidden again; a visible one goes back under the window that was on top (that
+  app is activated, reopened if needed, never Finder; hiding is the way out); then the app the user typed in is active
+  again. A first version only gave the active app back: with Ahenk itself active (a pick from its search), Spotify's
+  window stayed on top, because Ahenk's windows lie on the desktop. Not checked here: the hand-back itself (it needs a
+  real start in Spotify); the log line "put back in … ms" names the steps taken and what was in front afterwards.
 
 Checks on the final tree: `./Scripts/test.sh` 570/570 with the node tests (twice), `./Scripts/smoke.sh` passed (31
 subsystems), `./Scripts/make-app.sh` signed with the Apple Development identity, installed to /Applications with
