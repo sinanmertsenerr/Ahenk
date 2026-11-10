@@ -20,9 +20,11 @@ struct LyricsWidget: View {
     /// Times plain lyrics on this Mac (Beta); without it there is no
     /// "Align Lyrics".
     var aligner: LyricsAlignmentController?
-    /// Shows the bar without the pointer (offscreen checks).
+    /// Shows the bar (offscreen checks). On the desktop it stays away:
+    /// the lyrics are found and timed by themselves, and a bar that came
+    /// up under the pointer was only in the way. Style, offset and the
+    /// choice of lyrics are in Settings.
     var showsBar = false
-    @State private var isHovering = false
 
     var body: some View {
         let theme = player.theme
@@ -38,13 +40,11 @@ struct LyricsWidget: View {
                     .padding(10)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
-            if lyrics.panel == nil {
+            if lyrics.panel == nil, showsBar {
                 // Bottom right: clear of the cover and of the line being sung.
                 LyricsBar(lyrics: lyrics, settings: settings, theme: theme, effects: effects, canAlign: aligner != nil)
                     .padding([.bottom, .trailing], 10)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                    .opacity(isHovering || showsBar ? 1 : 0)
-                    .allowsHitTesting(isHovering || showsBar)
             }
             if let notice = lyrics.notice {
                 Text(notice)
@@ -59,9 +59,7 @@ struct LyricsWidget: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
-        .onHover { isHovering = $0 }
         .movesWidget()
-        .animation(.easeOut(duration: 0.18), value: isHovering)
         .animation(.smooth(duration: 0.24), value: lyrics.panel)
         .animation(.easeOut(duration: 0.2), value: lyrics.notice)
         .environment(\.colorScheme, .dark)
@@ -72,6 +70,10 @@ struct LyricsWidget: View {
         let general = settings.general
         let lighter = general.optimizedMode || power.isLowPowerMode || power.isThermallyConstrained
             || (general.lighterOnBattery && power.isOnBattery)
+        // 60, not the display's 120: every frame of the lyrics makes the
+        // window server blend the whole screen again (the video behind,
+        // the glass of the widgets), and at 120 it could not keep up; the
+        // lyrics then dropped frames and looked slower than at 60.
         return lighter ? 30 : 60
     }
 }

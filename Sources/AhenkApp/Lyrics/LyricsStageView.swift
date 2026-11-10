@@ -293,7 +293,7 @@ final class LyricsStageView: NSView {
     private func setRate(fast: Bool) {
         guard let link else { return }
         let steady: Float = (renderer?.animatesContinuously ?? false) ? 30 : 20
-        let rate = min(maximumFrameRate, fast ? 60 : steady)
+        let rate = fast ? maximumFrameRate : min(maximumFrameRate, steady)
         guard rate != currentRate else { return }
         currentRate = rate
         link.preferredFrameRateRange = CAFrameRateRange(minimum: min(rate, 15), maximum: rate, preferred: rate)
