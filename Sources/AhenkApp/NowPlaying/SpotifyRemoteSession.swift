@@ -41,6 +41,7 @@ final class SpotifyRemoteSession: NSObject, WKNavigationDelegate, NSWindowDelega
 
     private static let signedInKey = "spotifyRemoteSignedIn"
     private static let offeredKey = "spotifyRemoteOffered"
+    private static let usernameKey = "spotifyRemoteUsername"
     private static let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
     private static let readTimeout: TimeInterval = 12
     private static let routeLifetime: TimeInterval = 300
@@ -97,6 +98,7 @@ final class SpotifyRemoteSession: NSObject, WKNavigationDelegate, NSWindowDelega
         session = nil
         route = nil
         refresh?.cancel()
+        defaults.removeObject(forKey: Self.usernameKey)
         setStatus(.signedOut)
         let store = WKWebsiteDataStore.default()
         store.fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes()) { records in
@@ -215,6 +217,48 @@ final class SpotifyRemoteSession: NSObject, WKNavigationDelegate, NSWindowDelega
             self.session = nil
             _ = await self.currentSession()
         }
+    }
+
+    // MARK: Liked Songs
+
+    /// Whether the song is among the user's Liked Songs; `nil` when it
+    /// cannot be asked (not signed in, Spotify did not answer).
+    func isLiked(trackID: String) async -> Bool? {
+        guard isConnected, let session = await librarySession(),
+              let request = SpotifyRemote.likedRequest(session: session, trackID: trackID),
+              let answer = await Self.send(request), (200..<300).contains(answer.status)
+        else { return nil }
+        return SpotifyRemote.isLiked(fromJSON: answer.data)
+    }
+
+    /// Adds the song to Liked Songs or takes it out. `false`: not done.
+    func setLiked(_ liked: Bool, trackID: String) async -> Bool {
+        guard isConnected, let session = await librarySession(),
+              let request = SpotifyRemote.likeRequest(session: session, trackID: trackID, liked: liked, at: Date()),
+              let answer = await Self.send(request), (200..<300).contains(answer.status)
+        else {
+            log.notice("Spotify did not take the change to Liked Songs")
+            return false
+        }
+        log.info(liked ? "Added the song to Spotify's Liked Songs" : "Took the song out of Spotify's Liked Songs")
+        return true
+    }
+
+    /// The session with the account's user name: the page names it in
+    /// some loads only, so the last one seen is kept.
+    private func librarySession() async -> SpotifyRemote.Session? {
+        guard var session = await currentSession() else { return nil }
+        if let username = session.username {
+            defaults.set(username, forKey: Self.usernameKey)
+        } else {
+            session.username = defaults.string(forKey: Self.usernameKey)
+        }
+        return session.username == nil ? nil : session
+    }
+
+    /// The library can be asked (signed in, and the account's name is known).
+    var knowsLibrary: Bool {
+        isConnected && (session?.username ?? defaults.string(forKey: Self.usernameKey)) != nil
     }
 
     // MARK: Playing
@@ -346,6 +390,8 @@ final class SpotifyRemoteSession: NSObject, WKNavigationDelegate, NSWindowDelega
             }
             // The client token follows the session by a moment.
             if found.clientToken == nil, Date().timeIntervalSince(started) < Self.readTimeout - 3 { continue }
+            // The account's name shows in a request a moment later still.
+            if found.username == nil, defaults.string(forKey: Self.usernameKey) == nil, Date().timeIntervalSince(started) < 6 { continue }
             log.info("Read Spotify's session in \(Int(Date().timeIntervalSince(started) * 1000)) ms")
             session = found
             setStatus(.connected)

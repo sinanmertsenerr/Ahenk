@@ -24,12 +24,16 @@ public enum SpotifyRemote {
         /// `false` for the session of a visitor who is not signed in.
         public var isSignedIn: Bool
         public var expiresAt: Date?
+        /// The account's user name, when the page has named it in a
+        /// request (the library is asked by user name).
+        public var username: String?
 
-        public init(accessToken: String, clientToken: String?, isSignedIn: Bool, expiresAt: Date?) {
+        public init(accessToken: String, clientToken: String?, isSignedIn: Bool, expiresAt: Date?, username: String? = nil) {
             self.accessToken = accessToken
             self.clientToken = clientToken
             self.isSignedIn = isSignedIn
             self.expiresAt = expiresAt
+            self.username = username
         }
 
         /// Good for at least another minute.
@@ -64,6 +68,8 @@ public enum SpotifyRemote {
             var client = headers.get ? headers.get('client-token') : headers['client-token'];
             if (client) window.__ahenk.clientToken = client;
           }
+          var user = /\\/user\\/([A-Za-z0-9._-]{1,64})\\//.exec(url);
+          if (user) window.__ahenk.username = user[1];
         } catch (e) {}
         var answer = original.apply(this, arguments);
         if (url.indexOf('/api/token') !== -1) {
@@ -95,7 +101,8 @@ public enum SpotifyRemote {
             accessToken: token,
             clientToken: (object["clientToken"] as? String).flatMap { $0.isEmpty ? nil : $0 },
             isSignedIn: (session["isAnonymous"] as? Bool) == false,
-            expiresAt: expires
+            expiresAt: expires,
+            username: (object["username"] as? String).flatMap { isUsername($0) ? $0 : nil }
         )
     }
 
@@ -188,6 +195,47 @@ public enum SpotifyRemote {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("WebPlayer", forHTTPHeaderField: "app-platform")
         request.setValue("https://open.spotify.com", forHTTPHeaderField: "Origin")
+        return request
+    }
+
+    // MARK: Liked Songs
+
+    static let library = "https://spclient.wg.spotify.com/collection/v2"
+
+    public static func isUsername(_ text: String) -> Bool {
+        !text.isEmpty && text.count <= 64 && text.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || "._-".contains($0)) }
+    }
+
+    /// Asks whether the song is among the user's Liked Songs (answered
+    /// with ``isLiked(fromJSON:)``).
+    public static func likedRequest(session: Session, trackID: String) -> URLRequest? {
+        guard let username = session.username, isUsername(username), SpotifyAppScripts.isBase62ID(trackID) else { return nil }
+        let body: [String: Any] = ["username": username, "set": "collection", "items": [["uri": "spotify:track:\(trackID)"]]]
+        var request = request("POST", "\(library)/contains?market=from_token", session: session, body: body)
+        request?.setValue("application/json", forHTTPHeaderField: "Accept")
+        return request
+    }
+
+    /// `{"found": [true]}`.
+    public static func isLiked(fromJSON data: Data) -> Bool? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let found = object["found"] as? [Bool], found.count == 1
+        else { return nil }
+        return found[0]
+    }
+
+    /// Adds the song to the user's Liked Songs, or takes it out.
+    public static func likeRequest(session: Session, trackID: String, liked: Bool, at date: Date) -> URLRequest? {
+        guard let username = session.username, isUsername(username), SpotifyAppScripts.isBase62ID(trackID) else { return nil }
+        var item: [String: Any] = ["uri": "spotify:track:\(trackID)"]
+        if liked {
+            item["addedAt"] = Int(date.timeIntervalSince1970)
+        } else {
+            item["isRemoved"] = true
+        }
+        let body: [String: Any] = ["username": username, "set": "collection", "items": [item]]
+        var request = request("POST", "\(library)/write?market=from_token", session: session, body: body)
+        request?.setValue("application/json", forHTTPHeaderField: "Accept")
         return request
     }
 

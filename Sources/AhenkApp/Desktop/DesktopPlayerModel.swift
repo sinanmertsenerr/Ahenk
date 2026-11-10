@@ -80,6 +80,10 @@ struct ArtistPageContent: Equatable {
 final class DesktopPlayerModel {
     private(set) var theme = PlayerTheme.neutral
 
+    /// Whether the playing Spotify song is in Liked Songs, once Spotify
+    /// has said (see `spotifyLikeID`).
+    private(set) var spotifyLiked: Bool?
+
     // Continue Playing and playlists
     private(set) var recent: [CatalogSong] = []
     var listSelection: ListSelection = .continuePlaying {
@@ -368,12 +372,47 @@ final class DesktopPlayerModel {
 
     var canLike: Bool {
         guard let snapshot else { return false }
+        if spotifyLikeID != nil { return spotifyLiked != nil }
         return snapshot.capabilities.contains(.like) && snapshot.isLiked != nil
     }
 
-    var isLiked: Bool { snapshot?.isLiked ?? false }
+    var isLiked: Bool {
+        if spotifyLikeID != nil { return spotifyLiked ?? false }
+        return snapshot?.isLiked ?? false
+    }
+
+    /// The Spotify app tells nobody about Liked Songs; a user signed in to
+    /// Spotify gets them through Spotify's own library (`SpotifyRemoteSession`).
+    /// The playing song's track ID when that is the way, else `nil`.
+    private var spotifyLikeID: String? {
+        guard let snapshot, snapshot.track.source == .spotify, services.spotifyRemote?.isConnected == true else { return nil }
+        return SpotifyAppScripts.trackID(in: snapshot.track.id)
+    }
+
+    private static let likeLog = AhenkLogger(category: "player")
+
+    /// Asks Spotify whether the playing song is liked (on every new song).
+    private func refreshSpotifyLike() {
+        spotifyLiked = nil
+        guard let id = spotifyLikeID, let remote = services.spotifyRemote else { return }
+        Task { [weak self] in
+            let liked = await remote.isLiked(trackID: id)
+            guard let self, self.spotifyLikeID == id else { return }
+            self.spotifyLiked = liked
+            if liked == nil { Self.likeLog.notice("Spotify did not say whether the song is in Liked Songs") }
+        }
+    }
 
     func toggleLike() {
+        if let id = spotifyLikeID, let remote = services.spotifyRemote, let current = spotifyLiked {
+            spotifyLiked = !current
+            Task { [weak self] in
+                let done = await remote.setLiked(!current, trackID: id)
+                guard let self, self.spotifyLikeID == id, !done else { return }
+                self.spotifyLiked = current
+            }
+            return
+        }
         guard let snapshot else { return }
         let command = PlaybackCommand.setLiked(!(snapshot.isLiked ?? false))
         guard snapshot.capabilities.supports(command) else { return }
@@ -711,6 +750,7 @@ final class DesktopPlayerModel {
     /// song's album, looked up once per artist and album, only while the
     /// widgets are on screen.
     private func trackChanged(_ track: Track?) {
+        refreshSpotifyLike()
         guard isPresented else { return }
         guard let candidate = track ?? recent.first?.origin, !candidate.artist.isEmpty else { return }
         let key = TrackMatching.normalized(candidate.artist) + "|" + TrackMatching.normalized(candidate.album)

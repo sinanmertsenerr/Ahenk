@@ -88,4 +88,41 @@ struct SpotifyRemoteTests {
         #expect(SpotifyRemote.stateRequest(session: Self.session, deviceID: "a/b", connectionID: "c") == nil)
         #expect(SpotifyRemote.randomID().count == 32)
     }
+
+    @Test("Liked Songs are asked and changed by the account's user name")
+    func likedSongs() throws {
+        var session = Self.session
+        #expect(SpotifyRemote.likedRequest(session: session, trackID: "7hQJA50XrCWABAu5v6QZ4i") == nil, "no user name, no request")
+        session.username = "clis16rgm683"
+        let ask = try #require(SpotifyRemote.likedRequest(session: session, trackID: "7hQJA50XrCWABAu5v6QZ4i"))
+        #expect(ask.url?.absoluteString == "https://spclient.wg.spotify.com/collection/v2/contains?market=from_token")
+        let askedBody = try #require(ask.httpBody)
+        let asked = try #require(try JSONSerialization.jsonObject(with: askedBody) as? [String: Any])
+        #expect(asked["username"] as? String == "clis16rgm683")
+        #expect(asked["set"] as? String == "collection")
+        #expect((asked["items"] as? [[String: Any]])?.first?["uri"] as? String == "spotify:track:7hQJA50XrCWABAu5v6QZ4i")
+        #expect(SpotifyRemote.isLiked(fromJSON: Data(#"{"found": [true]}"#.utf8)) == true)
+        #expect(SpotifyRemote.isLiked(fromJSON: Data(#"{"found": [false]}"#.utf8)) == false)
+        #expect(SpotifyRemote.isLiked(fromJSON: Data("{}".utf8)) == nil)
+
+        let date = Date(timeIntervalSince1970: 1_794_000_000)
+        let add = try #require(SpotifyRemote.likeRequest(session: session, trackID: "7hQJA50XrCWABAu5v6QZ4i", liked: true, at: date))
+        #expect(add.url?.absoluteString == "https://spclient.wg.spotify.com/collection/v2/write?market=from_token")
+        let addedBody = try #require(add.httpBody)
+        let added = try #require(try JSONSerialization.jsonObject(with: addedBody) as? [String: Any])
+        #expect((added["items"] as? [[String: Any]])?.first?["addedAt"] as? Int == 1_794_000_000)
+        let remove = try #require(SpotifyRemote.likeRequest(session: session, trackID: "7hQJA50XrCWABAu5v6QZ4i", liked: false, at: date))
+        let removedBody = try #require(remove.httpBody)
+        let removed = try #require(try JSONSerialization.jsonObject(with: removedBody) as? [String: Any])
+        #expect((removed["items"] as? [[String: Any]])?.first?["isRemoved"] as? Bool == true)
+        session.username = "a/b"
+        #expect(SpotifyRemote.likeRequest(session: session, trackID: "7hQJA50XrCWABAu5v6QZ4i", liked: true, at: date) == nil)
+    }
+
+    @Test("The page's session carries the account's user name when the page named it")
+    func username() {
+        let text = #"{"username":"clis16rgm683","session":{"accessToken":"abc","isAnonymous":false}}"#
+        #expect(SpotifyRemote.session(fromJSON: text)?.username == "clis16rgm683")
+        #expect(SpotifyRemote.session(fromJSON: #"{"username":"a b","session":{"accessToken":"abc"}}"#)?.username == nil)
+    }
 }
