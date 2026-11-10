@@ -9,6 +9,7 @@
 #                                            (Chrome, Edge, Brave, Arc, Opera, Vivaldi, Search)
 #   Contents/Resources/Extension/Firefox     the same scripts with Firefox's manifest
 #   Contents/Resources/LICENSE, THIRD_PARTY_NOTICES.md
+#   Contents/Resources/AppIcon.icns          drawn by Scripts/make-icon.swift
 #
 # Signing: the stable "Apple Development" identity below, so macOS privacy
 # grants (system audio, Automation) survive rebuilds. If it is missing the
@@ -66,6 +67,14 @@ if [ "$needs_adapter_build" = "1" ]; then
   ./Scripts/build-adapter.sh
 fi
 
+# --- App icon (drawn again when Scripts/make-icon.swift changes) -------------
+ICON_DIR="$DIST/.icon"
+if [ ! -f "$ICON_DIR/AppIcon.icns" ] || [ Scripts/make-icon.swift -nt "$ICON_DIR/AppIcon.icns" ]; then
+  echo "==> Drawing the app icon"
+  swift Scripts/make-icon.swift "$ICON_DIR" >/dev/null
+fi
+[ -f "$ICON_DIR/AppIcon.icns" ] || fail "Scripts/make-icon.swift did not write $ICON_DIR/AppIcon.icns"
+
 # --- Build -------------------------------------------------------------------
 echo "==> Building $APP_NAME ($CONFIG)"
 swift build -c "$CONFIG" --product "$APP_NAME"
@@ -105,6 +114,7 @@ cp "$ADAPTER_SCRIPT" "$S/Resources/adapter/"
 cp "$ADAPTER_SRC/LICENSE" "$S/Resources/adapter/LICENSE"
 ditto "$ADAPTER_FW" "$S/Resources/adapter/MediaRemoteAdapter.framework"
 cp LICENSE THIRD_PARTY_NOTICES.md "$S/Resources/"
+cp "$ICON_DIR/AppIcon.icns" "$S/Resources/AppIcon.icns"
 
 # The browser extension: one folder per browser family, each with its
 # manifest at the top (what a browser's "Load unpacked" expects).

@@ -40,9 +40,20 @@ struct AboutPane: View {
     }
 }
 
-/// The app's mark: a glowing ring around a soft gradient disc.
+/// The app's icon (drawn by Scripts/make-icon.swift); a stand-in in the
+/// same spirit when running outside the app bundle.
 struct AppMark: View {
     var body: some View {
+        if AppInfo.isBundled {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .accessibilityHidden(true)
+        } else {
+            standIn
+        }
+    }
+
+    private var standIn: some View {
         ZStack {
             Circle()
                 .fill(

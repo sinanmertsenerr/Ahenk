@@ -15,6 +15,9 @@
 	<string>Ahenk</string>
 	<key>CFBundleExecutable</key>
 	<string>Ahenk</string>
+	<!-- Drawn by Scripts/make-icon.swift; make-app.sh copies it into Resources. -->
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleInfoDictionaryVersion</key>

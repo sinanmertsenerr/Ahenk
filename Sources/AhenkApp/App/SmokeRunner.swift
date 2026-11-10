@@ -148,7 +148,14 @@ final class SmokeRunner {
             + ["backward.fill", "forward.fill", "play.fill", "pause.fill", "plus", "minus", "waveform", "app.dashed", "globe"])
         let missing = symbols.filter { NSImage(systemSymbolName: $0, accessibilityDescription: nil) == nil }
         guard missing.isEmpty else { throw SmokeFailure("Missing SF Symbols: \(missing.sorted().joined(separator: ", "))") }
-        return "shader sources and \(symbols.count) SF Symbols present"
+        var icon = "no app icon outside the app bundle"
+        if AppInfo.isBundled {
+            guard let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+                  let image = NSImage(contentsOf: url), image.representations.count >= 5
+            else { throw SmokeFailure("AppIcon.icns is missing from the app or has too few sizes") }
+            icon = "AppIcon.icns with \(image.representations.count) sizes"
+        }
+        return "shader sources, \(symbols.count) SF Symbols and \(icon) present"
     }
 
     private func checkAdapter() throws -> String {
