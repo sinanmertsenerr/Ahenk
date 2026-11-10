@@ -176,6 +176,7 @@ final class YouTubeMediaView: WallpaperMediaView {
         webView.allowsBackForwardNavigationGestures = false
         webView.allowsLinkPreview = false
         webView.setAccessibilityElement(false)
+        Self.keepPlayingWhenCovered(webView)
         canvas.addSubview(webView)
         self.webView = webView
         layoutCanvas()
@@ -186,6 +187,23 @@ final class YouTubeMediaView: WallpaperMediaView {
         }
         self.timeout = timeout
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.startTimeout, execute: timeout)
+    }
+
+    /// WebKit counts a page in a covered window (app windows over the whole
+    /// desktop, a full-screen Space) as hidden and pauses its silent video
+    /// by itself; coming back, the video was behind the song by as long as
+    /// it had been covered. The wallpaper runs under whatever is in front
+    /// of it (see `WallpaperController.isVisible`), so the web view is told
+    /// not to look at that. The setter is WebKit's own but not in its
+    /// public headers: without it the video pauses as before.
+    private static func keepPlayingWhenCovered(_ webView: WKWebView) {
+        let setter = NSSelectorFromString("_setWindowOcclusionDetectionEnabled:")
+        guard webView.responds(to: setter), let method = webView.method(for: setter) else {
+            log.info("This WebKit cannot keep a covered wallpaper video playing; it will pause while covered")
+            return
+        }
+        typealias Setter = @convention(c) (AnyObject, Selector, Bool) -> Void
+        unsafeBitCast(method, to: Setter.self)(webView, setter, false)
     }
 
     // MARK: Control
