@@ -86,14 +86,30 @@ public final class RecentlyPlayedStore: Sendable {
     public func record(_ track: Track, bundleIdentifier: String?, at date: Date) {
         guard !track.title.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         let update = state.withLock { state -> ([RecentlyPlayedItem], [AsyncStream<[RecentlyPlayedItem]>.Continuation])? in
+            if let top = state.items.first, top.track.source != .otherApp, track.source == .otherApp, TrackMatching.sameSong(top.track, track) {
+                // Already on top from the music app: a browser tab playing
+                // the same song changes nothing.
+                return nil
+            }
             if let top = state.items.first, top.track.isSameSong(as: track) {
                 // Fill in details that arrived later (album, duration, cover URL).
                 guard top.track != track, Self.isRicher(track, than: top.track) else { return nil }
                 state.items[0].track = track
                 return (state.items, Array(state.continuations.values))
             }
-            state.items.removeAll { $0.track.isSameSong(as: track) }
-            state.items.insert(RecentlyPlayedItem(track: track, bundleIdentifier: bundleIdentifier, playedAt: date), at: 0)
+            // The same song heard elsewhere (Spotify, then a browser tab)
+            // is one row: the music app's entry is kept, because it can be
+            // played again from the list.
+            var entry = RecentlyPlayedItem(track: track, bundleIdentifier: bundleIdentifier, playedAt: date)
+            if track.source == .otherApp,
+               let known = state.items.first(where: { $0.track.source != .otherApp && TrackMatching.sameSong($0.track, track) }) {
+                entry = RecentlyPlayedItem(track: known.track, bundleIdentifier: known.bundleIdentifier, playedAt: date)
+            }
+            state.items.removeAll { item in
+                item.track.isSameSong(as: track)
+                    || ((item.track.source == .otherApp || track.source == .otherApp) && TrackMatching.sameSong(item.track, track))
+            }
+            state.items.insert(entry, at: 0)
             if state.items.count > Self.capacity { state.items.removeLast(state.items.count - Self.capacity) }
             return (state.items, Array(state.continuations.values))
         }
