@@ -223,18 +223,7 @@ final class YouTubeMediaView: WallpaperMediaView {
     override func seek(to seconds: TimeInterval) {
         guard seconds.isFinite else { return }
         start = max(0, seconds)
-        // A jump lands at normal speed.
-        if rate != 1 {
-            noteRate(1)
-            run("window.ahenk && window.ahenk.setRate(1)")
-        }
         run("window.ahenk && window.ahenk.seek(\(String(format: "%.2f", start)))")
-    }
-
-    override func setRate(_ rate: Double) {
-        guard rate != self.rate else { return }
-        noteRate(rate)
-        run("window.ahenk && window.ahenk.setRate(\(String(format: "%.2f", rate)))")
     }
 
     override func setLoops(_ loops: Bool) {

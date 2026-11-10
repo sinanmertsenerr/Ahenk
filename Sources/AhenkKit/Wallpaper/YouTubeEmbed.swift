@@ -98,7 +98,6 @@ public enum YouTubeEmbed {
             play: function () { if (ready) { player.mute(); player.playVideo(); } },
             pause: function () { if (ready) player.pauseVideo(); },
             seek: function (seconds) { if (ready) player.seekTo(seconds, true); },
-            setRate: function (rate) { if (ready) player.setPlaybackRate(rate); },
             setLoops: function (value) { loops = !!value; },
             status: function () {
               return ready ? { time: player.getCurrentTime(), duration: player.getDuration(), state: player.getPlayerState(), muted: player.isMuted() } : null;

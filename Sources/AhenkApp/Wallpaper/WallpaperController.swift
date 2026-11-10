@@ -997,7 +997,8 @@ final class WallpaperController {
     }
 
     /// While a following video shows and the song plays, compare the two
-    /// every few seconds (and at once after a seek or a resume).
+    /// every few seconds (and at once after a seek or a resume). The video
+    /// always plays at its own speed: only a real gap moves it.
     private func updateSync() {
         let following = screens.values.contains { screen in
             guard let front = screen.front else { return false }
@@ -1030,19 +1031,14 @@ final class WallpaperController {
             let duration = view.candidate.duration
             view.position { time, length in
                 guard let time else { return }
-                let song = snapshot.elapsed(at: Date())
-                let off = String(format: "%+.1f", time - song)
-                switch VideoSync.step(songPosition: song, videoPosition: time, videoDuration: length ?? duration, catchingUp: view.rate != 1) {
-                case .hold:
-                    if view.rate != 1 { Self.log.info("The song's video is in step again (\(off) s)") }
-                    view.setRate(1)
-                case .rate(let rate):
-                    if view.rate != rate { Self.log.info("The song's video was \(off) s off; catching up at \(rate)\u{00D7}") }
-                    view.setRate(rate)
-                case .jump(let target):
-                    Self.log.info("The song's video was \(off) s off; moved to \(String(format: "%.1f", target)) s")
-                    view.seek(to: target)
-                }
+                let now = Date()
+                let song = snapshot.elapsed(at: now)
+                guard let target = VideoSync.correction(songPosition: song, videoPosition: time, videoDuration: length ?? duration) else { return }
+                // The player is still settling after the last jump.
+                if let last = view.lastJump, now.timeIntervalSince(last) < VideoSync.settleTime { return }
+                view.lastJump = now
+                Self.log.info("The song's video was \(String(format: "%+.1f", time - song)) s off; moved to \(String(format: "%.1f", target)) s")
+                view.seek(to: target)
             }
         }
     }

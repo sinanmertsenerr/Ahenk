@@ -324,18 +324,17 @@ struct VideoSyncTests {
     func corrections() {
         #expect(VideoSync.startPosition(songPosition: 61, lead: 1.5, videoDuration: 230) == 62.5)
         #expect(VideoSync.startPosition(songPosition: 229.5, lead: 1.5, videoDuration: 230) == 229)
+        // A little off either way: left alone, at the video's own speed.
         #expect(VideoSync.correction(songPosition: 80, videoPosition: 79.5, videoDuration: 230) == nil)
-        #expect(VideoSync.correction(songPosition: 80, videoPosition: 70, videoDuration: 230) == 80)
+        #expect(VideoSync.correction(songPosition: 80, videoPosition: 78.6, videoDuration: 230) == nil)
+        #expect(VideoSync.correction(songPosition: 80, videoPosition: 81.4, videoDuration: 230) == nil)
+        // Far off: a jump ahead of the song, never past the last second.
+        #expect(VideoSync.correction(songPosition: 80, videoPosition: 70, videoDuration: 230) == 80.9)
+        #expect(VideoSync.correction(songPosition: 80, videoPosition: 82, videoDuration: 230) == 80.9)
+        #expect(VideoSync.correction(songPosition: 80, videoPosition: 70, videoDuration: nil) == 80.9)
+        #expect(VideoSync.correction(songPosition: 228.8, videoPosition: 200, videoDuration: 230) == 229)
         #expect(VideoSync.correction(songPosition: 229.8, videoPosition: 200, videoDuration: 230) == nil, "past the video's end it holds")
         #expect(VideoSync.correction(songPosition: 80, videoPosition: .nan, videoDuration: 230) == nil)
-        // A little behind: faster, until it has caught up; far off: a jump ahead of the song.
-        #expect(VideoSync.step(songPosition: 80, videoPosition: 79.9, videoDuration: 230, catchingUp: false) == .hold)
-        #expect(VideoSync.step(songPosition: 80, videoPosition: 78.6, videoDuration: 230, catchingUp: false) == .rate(VideoSync.fast))
-        #expect(VideoSync.step(songPosition: 80, videoPosition: 80.8, videoDuration: 230, catchingUp: false) == .rate(VideoSync.slow))
-        #expect(VideoSync.step(songPosition: 80, videoPosition: 79.8, videoDuration: 230, catchingUp: true) == .rate(VideoSync.fast), "keeps going until close")
-        #expect(VideoSync.step(songPosition: 80, videoPosition: 79.95, videoDuration: 230, catchingUp: true) == .hold)
-        #expect(VideoSync.step(songPosition: 80, videoPosition: 60, videoDuration: 230, catchingUp: false) == .jump(80.9))
-        #expect(VideoSync.step(songPosition: 229.8, videoPosition: 200, videoDuration: 230, catchingUp: false) == .hold)
     }
 }
 

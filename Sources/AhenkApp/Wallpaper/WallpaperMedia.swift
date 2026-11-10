@@ -49,12 +49,8 @@ class WallpaperMediaView: NSView {
     func setPlaying(_ playing: Bool) {}
     /// Jumps to `seconds` (the song's own video, in step with the song).
     func seek(to seconds: TimeInterval) {}
-    /// Plays faster or slower than normal for a while (catching up with
-    /// the song); media that cannot keeps its speed.
-    func setRate(_ rate: Double) {}
-    /// The speed set last.
-    private(set) var rate = 1.0
-    func noteRate(_ rate: Double) { self.rate = rate }
+    /// When the controller last moved it to the song's position.
+    var lastJump: Date?
     /// Loops on its own, or holds its last frame at the end.
     func setLoops(_ loops: Bool) {}
     /// The current position and length, when the media knows them.
