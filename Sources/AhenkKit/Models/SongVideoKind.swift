@@ -32,3 +32,14 @@ public enum SongVideoKind: String, Codable, Sendable, CaseIterable {
         self == .officialVideo || self == .userVideo
     }
 }
+
+extension NowPlayingSnapshot {
+    /// A music video on YouTube or YouTube Music: moving pictures, as the
+    /// page says; on YouTube itself, anything the page does not call a
+    /// still. A video is its own recording of the song (an intro, a scene
+    /// in the middle, another length), where an art track is the album's.
+    public var isMusicVideo: Bool {
+        guard track.source == .youtube || track.source == .youtubeMusic else { return false }
+        return songVideoKind?.isMovingPicture ?? (track.source == .youtube)
+    }
+}

@@ -58,8 +58,17 @@ public final class LyricsFinder: Sendable {
         "choice\u{1}" + query.cacheKey
     }
 
-    public func find(_ query: LyricsQuery, onProvisional: (@Sendable (LyricsResponse) async -> Void)? = nil) async -> Found {
+    /// - Parameter otherwise: other ways to ask about the same song, tried
+    ///   in order when the song's own metadata finds no lyrics (a music
+    ///   video asked about as the song it plays, `LyricsQuery.songsOfVideo`).
+    ///   What they find was timed for another recording: nothing is proved
+    ///   about this one, so the timing stays open to correction.
+    public func find(
+        _ query: LyricsQuery, otherwise: [LyricsQuery] = [], onProvisional: (@Sendable (LyricsResponse) async -> Void)? = nil
+    ) async -> Found {
         let key = query.cacheKey
+        // A miss without the other ways says nothing about a lookup with them.
+        let missKey = otherwise.isEmpty ? key : key + "\u{1}otherwise"
         if let choice = songs.entry(for: key)?.choice {
             if let stored = await cache?.load(Self.choiceKey(query)) {
                 return Found(response: stored, origin: .choice, allFailed: false, choice: choice)
@@ -80,16 +89,27 @@ public final class LyricsFinder: Sendable {
             return Found(response: stored, origin: .cache, allFailed: false, choice: nil)
         }
         let now = clock()
-        if let missed = misses.withLock({ $0[key] }), now.timeIntervalSince(missed) < Self.missMemory {
+        if let missed = misses.withLock({ $0[missKey] }), now.timeIntervalSince(missed) < Self.missMemory {
             return Found(response: .none, origin: .recentMiss, allFailed: false, choice: nil)
         }
-        let lookup = await chain.fetch(query, onProvisional: onProvisional)
+        var lookup = await chain.fetch(query, onProvisional: onProvisional)
+        if !lookup.response.result.hasLyrics {
+            for other in otherwise {
+                let found = await chain.fetch(other)
+                if found.response.result.hasLyrics {
+                    Self.log.info("Nothing under the video's own title and length; found as the song it plays (\(found.response.source))")
+                    lookup = LyricsLookup(response: LyricsResponse(result: found.response.result, source: found.response.source, timingAuthority: .unverified))
+                    break
+                }
+                lookup.allFailed = lookup.allFailed && found.allFailed
+            }
+        }
         if lookup.response.result.hasLyrics {
             await cache?.store(lookup.response, for: key)
-            misses.withLock { $0[key] = nil }
+            misses.withLock { $0[missKey] = nil }
         } else if !lookup.allFailed {
             misses.withLock { misses in
-                misses[key] = now
+                misses[missKey] = now
                 if misses.count > 500 {
                     misses = misses.filter { now.timeIntervalSince($0.value) < Self.missMemory }
                 }

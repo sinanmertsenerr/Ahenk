@@ -10,13 +10,18 @@ public struct LyricsQuery: Sendable, Equatable, Hashable {
     /// `spotify:track:`), when the source exposes it. Unlike title and
     /// artist, it names the very master whose timing Spotify plays.
     public var spotifyTrackID: String?
+    /// The length is another recording's (a music video's, asked about as
+    /// the song it plays): lyrics of any length are taken, the nearest
+    /// first.
+    public var anyLength = false
 
-    public init(title: String, artist: String, album: String? = nil, duration: TimeInterval? = nil, spotifyTrackID: String? = nil) {
+    public init(title: String, artist: String, album: String? = nil, duration: TimeInterval? = nil, spotifyTrackID: String? = nil, anyLength: Bool = false) {
         self.title = title
         self.artist = artist
         self.album = album
         self.duration = duration
         self.spotifyTrackID = Self.normalizedSpotifyTrackID(spotifyTrackID)
+        self.anyLength = anyLength
     }
 
     public init(track: Track) {
@@ -54,8 +59,64 @@ public struct LyricsQuery: Sendable, Equatable, Hashable {
             artist: Self.cleanArtist(artist),
             album: album.map(Self.cleanArtist),
             duration: duration,
-            spotifyTrackID: spotifyTrackID
+            spotifyTrackID: spotifyTrackID,
+            anyLength: anyLength
         )
+    }
+
+    /// A music video asked about as the song it plays, for when its own
+    /// title and length find nothing: the catalogs file the album's
+    /// recording, under the song's plain title, one of its artists and
+    /// another length (a video has an intro). First with the artists as
+    /// given, then with each of them alone (three at most).
+    public var songsOfVideo: [LyricsQuery] {
+        let song = Self.songTitle(ofVideo: title, artist: artist)
+        let artists = Self.cleanArtist(artist)
+        var names = [artists]
+        for part in Self.artistParts(artists).prefix(3) where !names.contains(part) { names.append(part) }
+        return names.map { LyricsQuery(title: song, artist: $0, duration: duration, anyLength: true) }
+    }
+
+    /// The names in an artist credit, as written: "A, B ve C", "A & B",
+    /// "A x B", "A feat. B". (A band may be called "A ve B": the whole
+    /// credit is always asked about first.)
+    public static func artistParts(_ artist: String) -> [String] {
+        artist.replacingOccurrences(
+            of: #"\s*(?:,|&|;|/|\+|\s(?:ve|and|x|feat\.?|ft\.?|featuring|with|vs\.?)\s)\s*"#, with: "\u{1F}",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        .split(separator: "\u{1F}")
+        .map { $0.trimmingCharacters(in: .whitespaces) }
+        .filter { !$0.isEmpty }
+    }
+
+    /// The song's title in a video's: what follows a bar is the channel's
+    /// decoration, brackets and "Official Music Video" say what kind of
+    /// upload it is, and "Artist - Title" (or "Title - Artist") names the
+    /// artist the page already gives.
+    /// "Tin Orchard - Paper Lanterns | Official Music Video" → "Paper Lanterns".
+    public static func songTitle(ofVideo title: String, artist: String) -> String {
+        var text = title.components(separatedBy: " | ").first ?? title
+        text = cleanTitle(text)
+        text = text.replacingOccurrences(
+            of: #"\s*[-–:]?\s*(official\s+(music\s+)?(video|audio|clip|mv)|music\s+video|lyrics?\s+video|video\s+klip)\s*$"#, with: "",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        let names = Set(artistParts(artist).map(matchText).filter { !$0.isEmpty })
+        func isArtist(_ part: String) -> Bool {
+            !names.isDisjoint(with: artistParts(part).map(matchText))
+        }
+        let parts = text.replacingOccurrences(of: " – ", with: " - ").components(separatedBy: " - ")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        if parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty {
+            if isArtist(parts[0]) {
+                text = parts[1]
+            } else if isArtist(parts[1]) {
+                text = parts[0]
+            }
+        }
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? cleanTitle(title) : text
     }
 
     /// Accepts the forms Spotify uses (URI, URL, bare ID); anything else
@@ -107,7 +168,7 @@ public struct LyricsQuery: Sendable, Equatable, Hashable {
     /// Lengths of one recording differ by a fraction of a second between
     /// catalogs; LRCLIB documents ±2 s, and beyond that it is another edit.
     public func durationMatches(_ candidate: TimeInterval) -> Bool {
-        guard let duration, duration > 0, candidate > 0 else { return true }
+        guard !anyLength, let duration, duration > 0, candidate > 0 else { return true }
         return abs(duration - candidate) <= 2
     }
 }

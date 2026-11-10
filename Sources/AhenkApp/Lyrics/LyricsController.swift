@@ -93,6 +93,9 @@ final class LyricsController {
     /// The song (its cache key) whose lyrics the video's captions were
     /// tried on, so it happens once per load.
     @ObservationIgnored private var timedByCaptions: String?
+    /// The lookup for the song that plays also asked about it as a music
+    /// video's song (`LyricsQuery.songsOfVideo`).
+    @ObservationIgnored private var askedAsVideo = false
 
     /// Nudges move the timing this much (seconds).
     static let nudgeStep = 0.2
@@ -142,9 +145,11 @@ final class LyricsController {
     }
 
     /// The song and whether it is music: a change of either looks again.
+    /// (And whether it is a music video: the page may say so a moment
+    /// after the song changed, see `songChanged`.)
     private static func identity(_ snapshot: NowPlayingSnapshot) -> String {
         let track = snapshot.track
-        return "\(track.source.rawValue)|\(track.title)|\(track.artist)|\(track.album)|\(Int(track.duration.rounded()))|\(wantsLyrics(snapshot))"
+        return "\(track.source.rawValue)|\(track.title)|\(track.artist)|\(track.album)|\(Int(track.duration.rounded()))|\(wantsLyrics(snapshot))|\(snapshot.isMusicVideo)"
     }
 
     private static func wantsLyrics(_ snapshot: NowPlayingSnapshot) -> Bool {
@@ -160,6 +165,9 @@ final class LyricsController {
         let track = snapshot.track
         if let song, song.isSameSong(as: track), song.duration == track.duration || track.duration == 0, phase != .idle {
             self.song = track
+            // The page now says it is a music video, and the lookup that
+            // did not know found nothing: ask again, as a video.
+            if snapshot.isMusicVideo, !askedAsVideo, phase == .notFound || phase == .loading { load(track) }
             return
         }
         load(track)
@@ -203,9 +211,15 @@ final class LyricsController {
         if panel == .versions { panel = nil }
         manualOffset = finder.songs.entry(for: query.cacheKey)?.manualOffset
         autoOffset = nil
+        // A music video is another recording than the catalogs file: when
+        // its own title and length find nothing, it is asked about as the
+        // song it plays (the timing is then put right by listening).
+        let isVideo = nowPlaying.snapshot.map { $0.track.isSameSong(as: track) && $0.isMusicVideo } ?? false
+        askedAsVideo = isVideo
+        let otherwise = isVideo ? query.songsOfVideo : []
         let finder = self.finder
         task = Task { [weak self] in
-            let found = await finder.find(query) { [weak self] provisional in
+            let found = await finder.find(query, otherwise: otherwise) { [weak self] provisional in
                 await self?.apply(provisional, choice: nil, for: query, provisional: true)
             }
             guard let self, !Task.isCancelled, self.query == query else { return }
