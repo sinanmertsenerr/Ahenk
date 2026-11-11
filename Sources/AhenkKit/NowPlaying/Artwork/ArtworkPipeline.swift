@@ -3,10 +3,13 @@ import Foundation
 
 /// Which covers Ahenk may look up in public catalogs. A wrong cover is worse
 /// than a small one, so videos, podcasts and unknown content keep what their
-/// source gave.
+/// source gave. So does a music video (a clip) on YouTube or YouTube Music:
+/// it shows its own picture, and only a song played over its album cover
+/// gets the catalog's larger copy of that cover.
 public enum ArtworkPolicy {
-    public static func allowsCatalogLookup(source: MusicSource, kind: ContentKind) -> Bool {
-        switch source {
+    public static func allowsCatalogLookup(source: MusicSource, kind: ContentKind, isMusicVideo: Bool = false) -> Bool {
+        if isMusicVideo { return false }
+        return switch source {
         case .demo, .local: false
         case .youtube, .otherApp: kind == .music
         case .appleMusic, .spotify, .spotifyWeb, .youtubeMusic, .soundCloud, .amazonMusic, .deezer, .tidal:
@@ -107,13 +110,22 @@ public actor ArtworkPipeline: ArtworkProvider {
     static func requestKey(_ snapshot: NowPlayingSnapshot, pixelSize: Int) -> String {
         let artwork = snapshot.artworkIdentifier ?? snapshot.artworkData.map { "\($0.count)" } ?? "-"
         let url = snapshot.track.artworkURL?.absoluteString ?? "-"
-        return "\(coverKey(for: snapshot.track))|\(artwork)|\(url)|\(snapshot.contentKind.rawValue)@\(pixelSize)"
+        // The same video is a clip or a still once its page says which.
+        let video = snapshot.isMusicVideo ? "clip" : "song"
+        return "\(coverKey(for: snapshot.track))|\(artwork)|\(url)|\(snapshot.contentKind.rawValue)|\(video)@\(pixelSize)"
     }
 
     private func resolve(_ snapshot: NowPlayingSnapshot, pixelSize: Int) async -> Artwork? {
         let track = snapshot.track
         var best: Loaded?
-        if let data = snapshot.artworkData,
+        // A clip: its own picture, at the size YouTube keeps it (what the
+        // page hands over is often a small one).
+        for url in YouTubeSongs.clipPictureURLs(for: snapshot) where best == nil {
+            best = await load(url, pixelSize: pixelSize)
+        }
+        if best != nil {
+            // Found.
+        } else if let data = snapshot.artworkData,
            let decoded = ArtworkImageDecoder.decodeSquare(data, maxPixelSize: pixelSize) {
             best = Loaded(decoded: decoded, bytes: data, identity: "data:" + (snapshot.artworkIdentifier ?? ArtworkDigest.hex(of: data)))
         } else if let url = track.artworkURL {
@@ -125,7 +137,7 @@ public actor ArtworkPipeline: ArtworkProvider {
             if best == nil { best = await load(url, pixelSize: pixelSize) }
         }
         let wanted = Double(min(pixelSize, 600)) * Self.upgradeThreshold
-        if ArtworkPolicy.allowsCatalogLookup(source: track.source, kind: snapshot.contentKind),
+        if ArtworkPolicy.allowsCatalogLookup(source: track.source, kind: snapshot.contentKind, isMusicVideo: snapshot.isMusicVideo),
            Double(best?.decoded.sourcePixelSize ?? 0) < wanted,
            let url = await catalogURL(for: track),
            let found = await load(url, pixelSize: pixelSize),
@@ -140,7 +152,8 @@ public actor ArtworkPipeline: ArtworkProvider {
         guard let best else { return nil }
         if track.source != .demo, let disk {
             let key = Self.coverKey(for: track)
-            if !disk.contains(key) || snapshot.artworkData != nil {
+            // A clip's picture also replaces a cover kept from before the page said it was one.
+            if !disk.contains(key) || snapshot.artworkData != nil || snapshot.isMusicVideo {
                 disk.store(best.bytes, forKey: key)
             }
         }

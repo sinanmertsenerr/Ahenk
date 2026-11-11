@@ -31,6 +31,8 @@ const bridge = {
   heartbeat: null,
   lastError: null,
   appVersion: null,
+  /** The extension version the connected Ahenk carries, when it is newer than this one. */
+  newerVersion: null,
 };
 
 const settings = { basePort: P.DEFAULT_PORT, profile: null, loaded: null };
@@ -140,6 +142,7 @@ function opened(socket, port, welcome) {
   bridge.attempt = 0;
   bridge.lastError = null;
   bridge.appVersion = welcome.appVersion || null;
+  takeUpNewer(welcome.extensionVersion);
   const every = Math.max(5, Math.min(60, Number(welcome.heartbeat) || P.HEARTBEAT)) * 1000;
   clearInterval(bridge.heartbeat);
   bridge.heartbeat = setInterval(() => {
@@ -150,6 +153,38 @@ function opened(socket, port, welcome) {
     send(P.ping());
   }, every);
   send(P.tabs(reportedTabs()));
+}
+
+// MARK: A newer extension in Ahenk's folder
+
+/**
+ * Ahenk carries the extension in its own folder and says in its welcome
+ * which version that is. When it is newer than this one, the browser
+ * still runs the scripts it read before Ahenk was updated: the extension
+ * takes itself up again, which reads the folder afresh (loaded unpacked)
+ * or installs an update the store already has. Once per version: a
+ * browser that keeps a copy of its own comes back as old as before, and
+ * Ahenk then tells its user to reload the extension by hand.
+ */
+async function takeUpNewer(shipped) {
+  const own = ext.runtime.getManifest().version;
+  bridge.newerVersion = C.versionNewer(shipped, own) ? String(shipped) : null;
+  if (!bridge.newerVersion) return;
+  try {
+    const stored = await ext.storage.local.get(['reloadedFor']);
+    if (!C.takesUpNewer(shipped, own, stored.reloadedFor)) return;
+    await ext.storage.local.set({ reloadedFor: bridge.newerVersion });
+    if (typeof ext.runtime.requestUpdateCheck === 'function') {
+      try {
+        await ext.runtime.requestUpdateCheck();
+      } catch (_) {
+        // Not from a store, or asked too often.
+      }
+    }
+    ext.runtime.reload();
+  } catch (_) {
+    // Without storage the reload could repeat forever: left to the user.
+  }
 }
 
 function closed(socket) {
@@ -238,7 +273,7 @@ function bestTab(site) {
 }
 
 async function startJob(message) {
-  const request = { request: message.request, site: message.site, song: message.song, playlistId: message.playlistId, playlistUrl: message.playlistUrl, index: message.index, volume: message.volume };
+  const request = { request: message.request, site: message.site, song: message.song, playlistId: message.playlistId, playlistUrl: message.playlistUrl, index: message.index, volume: message.volume, from: message.from, seconds: message.seconds, videoId: message.videoId };
   let tabId = Number.isInteger(message.tabId) && tabs.has(message.tabId) ? message.tabId : bestTab(message.site);
   const job = { id: message.id, request, tabId, phase: 1, waiting: false, timer: null };
   jobs.set(job.id, job);
@@ -253,6 +288,8 @@ async function startJob(message) {
     let url = null;
     if (request.request === 'playPlaylist') url = request.playlistUrl || C.siteURL(request.site, 'home');
     else if (request.site === 'spotify' && C.spotifyTrackId(song.trackId || song.url || '')) url = C.siteURL('spotify', 'track', C.spotifyTrackId(song.trackId || song.url));
+    // A video the site knows by ID opens as that video, not as a search for its title.
+    else if ((request.site === 'youtube' || request.site === 'youtubeMusic') && C.youtubeVideoId(song.trackId || '')) url = C.siteURL(request.site, 'track', C.youtubeVideoId(song.trackId));
     else url = C.siteURL(request.site, 'search', C.searchQuery(song));
     if (!url) {
       finishJob(job.id, { ok: false, outcome: 'noTab' });
@@ -418,10 +455,13 @@ ext.runtime.onStartup.addListener(() => {
   connect();
 });
 
+let installedNow = false;
 ext.runtime.onInstalled.addListener(() => {
+  installedNow = true;
+  if (ext.storage.session) ext.storage.session.set({ tabsLookedAt: Date.now() }).catch(() => {});
   ensureAlarm();
   connect();
-  injectIntoOpenTabs();
+  injectIntoOpenTabs(false);
 });
 
 ext.storage.onChanged.addListener((changes, area) => {
@@ -431,10 +471,14 @@ ext.storage.onChanged.addListener((changes, area) => {
   reconnectNow();
 });
 
-/** Tabs open before the extension was installed get the scripts too (their
- *  page already registered its media handlers, so commands use the page's
- *  own buttons until it reloads). */
-async function injectIntoOpenTabs() {
+/** Tabs that were open before the extension was installed, updated or
+ *  reloaded get its scripts: a page that never had them (it registered its
+ *  media handlers already, so commands use its own buttons until it
+ *  reloads), and a page that holds the scripts of the extension before,
+ *  which step down for these (see page/engine.js and content/relay.js).
+ *  With `onlyUnheard`, only tabs no relay has spoken from: the background
+ *  woke up and a page's relay did not come back by itself. */
+async function injectIntoOpenTabs(onlyUnheard) {
   if (!ext.scripting || !ext.tabs.query) return;
   const manifest = ext.runtime.getManifest();
   const groups = manifest.content_scripts || [];
@@ -446,6 +490,9 @@ async function injectIntoOpenTabs() {
     return;
   }
   for (const tab of open) {
+    // A tab put to sleep has no page to take them.
+    if (tab.discarded) continue;
+    if (onlyUnheard && tabs.has(tab.id) && tabs.get(tab.id).port) continue;
     for (const group of groups) {
       try {
         await ext.scripting.executeScript({ target: { tabId: tab.id }, files: group.js, world: group.world === 'MAIN' ? 'MAIN' : 'ISOLATED' });
@@ -469,6 +516,7 @@ ext.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       port: bridge.port,
       basePort: settings.basePort,
       appVersion: bridge.appVersion,
+      newerVersion: bridge.newerVersion,
       lastError: bridge.lastError,
       tabs: reportedTabs().map((tab) => ({ site: tab.site, title: tab.title, artist: tab.artist, state: tab.state })),
     });
@@ -478,3 +526,19 @@ ext.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 ensureAlarm();
 connect();
+// A browser that does not announce a reload or an update (no onInstalled):
+// the pages' old relays cannot reach this background, so nothing is heard
+// from their tabs. Looked at once per load of the extension (the session's
+// storage is emptied with it, and kept while the background only sleeps);
+// relays that live come back within a moment.
+setTimeout(async () => {
+  if (installedNow || !ext.storage.session) return;
+  try {
+    const stored = await ext.storage.session.get(['tabsLookedAt']);
+    if (stored.tabsLookedAt) return;
+    await ext.storage.session.set({ tabsLookedAt: Date.now() });
+  } catch (_) {
+    return;
+  }
+  if (!installedNow) injectIntoOpenTabs(true);
+}, 5000);

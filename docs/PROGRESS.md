@@ -2658,3 +2658,154 @@ Then, the same night, after the user saw the lyrics of a video move only as the 
 Checks, in a worktree of the commit (another session's lyric lookup commit before it included): `./Scripts/test.sh`
 602/602 with the node tests (twice in the main tree before), `./Scripts/make-app.sh` signed, `./Scripts/smoke.sh`
 passed, build 202 installed with `./Scripts/install.sh --no-build`.
+
+Then, on 2026-11-11, for videos whose lyrics should stand before the singing starts, and for picks that the site
+held up:
+
+- **A video's sound is read ahead of the song** (extension 1.4.0: `lib/sound.js`, `page/hooks.js`, `page/engine.js`;
+  `BridgeRequest.Kind.sound`, `LyricsAutoSync`). YouTube's player hands its audio stream to the browser well before
+  it is heard; the page hooks keep a copy (a few megabytes, in the page only) and the engine decodes ten seconds of
+  it at 16 kHz when Ahenk asks, so whisper hears a video's words before they are sung instead of as they play.
+  Tried in a throwaway, muted test browser on two real videos: the shift found from the held sound was +9.0 s
+  against +8.9 s measured live, and +44.5 s against +44.5 s, each sure before the first sung line; a ten-second
+  window came back in under 0.1 s in one frame of about 430 kB. WebKit (the engine of the Search browser) hands the
+  hooks the same stream and decodes it in the page (80 s held 30 s into a song). The sound of an advertisement is
+  not given. Not seen live: the user's own browser, a seek, and the whole path in the installed app.
+- **A pick is shown in the site's own page** (`C.youtubeEndpoint`, `profile.show`, `showInPage`). A song picked in
+  Ahenk used to load the site's search page over the one that played: YouTube Music asked "Leave site?" in a browser
+  nobody looked at, and the loaded page could not start the song by itself (a browser lets a new page play only
+  after a click in it), so Ahenk said "press Play there". Now YouTube and YouTube Music are told to show the video,
+  the search or the playlist in place, the way a click on one of their own links does (`yt-navigate` on the app
+  element): nothing loads, what plays goes on until the pick starts, and the site has nothing to ask. A song the
+  site knows by ID is opened as that video; without an ID, or when the video is gone, the search is shown in place
+  and only a row that matches is waited for (rows of a search shown before stay until the new ones arrive). When
+  the page does not take the command (another site, or a changed one), the address is loaded as before, and for
+  three seconds after the engine says so the site's own `beforeunload` listeners are not reached
+  (`hooks.leaveQuietly`; the hooks' listener is the first one, capturing): the pick in Ahenk was the answer. Pages
+  the user leaves in the tab are asked about as ever.
+- **A video named "Artist - Song" counts as that artist's song** (`C.matchScore`). youtube.com results sit under
+  channel names of their own ("Artist - Song (Official Video)" by a label), which scored 0.35 and were refused, so
+  a search there found nothing. A title half that holds the wanted artist as whole words is now read as the
+  artist, a little under the artist's own upload.
+- **youtube.com's playlist page is read as it is drawn now** (`sites.youtube.playlists.rows`). Its rows are
+  `yt-lockup-view-model` elements today; the reader knew only the older ones, found none, and a playlist there
+  answered "not found". Both are read.
+
+Checks: `./Scripts/test.sh` 603/603 and 40/40 node tests; `./Scripts/bridge-e2e.sh` passed, and now fails when a
+pick loads a page or the mock site (which asks before leaving, like the real one) asks; `./Scripts/smoke.sh`
+passed. On the real sites in a throwaway, muted test Chromium with the unpacked extension and a stand-in for Ahenk:
+on music.youtube.com a pick by ID, a pick by search and a playlist each started in the same page with no question,
+and with the command blocked the page was loaded with no question (the same load without Ahenk was asked about);
+on www.youtube.com a pick by ID, a pick by search and a playlist (from its second row) started in the same page. In WebKit, off screen and muted: by ID and
+by search started in the same page, and a page loaded by the engine did not reach a later `beforeunload` listener
+while other loads did. Not seen: the "Leave site?" panel itself in WebKit (the test view never raised it), and the
+user's own browser.
+
+Then, the same afternoon, after the user's pick still loaded a page and stopped two seconds in, and a search with
+YouTube chosen listed no videos:
+
+- **Why the pick still failed.** The Search browser keeps a copy of an unpacked extension and runs that copy until
+  the extension is reloaded there. The in-page pick above was written after that copy was made, under the same
+  version (1.4.0), so Ahenk's "an older version" notice had nothing to go by. The old scripts loaded the search page
+  over the tab; WebKit then stops a video that was started without a click in its page (seen in the log: 2 to 5 s of
+  sound after each Play).
+- **A change to the extension needs a higher version** (extension 1.5.0; `Tests/Extension/fingerprint.mjs`,
+  `version.test.mjs`). The extension's files are recorded as one number with their version; the tests fail when the
+  files change and the version does not, and the record is only written for a higher version.
+- **An older extension takes itself up again** (`BridgeWelcome.extensionVersion`, `takeUpNewer` in `background.js`).
+  Ahenk says in its welcome which extension it carries; an older one reloads itself, once per version, which reads
+  the folder afresh in a browser that runs it from there. A browser that keeps a copy (Search) comes back as old:
+  Settings and the onboarding say so as before, and now the player does too when a pick is shown but not started,
+  not found or failed ("The browser's Ahenk extension is out of date…"), and the log notes it at the hello. The
+  popup says it as well.
+- **A reloaded or updated extension takes over the pages that are open** (`engine.js` `retire`, `relay.js`
+  `retire`, `injectIntoOpenTabs`). The page-world scripts and the relay step down for the ones the new extension
+  puts into the page (on `onInstalled`, or once per load of the extension for tabs nothing was heard from), so a tab
+  that plays is not reloaded and not lost. The hooks stay the page's own (they hold what the site registered). A
+  page with scripts from before 1.5.0 cannot hand over and keeps them until it loads again.
+- **With YouTube as the source, search lists YouTube's videos** (`YouTubeSongs`, `DesktopPlayerModel.queryChanged`).
+  Search asked Apple's catalog whatever the source, so a clip the catalog does not have was never listed. Now
+  YouTube's own videos are the songs ("Videos"), each opened by its ID (the very video, in place), with the
+  catalog's artists and albums beside them; without an answer from YouTube the catalog's results stand. A search
+  that was typed on no longer falls through to the results page (`YouTubeVideoSearch`), and a new tab for a video
+  known by ID opens on that video.
+- The bridge logs how a pick was answered (started, shown, not found, failed).
+
+Checks: `./Scripts/test.sh` 607/607 and 43 node tests; `./Scripts/bridge-e2e.sh` passed with the new
+`takeover.mjs` (the scripts come into the open mock page again, one answer per command and pick, no page loaded; an
+extension told of a newer one reloads itself); `./Scripts/smoke.sh` passed; build 203 installed. In the user's
+Search (WebKit), with the extension reloaded from the app's folder: on music.youtube.com a pick by title started in
+the same page and played on (29 s watched); reloading the extension again replaced the engine in that page without
+loading it and the tab stayed with Ahenk; on www.youtube.com a video picked by ID started in the same page. Not
+seen: the videos in the player's own search list (the request and its reading were tried against YouTube outside
+the app), a pick into a new tab, and the self-reload in a browser that runs the extension from the folder (the test
+browser does not bring back an extension named on its command line).
+
+Then, the same evening, on the user's word that the albums beside the cover serve nothing and that a clip showed the
+album's cover:
+
+- **The cover flow is gone; the large player shows the cover of what plays** (`PlayingCoverView`; `CoverFlowView`
+  and `CoverFlowGeometry` removed, the row is 214 points high instead of 268). The artist's albums are still looked
+  up for the bar's "album" and "artist" pages. Settings › Player names the row "The playing song's cover".
+- **A clip shows its own picture** (`YouTubeSongs.clipPictureURLs`, `ArtworkPolicy`, `ArtworkPipeline`). A music
+  video on YouTube or YouTube Music used to get the catalog's album cover when the page's picture was small. Now it
+  gets the video's own picture (1280×720 where YouTube has one, else 320×180), as wide as the clip in the player
+  and cut square elsewhere; a song played over its album cover keeps the cover and its larger catalog copy.
+- **Search asks the source picks play in** (`SourceSongSearching`, `SourceSearch`; `NowPlayingServices.songSearch`).
+  YouTube (videos), YouTube Music (its "Songs" results), Spotify and its web player (the search page Ahenk already
+  read for track IDs, now with album, length and cover; 20 rows; a search typed on is no longer read) and Deezer
+  (its public API) list their own songs, each picked by its own ID. Apple Music lists Apple's catalog as before;
+  SoundCloud, Amazon Music and TIDAL have no search Ahenk can ask without an account and list the catalog too. The
+  catalog's artists and albums stay beside the songs.
+
+Checks: `./Scripts/test.sh` 607/607, `./Scripts/smoke.sh` passed, build installed; the player's row drawn offscreen
+with the demo song. Spotify's row reading was tried against the live page in a private browser tab (20 rows with
+album, cover and length) and Deezer's API with curl. Not seen: any of the new lists in the running app, and a clip's
+wide picture in the player.
+
+Then, the same evening, on the user's word that a song played as sound should show its clip in step with it, as
+fast and as unnoticeably as YouTube Music switches between a song and its video, and that the cover above the
+search field should go (the song and its cover are beside the lyrics already):
+
+- **The row above the search field is gone** (`PlayingCoverView` and the setting removed; `PlayerLayoutState` has
+  no `showsAlbums`). The large player is the search field and the bar, with a row for messages; pages open above
+  as before. This replaces the cover row of the note before.
+- **The wallpaper's clip follows the song at the song's place in it** (`SongClip`, `SongClipMap`, `SongClipMaps`,
+  `SongClipTiming`, `WallpaperController`). A clip used to follow the song only when the two were about as long,
+  from the same position; any other clip looped beside it. Now the song's place in the clip is found and kept:
+  1. *YouTube Music's own pairing* (extension 1.6.0: request `clip`, `C.clipSegments`, `sites.youtubeMusic.clip`).
+     The site keeps, for a listener who may switch between a song and its video, the stretches the two share. It is
+     asked the way the site asks itself (the app element's network manager, `/next`) from a signed-in tab; without
+     a signed-in listener the answer carries no pairing (tried with curl). A pairing with a song of another length
+     than the one that plays is not used.
+  2. *Heard* (`SongClipOffsetFinder`, `YouTubeMediaView.sound`): the embedded player holds its audio stream with
+     the extension's own `lib/sound.js` and `page/hooks.js` (which now also run on youtube-nocookie.com), whisper
+     reads it ten seconds at a time and `LyricShiftEstimator` looks the words up in the song's timed lyrics.
+  A clip with a known place is held within 0.6 s of the song (1.5 s before), and jumps are aimed with a lead
+  learned from where the last one landed (`VideoSync.adjustedLead`).
+- `--smoke --smoke-only clipLive --wallpaper-song "Title|Artist|seconds"` hears one named song's clip in a window
+  nobody sees.
+
+Checks: `./Scripts/test.sh` 614/614 with the node tests, `./Scripts/smoke.sh` and `./Scripts/bridge-e2e.sh`
+passed, build installed, extension 1.6.0 reloaded in the user's Search. Live: `clipLive` for one song heard +40.4 s
+in 29 s (7 lines, 24 words); the same clip asked through the engine in the user's YouTube Music tab answered
+41.0 s against 0.613 s (+40.39 s) in 1.9 s. Not seen: the wallpaper moving a clip by a map (no song played as sound
+with a clip of another length while this was written), a clip of several stretches, and how close the learned
+lead lands.
+
+Then, at once, because half a minute before a clip is in step is far too long:
+
+- **A clip starts at the song's likely place and is put right within seconds** (`SongClip.guess`,
+  `SongClip.possibleOffsets`, `LyricShift.isLikely`, `LyricShiftEstimator.estimate(within:)`,
+  `SongClipOffsetFinder`). Hearing used to read the clip from its start, ten seconds after ten, through an intro
+  nobody sings in. Now the clip follows the song from its first frame at a guess from the two lengths (what a
+  longer clip has more is taken for an intro), so what its player holds is what is sung about now; the first
+  window (12 s) is read as soon as it is held, votes for offsets the lengths rule out are left out, and an answer
+  that is likely but not yet sure moves the clip at once while more is heard. Only a sure answer is kept.
+  `hooks.sound.describe()` says what is held when the player gives no sound (extension 1.6.1).
+
+Checks: `./Scripts/test.sh` 616/616, smoke and `bridge-e2e.sh` passed, installed, extension 1.6.1 reloaded in the
+user's Search. `clipLive` on three songs: a clip with a 40 s intro was moved to +40.4 s after 5.2 s (guessed
++45.0 s; sure after 12.8 s; 29 s before); two clips as long as their songs were sure of +0.0 s after 3.6 s and
+5.3 s. Seen once and not explained: the player stopped giving its sound some 30 s in (a held stream whose start
+could not be told); the next run read on. Not seen: any of it on the wallpaper itself.

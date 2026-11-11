@@ -31,7 +31,8 @@ public enum BridgeProtocol {
     public static let helloTimeout: TimeInterval = 5
     /// Ports tried from the base port up (the extension tries the same ones).
     public static let portCount = 4
-    /// Larger frames are refused (lyrics and playlists stay far below).
+    /// Larger frames are refused (lyrics and playlists stay far below; ten
+    /// seconds of a player's sound are about 430 kB).
     public static let maximumMessageSize = 1 << 20
 
     /// The ports Ahenk may listen on, in the order both sides try them.
@@ -120,18 +121,26 @@ public struct BridgeWelcome: Codable, Equatable, Sendable {
     public var protocolVersion: Int
     public var app: String
     public var appVersion: String
+    /// The extension this Ahenk carries in its folder. An older extension
+    /// takes itself up again when it hears of a newer one (see
+    /// `takeUpNewer` in Extension/background.js).
+    public var extensionVersion: String
     /// Seconds between the extension's pings.
     public var heartbeat: Double
 
-    public init(protocolVersion: Int, app: String = "Ahenk", appVersion: String, heartbeat: Double = BridgeProtocol.heartbeatInterval) {
+    public init(
+        protocolVersion: Int, app: String = "Ahenk", appVersion: String,
+        extensionVersion: String = ExtensionVersion.shipped.description, heartbeat: Double = BridgeProtocol.heartbeatInterval
+    ) {
         self.protocolVersion = protocolVersion
         self.app = app
         self.appVersion = appVersion
+        self.extensionVersion = extensionVersion
         self.heartbeat = heartbeat
     }
 
     enum CodingKeys: String, CodingKey {
-        case protocolVersion = "protocol", app, appVersion, heartbeat
+        case protocolVersion = "protocol", app, appVersion, extensionVersion, heartbeat
     }
 
     public init(from decoder: Decoder) throws {
@@ -139,6 +148,7 @@ public struct BridgeWelcome: Codable, Equatable, Sendable {
         protocolVersion = c.lenient(.protocolVersion, 0)
         app = c.lenient(.app, "")
         appVersion = c.lenient(.appVersion, "")
+        extensionVersion = c.lenient(.extensionVersion, "")
         heartbeat = c.lenient(.heartbeat, BridgeProtocol.heartbeatInterval)
     }
 }
@@ -154,6 +164,12 @@ public enum BridgeCapability: String, Codable, CaseIterable, Sendable {
     case volume
     /// Play faster or slower (the tab's media element takes a rate).
     case rate
+    /// The tab can hand over the sound its player holds ahead of what it
+    /// plays (`BridgeRequest.Kind.sound`).
+    case sound
+    /// The site can say where a song falls in its music video
+    /// (`BridgeRequest.Kind.clip`).
+    case clip
 }
 
 /// One tab that plays or paused media on a music site.
@@ -463,6 +479,12 @@ public struct BridgeRequest: Codable, Equatable, Sendable {
         case removeQueueItem
         case volume
         case setVolume
+        /// `seconds` of the sound the tab's player holds for `song`, from
+        /// `from` seconds of it (or from where what it holds begins).
+        case sound
+        /// Where a song falls in its music video `videoID`, as the site
+        /// itself pairs the two.
+        case clip
     }
 
     public var id: String
@@ -475,11 +497,18 @@ public struct BridgeRequest: Codable, Equatable, Sendable {
     public var playlistURL: String?
     public var index: Int?
     public var volume: Double?
+    /// `sound`: seconds of the song where the stretch begins, and its length.
+    public var from: Double?
+    public var seconds: Double?
+    /// `clip`: the music video asked about.
+    public var videoID: String?
 
     public init(
         id: String, kind: Kind, site: String, tabID: Int? = nil, song: BridgeSong? = nil, playlistID: String? = nil,
-        playlistURL: String? = nil, index: Int? = nil, volume: Double? = nil
+        playlistURL: String? = nil, index: Int? = nil, volume: Double? = nil, from: Double? = nil, seconds: Double? = nil,
+        videoID: String? = nil
     ) {
+        self.videoID = videoID
         self.id = id
         self.kind = kind
         self.site = site
@@ -489,11 +518,135 @@ public struct BridgeRequest: Codable, Equatable, Sendable {
         self.playlistURL = playlistURL
         self.index = index
         self.volume = volume
+        self.from = from
+        self.seconds = seconds
     }
 
     enum CodingKeys: String, CodingKey {
         case id, kind = "request", site, tabID = "tabId", song, playlistID = "playlistId", playlistURL = "playlistUrl", index, volume
+        case from, seconds, videoID = "videoId"
     }
+}
+
+/// Where a song falls in its music video, as YouTube Music pairs the two
+/// for a listener who may switch between them: the stretches they share.
+public struct BridgeClip: Codable, Equatable, Sendable {
+    public struct Segment: Codable, Equatable, Sendable {
+        /// Seconds of the video and of the song where the stretch begins,
+        /// and how long it is.
+        public var video: Double
+        public var song: Double
+        public var duration: Double
+
+        public init(video: Double, song: Double, duration: Double) {
+            self.video = video
+            self.song = song
+            self.duration = duration
+        }
+    }
+
+    public var videoID: String
+    /// The song the site pairs the video with (its own video ID there),
+    /// and that song's length when the site said it.
+    public var songID: String?
+    public var songSeconds: Double?
+    public var segments: [Segment]
+
+    public init(videoID: String, songID: String? = nil, songSeconds: Double? = nil, segments: [Segment]) {
+        self.videoID = videoID
+        self.songID = songID
+        self.songSeconds = songSeconds
+        self.segments = segments
+    }
+
+    enum CodingKeys: String, CodingKey { case videoID = "videoId", songID = "songId", songSeconds, segments }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        videoID = c.lenient(.videoID, "")
+        songID = c.lenientOptional(.songID)
+        songSeconds = (c.lenientOptional(.songSeconds) as Double?).flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+        segments = c.lenientArray(.segments, []).filter { segment in
+            [segment.video, segment.song, segment.duration].allSatisfy(\.isFinite) && segment.video >= 0 && segment.song >= 0 && segment.duration > 0
+        }
+    }
+}
+
+/// A stretch of the sound a tab's player holds ahead of what it plays, as
+/// the extension copied it from the player's own stream: 16-bit mono PCM in
+/// base64. Without `samples` the answer only says how far the player holds
+/// (`heldFrom`…`heldUntil`): it has no more yet.
+public struct BridgeSound: Codable, Equatable, Sendable {
+    /// Seconds of the song the held stream begins and ends at.
+    public var heldFrom: Double?
+    public var heldUntil: Double?
+    /// Seconds of the song at the first sample.
+    public var start: Double?
+    /// Samples a second.
+    public var rate: Double?
+    public var samples: String?
+
+    /// The most sound one answer may carry (and the fewest samples worth
+    /// reading).
+    public static let maximumSeconds = 15.0
+    public static let rateRange: ClosedRange<Double> = 8_000...48_000
+
+    public init(heldFrom: Double? = nil, heldUntil: Double? = nil, start: Double? = nil, rate: Double? = nil, samples: String? = nil) {
+        self.heldFrom = heldFrom
+        self.heldUntil = heldUntil
+        self.start = start
+        self.rate = rate
+        self.samples = samples
+    }
+
+    enum CodingKeys: String, CodingKey { case heldFrom = "from", heldUntil = "until", start, rate, samples }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        heldFrom = Self.time(c.lenientOptional(.heldFrom))
+        heldUntil = Self.time(c.lenientOptional(.heldUntil))
+        start = Self.time(c.lenientOptional(.start))
+        rate = (c.lenientOptional(.rate) as Double?).flatMap { $0.isFinite && Self.rateRange.contains($0) ? $0 : nil }
+        samples = (c.lenientOptional(.samples) as String?).flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    private static func time(_ value: Double?) -> Double? {
+        guard let value, value.isFinite, value >= 0 else { return nil }
+        return value
+    }
+
+    /// The stretch as samples, when the answer carries one that can be
+    /// read: a start, a rate, and whole 16-bit samples of at least a
+    /// second and no more than an answer may carry.
+    public var window: HeldSound? {
+        guard let start, let rate, let samples, let data = Data(base64Encoded: samples), data.count.isMultiple(of: 2) else { return nil }
+        let count = data.count / 2
+        guard Double(count) >= rate, Double(count) <= rate * (Self.maximumSeconds + 1) else { return nil }
+        var floats = [Float](repeating: 0, count: count)
+        data.withUnsafeBytes { raw in
+            for index in 0..<count {
+                let value = Int16(littleEndian: raw.loadUnaligned(fromByteOffset: index * 2, as: Int16.self))
+                floats[index] = Float(value) / 32_768
+            }
+        }
+        return HeldSound(start: start, sampleRate: rate, samples: floats)
+    }
+}
+
+/// Sound a player held before it played: mono samples from `start` seconds
+/// of the song.
+public struct HeldSound: Equatable, Sendable {
+    public var start: Double
+    public var sampleRate: Double
+    public var samples: [Float]
+
+    public init(start: Double, sampleRate: Double, samples: [Float]) {
+        self.start = start
+        self.sampleRate = sampleRate
+        self.samples = samples
+    }
+
+    public var seconds: Double { sampleRate > 0 ? Double(samples.count) / sampleRate : 0 }
 }
 
 /// The answer to a command or a request.
@@ -520,11 +673,15 @@ public struct BridgeResult: Codable, Equatable, Sendable {
     public var songs: [BridgeSong]?
     public var queue: [BridgeQueueItem]?
     public var volume: Double?
+    public var sound: BridgeSound?
+    public var clip: BridgeClip?
 
     public init(
         id: String, ok: Bool, outcome: Outcome? = nil, error: String? = nil, tabID: Int? = nil, playlists: [BridgePlaylist]? = nil,
-        songs: [BridgeSong]? = nil, queue: [BridgeQueueItem]? = nil, volume: Double? = nil
+        songs: [BridgeSong]? = nil, queue: [BridgeQueueItem]? = nil, volume: Double? = nil, sound: BridgeSound? = nil,
+        clip: BridgeClip? = nil
     ) {
+        self.clip = clip
         self.id = id
         self.ok = ok
         self.outcome = outcome
@@ -534,9 +691,10 @@ public struct BridgeResult: Codable, Equatable, Sendable {
         self.songs = songs
         self.queue = queue
         self.volume = volume
+        self.sound = sound
     }
 
-    enum CodingKeys: String, CodingKey { case id, ok, outcome, error, tabID = "tabId", playlists, songs, queue, volume }
+    enum CodingKeys: String, CodingKey { case id, ok, outcome, error, tabID = "tabId", playlists, songs, queue, volume, sound, clip }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -549,6 +707,8 @@ public struct BridgeResult: Codable, Equatable, Sendable {
         songs = c.contains(.songs) ? c.lenientArray(.songs, []) : nil
         queue = c.contains(.queue) ? c.lenientArray(.queue, []) : nil
         volume = (c.lenientOptional(.volume) as Double?).flatMap { $0.isFinite ? min(1, max(0, $0)) : nil }
+        sound = c.lenientOptional(.sound)
+        clip = (c.lenientOptional(.clip) as BridgeClip?).flatMap { $0.segments.isEmpty ? nil : $0 }
     }
 }
 

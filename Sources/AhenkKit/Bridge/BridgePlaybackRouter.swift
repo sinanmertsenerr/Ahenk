@@ -20,6 +20,10 @@ public final class BridgePlaybackRouter: BrowserPlaybackRouting, @unchecked Send
 
     public var isConnected: Bool { !server.connectedBrowsers.isEmpty }
 
+    public var extensionNeedsReload: Bool {
+        server.connectedBrowsers.contains { ExtensionVersion.needsReload(reported: $0.extensionVersion) }
+    }
+
     private func route(for site: MusicSource) -> BrowserPlaybackPolicy.Route {
         BrowserPlaybackPolicy.route(for: site, tabs: server.currentTabs, connections: server.connectedBrowsers.map(\.id))
     }
@@ -39,7 +43,20 @@ public final class BridgePlaybackRouter: BrowserPlaybackRouting, @unchecked Send
         let result = await server.request({ id in
             BridgeRequest(id: id, kind: .play, site: site.rawValue, tabID: target.tabID, song: song)
         }, on: target.connection, timeout: Self.playTimeout)
-        return BrowserPlaybackPolicy.outcome(of: result)
+        let outcome = BrowserPlaybackPolicy.outcome(of: result)
+        Self.log.info("Bridge: \(site.rawValue) answered the pick: \(Self.describe(outcome))")
+        return outcome
+    }
+
+    private static func describe(_ outcome: BrowserPlayOutcome) -> String {
+        switch outcome {
+        case .started: "started"
+        case .opened: "shown, not started (the browser lets a page play only after a click in it)"
+        case .notFound: "not found"
+        case .noTab: "no tab of the site"
+        case .noExtension: "no extension"
+        case .failed(let reason): "failed (\(reason))"
+        }
     }
 
     // MARK: Playlists
@@ -79,7 +96,26 @@ public final class BridgePlaybackRouter: BrowserPlaybackRouting, @unchecked Send
         let result = await server.request({ requestID in
             BridgeRequest(id: requestID, kind: .playPlaylist, site: site.rawValue, tabID: target.tabID, playlistID: ownID, playlistURL: url, index: index)
         }, on: target.connection, timeout: Self.playTimeout)
-        return BrowserPlaybackPolicy.outcome(of: result)
+        let outcome = BrowserPlaybackPolicy.outcome(of: result)
+        Self.log.info("Bridge: \(site.rawValue) answered the playlist: \(Self.describe(outcome))")
+        return outcome
+    }
+
+    // MARK: A song's music video
+
+    /// Where a song falls in its music video, as YouTube Music pairs the
+    /// two (`BridgeClip`): asked of a YouTube Music tab that can say.
+    /// `nil`: no such tab, or the site pairs the video with no song for
+    /// this listener.
+    public func clip(ofVideo videoID: String) async -> BridgeClip? {
+        guard BrowserSite.youtubeVideoID(videoID) == videoID else { return nil }
+        let tabs = server.currentTabs.filter { $0.site == .youtubeMusic && $0.bridgeCapabilities.contains(.clip) && $0.browserTabID != nil && $0.connectionID != nil }
+        guard let tab = BrowserPlaybackPolicy.tab(for: .youtubeMusic, among: tabs), let connection = tab.connectionID, let tabID = tab.browserTabID else { return nil }
+        let result = await server.request({ id in
+            BridgeRequest(id: id, kind: .clip, site: BrowserSite.youtubeMusic.rawValue, tabID: tabID, videoID: videoID)
+        }, on: connection, timeout: Self.readTimeout)
+        guard let clip = result?.clip, result?.ok == true, clip.videoID == videoID else { return nil }
+        return clip
     }
 
     // MARK: Queue

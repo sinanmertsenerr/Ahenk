@@ -200,9 +200,18 @@ final class PlaybackRouter {
     }
 
     private func outcome(of answer: BrowserPlayOutcome, song: Bool) -> Outcome {
+        // An extension older than the one Ahenk carries starts picks the
+        // old way (or not at all): say what would put it right.
+        let outdated = services.browserPlayback?.extensionNeedsReload == true
         switch answer {
         case .started: return .started
-        case .opened: return .shown("The site shows it now: press Play there.".l10n)
+        case .opened:
+            return .shown(outdated
+                ? "Press Play on the site. The browser's Ahenk extension is out of date: reload it on the extensions page.".l10n
+                : "The site shows it now: press Play there.".l10n)
+        case .notFound, .failed where outdated:
+            if case .failed(let reason) = answer { log.notice("Browser playback failed: \(reason)") }
+            return .failed("The browser's Ahenk extension is out of date: reload it on the extensions page.".l10n)
         case .notFound: return .failed(song ? "The site did not find this song.".l10n : "The site did not find this playlist.".l10n)
         case .noTab: return .failed("Open the site in your browser first.".l10n)
         case .noExtension: return .unavailable("Playing on music sites needs the Ahenk browser extension.".l10n)

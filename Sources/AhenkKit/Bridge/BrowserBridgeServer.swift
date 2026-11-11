@@ -266,7 +266,11 @@ public final class BrowserBridgeServer: BrowserBridge, @unchecked Sendable {
             return
         }
         if case .hello(let hello) = message {
-            Self.log.info("Bridge: \(hello.browser.name.isEmpty ? "a browser" : hello.browser.name) says hello (extension \(hello.extensionVersion), protocol \(hello.protocolVersion))")
+            let browser = hello.browser.name.isEmpty ? "a browser" : hello.browser.name
+            Self.log.info("Bridge: \(browser) says hello (extension \(hello.extensionVersion), protocol \(hello.protocolVersion))")
+            if ExtensionVersion.needsReload(reported: hello.extensionVersion) {
+                Self.log.notice("Bridge: \(browser) runs extension \(hello.extensionVersion), older than the \(ExtensionVersion.shipped) Ahenk carries; it was told, and reloads itself where the browser reads the folder again")
+            }
         }
         apply(registry.received(message, from: id, at: clock()))
     }
@@ -474,6 +478,20 @@ public final class BrowserBridgeServer: BrowserBridge, @unchecked Sendable {
             return (connection, .command(BridgeCommand(id: id, tabID: tabID, rate: rate)))
         }
         return result?.ok == true
+    }
+
+    /// Asks a tab for `seconds` of the sound its player holds for the song
+    /// it plays, from `from` seconds of it (`BridgeRequest.Kind.sound`).
+    /// `nil`: the tab is gone, plays another song, or did not answer.
+    public func heldSound(inTab tabKey: String, from: Double, seconds: Double, timeout: TimeInterval = 8) async -> BridgeResult? {
+        await perform(timeout: timeout) { id -> (Int, BridgeOutbound)? in
+            guard let (connection, tabID) = self.registry.locate(tabKey: tabKey),
+                  let report = self.lastReports.first(where: { $0.tabID == tabKey }),
+                  let site = BrowserSite(source: report.site), let track = report.siteTrackID
+            else { return nil }
+            let song = BridgeSong(title: report.title, artist: report.artist, trackID: track)
+            return (connection, .request(BridgeRequest(id: id, kind: .sound, site: site.rawValue, tabID: tabID, song: song, from: max(0, from), seconds: seconds)))
+        }
     }
 
     /// Sends a request to one connection and waits for its answer (`nil`:

@@ -2,7 +2,7 @@
 // artists and IDs only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { load } from './load.mjs';
+import { load, fixture } from './load.mjs';
 
 const { C, P } = load();
 
@@ -93,6 +93,25 @@ test('search results: the best match wins, a weak one is refused', () => {
   assert.equal(C.matchScore({ title: '', artist: 'x' }, results[1]), 0);
   // An artist written another way ("Nadia Ferro & Band") still counts.
   assert.ok(C.matchScore(wanted, { title: 'Quiet Engines', artist: 'Nadia Ferro & Band', duration: 187 }) >= 0.8);
+});
+
+test("a video's title that names its artist counts as that artist's song", () => {
+  const wanted = { title: 'Quiet Engines', artist: 'Nadia Ferro' };
+  // Under a channel with a name of its own, in either order.
+  assert.ok(C.matchScore(wanted, { title: 'Nadia Ferro & Kestrel - Quiet Engines (Official Video)', artist: 'Low Orbit Records' }) >= 0.7);
+  assert.ok(C.matchScore(wanted, { title: 'Quiet Engines (Old Version) – Nadia Ferro', artist: 'Some Uploader' }) >= 0.7);
+  // Another artist's video of that name, or a name inside another word, is not.
+  assert.ok(C.matchScore(wanted, { title: 'Kestrel & Vale - Quiet Engines', artist: 'Paper Comets TV' }) < 0.5);
+  assert.ok(C.matchScore({ title: 'Quiet Engines', artist: 'Nadia' }, { title: 'Nadiah - Quiet Engines', artist: 'Paper Comets TV' }) < 0.5);
+  // A title with a dash that names nobody scores as it is written.
+  const dashed = { title: 'Quiet Engines - 2019 Remaster', artist: 'Nadia Ferro', duration: 187 };
+  assert.ok(Math.abs(C.matchScore(Object.assign({ duration: 187 }, wanted), dashed) - 0.95) < 1e-9);
+  // The channel's own song still wins over a video that only names the artist.
+  const results = [
+    { title: 'Nadia Ferro - Quiet Engines (Fan Lyric Video)', artist: 'Some Uploader' },
+    { title: 'Quiet Engines', artist: 'Nadia Ferro' },
+  ];
+  assert.equal(C.pickBest(wanted, results, 0.5), results[1]);
 });
 
 test('where each site searches and plays', () => {
@@ -202,4 +221,104 @@ test('state attributes that do not depend on the UI language', () => {
   assert.equal(C.boolAttr(false), false);
   assert.equal(C.boolAttr('mixed'), null);
   assert.equal(C.boolAttr(null), null);
+});
+
+test('the page that is shown is the one that was asked for', () => {
+  const wanted = C.siteURL('youtubeMusic', 'search', 'Quiet Engines Nadia Ferro');
+  // The site writes a space its own way and adds parameters of its own.
+  assert.equal(C.sameAddress('https://music.youtube.com/search?q=Quiet+Engines+Nadia+Ferro', wanted), true);
+  assert.equal(C.sameAddress('https://music.youtube.com/search?q=Quiet%20Engines%20Nadia%20Ferro&sp=x', wanted), true);
+  assert.equal(C.sameAddress('https://music.youtube.com/search?q=Quiet+Engines', wanted), false);
+  assert.equal(C.sameAddress('https://www.youtube.com/search?q=Quiet+Engines+Nadia+Ferro', wanted), false);
+  assert.equal(C.sameAddress('https://music.youtube.com/watch?v=ahenkMock02&list=RDAMx', 'https://music.youtube.com/watch?v=ahenkMock02'), true);
+  assert.equal(C.sameAddress('https://music.youtube.com/watch?v=ahenkMock01', 'https://music.youtube.com/watch?v=ahenkMock02'), false);
+  assert.equal(C.sameAddress('https://music.youtube.com/playlist/?list=PLahenkKiyidan', 'https://music.youtube.com/playlist?list=PLahenkKiyidan'), true);
+  assert.equal(C.sameAddress('not an address', wanted), false);
+  assert.equal(C.sameAddress(wanted, ''), false);
+});
+
+test("what YouTube's own page is told to show an address in place", () => {
+  // YouTube Music: a video, a search, a playlist.
+  assert.deepEqual(C.youtubeEndpoint('youtubeMusic', C.siteURL('youtubeMusic', 'track', 'ahenkMock01')), { watchEndpoint: { videoId: 'ahenkMock01' } });
+  assert.deepEqual(C.youtubeEndpoint('youtubeMusic', 'https://music.youtube.com/watch?v=ahenkMock01&list=PLahenkKiyidan'), { watchEndpoint: { videoId: 'ahenkMock01', playlistId: 'PLahenkKiyidan' } });
+  assert.deepEqual(C.youtubeEndpoint('youtubeMusic', C.siteURL('youtubeMusic', 'search', 'Marmara Neon Deniz Ulaş Trio')), { searchEndpoint: { query: 'Marmara Neon Deniz Ulaş Trio' } });
+  assert.deepEqual(C.youtubeEndpoint('youtubeMusic', 'https://music.youtube.com/playlist?list=PLahenkKiyidan'), { browseEndpoint: { browseId: 'VLPLahenkKiyidan' } });
+  // youtube.com also reads the page the command leads to.
+  assert.deepEqual(C.youtubeEndpoint('youtube', C.siteURL('youtube', 'track', 'ahenkMock01')), {
+    watchEndpoint: { videoId: 'ahenkMock01' },
+    commandMetadata: { webCommandMetadata: { url: '/watch?v=ahenkMock01', webPageType: 'WEB_PAGE_TYPE_WATCH', rootVe: 3832 } },
+  });
+  assert.deepEqual(C.youtubeEndpoint('youtube', C.siteURL('youtube', 'search', 'Quiet Engines')), {
+    searchEndpoint: { query: 'Quiet Engines' },
+    commandMetadata: { webCommandMetadata: { url: '/results?search_query=Quiet%20Engines', webPageType: 'WEB_PAGE_TYPE_SEARCH', rootVe: 4724 } },
+  });
+  assert.deepEqual(C.youtubeEndpoint('youtube', 'https://www.youtube.com/playlist?list=PLahenkKiyidan'), {
+    browseEndpoint: { browseId: 'VLPLahenkKiyidan' },
+    commandMetadata: { webCommandMetadata: { url: '/playlist?list=PLahenkKiyidan', webPageType: 'WEB_PAGE_TYPE_PLAYLIST', rootVe: 5754 } },
+  });
+  // Anything else is loaded as a page: another site's address, another
+  // kind of page, an ID or a query that is not one.
+  assert.equal(C.youtubeEndpoint('youtubeMusic', 'https://www.youtube.com/watch?v=ahenkMock01'), null);
+  assert.equal(C.youtubeEndpoint('youtube', 'https://music.youtube.com/watch?v=ahenkMock01'), null);
+  assert.equal(C.youtubeEndpoint('youtube', 'https://youtu.be/ahenkMock01'), null);
+  assert.equal(C.youtubeEndpoint('youtubeMusic', 'http://music.youtube.com/watch?v=ahenkMock01'), null);
+  assert.equal(C.youtubeEndpoint('youtubeMusic', 'https://music.youtube.com/watch?v=short'), null);
+  assert.equal(C.youtubeEndpoint('youtubeMusic', 'https://music.youtube.com/watch?v=ahenkMock01&list=a%20b'), null);
+  assert.equal(C.youtubeEndpoint('youtubeMusic', 'https://music.youtube.com/search?q=%20'), null);
+  assert.equal(C.youtubeEndpoint('youtubeMusic', 'https://music.youtube.com/playlist'), null);
+  assert.equal(C.youtubeEndpoint('youtubeMusic', 'https://music.youtube.com/'), null);
+  assert.equal(C.youtubeEndpoint('youtubeMusic', 'https://music.youtube.com/channel/UCx'), null);
+  assert.equal(C.youtubeEndpoint('spotify', 'https://open.spotify.com/track/x'), null);
+  assert.equal(C.youtubeEndpoint('youtubeMusic', 'nowhere'), null);
+});
+
+test('versions: which is newer, and when the extension takes itself up again', () => {
+  assert.deepEqual(C.parseVersion('1.5'), [1, 5, 0]);
+  assert.deepEqual(C.parseVersion(' v1.10.3 '), [1, 10, 3]);
+  for (const text of ['', 'test', '1.2.3.4', '1..2', '-1.0', '1.x', null, undefined]) assert.equal(C.parseVersion(text), null, String(text));
+  assert.equal(C.versionNewer('1.5.0', '1.4.0'), true);
+  assert.equal(C.versionNewer('1.10.0', '1.9.9'), true, 'numbers, not text');
+  assert.equal(C.versionNewer('2', '1.99.99'), true);
+  assert.equal(C.versionNewer('1.5.0', '1.5'), false, 'the same version');
+  assert.equal(C.versionNewer('1.4.0', '1.5.0'), false);
+  assert.equal(C.versionNewer('newer', '1.0.0'), false, 'an unreadable version is not newer');
+  assert.equal(C.versionNewer('1.5.0', undefined), false);
+  // Ahenk carries 1.5.0.
+  assert.equal(C.takesUpNewer('1.5.0', '1.4.0', undefined), true);
+  assert.equal(C.takesUpNewer('1.5.0', '1.4.0', '1.4.0'), true, 'tried for an older version before');
+  assert.equal(C.takesUpNewer('1.5.0', '1.4.0', '1.5.0'), false, 'once per version: the browser keeps a copy of its own');
+  assert.equal(C.takesUpNewer('1.5.0', '1.5.0', undefined), false);
+  assert.equal(C.takesUpNewer('1.5.0', '1.6.0', undefined), false, 'an older Ahenk does not take a newer extension down');
+  assert.equal(C.takesUpNewer(undefined, '1.4.0', undefined), false, 'an Ahenk from before it said so');
+});
+
+test("YouTube Music's pairing of a video with its song is read from its answer", () => {
+  const renderer = (videoId, length) => ({ playlistPanelVideoRenderer: { videoId, title: { runs: [{ text: 'Velvet Harbor Lights' }] }, lengthText: { runs: [{ text: length }] } } });
+  const answer = {
+    contents: { deep: [{ tabs: [{ panel: { contents: [
+      { playlistPanelVideoRenderer: { videoId: 'ahenkMock09' } },
+      { playlistPanelVideoWrapperRenderer: {
+        primaryRenderer: renderer('ahenkMock0V', '4:22'),
+        counterpart: [{
+          counterpartRenderer: renderer('ahenkMock01', '3:34'),
+          segmentMap: { segment: [
+            { primaryVideoStartTimeMilliseconds: '41000', counterpartVideoStartTimeMilliseconds: '613', durationMilliseconds: '120000' },
+            { primaryVideoStartTimeMilliseconds: '175500', counterpartVideoStartTimeMilliseconds: '120613', durationMilliseconds: '93000' },
+            { primaryVideoStartTimeMilliseconds: 'x', counterpartVideoStartTimeMilliseconds: '0', durationMilliseconds: '5' },
+            { primaryVideoStartTimeMilliseconds: '0', counterpartVideoStartTimeMilliseconds: '0', durationMilliseconds: '0' },
+          ] },
+        }],
+      } },
+    ] } }] }] },
+  };
+  const expected = fixture('result-clip').clip;
+  assert.deepEqual(C.clipSegments(answer, 'ahenkMock0V'), expected);
+  // What Ahenk is told is what the app's fixture says.
+  assert.deepEqual(P.result('r14', true, { tabId: 41, clip: C.clipSegments(answer, 'ahenkMock0V') }), fixture('result-clip'));
+  // Another video, a listener the site offers no switch to, or no answer at all.
+  assert.equal(C.clipSegments(answer, 'ahenkMock01'), null);
+  assert.equal(C.clipSegments({ contents: [renderer('ahenkMock0V', '4:22')] }, 'ahenkMock0V'), null);
+  assert.equal(C.clipSegments(null, 'ahenkMock0V'), null);
+  assert.equal(P.result('r1', true, { clip: { videoId: 'ahenkMock0V', segments: [] } }).clip, undefined);
+  assert.ok(P.CAPABILITIES.includes('clip'));
 });

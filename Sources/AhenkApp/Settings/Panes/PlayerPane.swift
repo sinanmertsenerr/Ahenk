@@ -10,7 +10,7 @@ struct PlayerPane: View {
     var body: some View {
         PaneForm(
             pane: .player,
-            summary: "A glass player on the desktop, under your windows: a big clock, Continue Playing, the artist's albums and search.".l10n
+            summary: "A glass player on the desktop, under your windows: a big clock, Continue Playing and search.".l10n
         ) {
             Section {
                 ToggleRow(title: "Show the desktop player".l10n, isOn: $settings.player.enabled)
@@ -31,7 +31,6 @@ struct PlayerPane: View {
             Section("Show".l10n) {
                 Toggle("Clock".l10n, isOn: $settings.player.showClock)
                 Toggle("Continue Playing".l10n, isOn: $settings.player.showContinuePlaying)
-                Toggle("The artist's albums".l10n, isOn: $settings.player.showAlbums)
                 Toggle("Search bar".l10n, isOn: $settings.player.showSearch)
                 Toggle("Player bar".l10n, isOn: $settings.player.showPlayerBar)
             }

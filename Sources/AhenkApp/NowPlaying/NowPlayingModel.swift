@@ -103,7 +103,7 @@ final class NowPlayingModel {
     static func artworkSignature(of snapshot: NowPlayingSnapshot) -> String {
         let track = snapshot.track
         let cover = snapshot.artworkIdentifier ?? snapshot.artworkData.map { "\($0.count)" } ?? ""
-        return "\(track.source.rawValue):\(track.id)|\(cover)|\(track.artworkURL?.absoluteString ?? "")|\(snapshot.contentKind.rawValue)"
+        return "\(track.source.rawValue):\(track.id)|\(cover)|\(track.artworkURL?.absoluteString ?? "")|\(snapshot.contentKind.rawValue)|\(snapshot.isMusicVideo)"
     }
 
     private func loadArtwork(for snapshot: NowPlayingSnapshot) {

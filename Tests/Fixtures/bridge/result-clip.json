@@ -1,0 +1,15 @@
+{
+  "type": "result",
+  "id": "r14",
+  "ok": true,
+  "tabId": 41,
+  "clip": {
+    "videoId": "ahenkMock0V",
+    "songId": "ahenkMock01",
+    "songSeconds": 214,
+    "segments": [
+      { "video": 41, "song": 0.613, "duration": 120 },
+      { "video": 175.5, "song": 120.613, "duration": 93 }
+    ]
+  }
+}

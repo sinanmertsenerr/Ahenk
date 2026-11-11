@@ -245,6 +245,8 @@ public final class YouTubeVideoSearch: Sendable {
         } catch CatalogError.rateLimited {
             throw CatalogError.rateLimited
         } catch {
+            // Nobody waits for the answer any more (the search was typed on).
+            if Task.isCancelled { throw CancellationError() }
             // The results page holds the same data.
             Self.log.info("YouTube's search endpoint did not answer usefully (\(String(describing: error))); trying the results page")
             guard let url = Self.resultsPageURL(query: trimmed, region: country) else { throw CatalogError.unreadable }

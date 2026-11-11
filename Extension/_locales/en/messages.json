@@ -31,6 +31,14 @@
       }
     }
   },
+  "newerVersion": {
+    "message": "Ahenk carries version $VERSION$ of this extension: reload it on the extensions page.",
+    "placeholders": {
+      "version": {
+        "content": "$1"
+      }
+    }
+  },
   "tabsTitle": {
     "message": "Music tabs"
   },

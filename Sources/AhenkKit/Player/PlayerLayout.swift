@@ -4,8 +4,6 @@ import Foundation
 /// What the player window shows; its size follows from it.
 public struct PlayerLayoutState: Hashable, Sendable {
     public var size: PlayerSize
-    /// The artist's albums (large player only).
-    public var showsAlbums: Bool
     /// The search field (always in the large player; on request in the small one).
     public var showsSearch: Bool
     public var showsBar: Bool
@@ -17,11 +15,10 @@ public struct PlayerLayoutState: Hashable, Sendable {
     public var showsWallpaperPicker: Bool
 
     public init(
-        size: PlayerSize, showsAlbums: Bool = true, showsSearch: Bool = true, showsBar: Bool = true,
+        size: PlayerSize, showsSearch: Bool = true, showsBar: Bool = true,
         showsPage: Bool = false, isSearchOpen: Bool = false, showsWallpaperPicker: Bool = false
     ) {
         self.size = size
-        self.showsAlbums = showsAlbums
         self.showsSearch = showsSearch
         self.showsBar = showsBar
         self.showsPage = showsPage
@@ -41,12 +38,12 @@ public struct PlayerLayoutState: Hashable, Sendable {
 
     /// Something is drawn at all (the dots alone are not a player).
     public var isEmpty: Bool {
-        size == .large && !showsAlbums && !showsSearch && !showsBar && !showsPage
+        size == .large && !showsSearch && !showsBar && !showsPage
     }
 }
 
 /// The player window's parts, stacked from the bottom: the bar, the search
-/// field, then the albums or an open page, and on top the live wallpaper's
+/// field, then an open page or the row a message appears in, and on top the live wallpaper's
 /// picker dots when they are on. The window is anchored at its
 /// bottom centre (`DesktopWidget.player.anchor`), so the bar stays where
 /// the user put it while the window grows or shrinks above it.
@@ -55,8 +52,6 @@ public enum PlayerLayout {
     public static let smallWidth: Double = 660
     public static let barHeight: Double = 58
     public static let searchHeight: Double = 40
-    /// The cover flow with the centre album's title under it.
-    public static let albumsHeight: Double = 268
     /// An album, an artist or search results.
     public static let pageHeight: Double = 404
     /// The small player's round buttons, or the row a message appears in
@@ -78,8 +73,6 @@ public enum PlayerLayout {
         case .large:
             if state.showsPage {
                 rows.append(pageHeight)
-            } else if state.showsAlbums {
-                rows.append(albumsHeight)
             } else {
                 rows.append(accessoryHeight)
             }

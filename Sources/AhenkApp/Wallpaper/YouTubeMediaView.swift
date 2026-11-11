@@ -24,6 +24,13 @@ final class YouTubeMediaView: WallpaperMediaView {
     private var start: TimeInterval
     private var loops: Bool
     private var plan: WallpaperPowerPlan
+    /// The wallpaper runs under whatever covers it; the player's clip is
+    /// left to WebKit, which pauses a covered silent video by itself.
+    private var playsWhenCovered: Bool
+    /// The player's sound is held as it arrives, to be read (`sound`).
+    let hearsSound: Bool
+    private var soundAnswers: [Int: CheckedContinuation<ClipSoundAnswer, Never>] = [:]
+    private var nextSoundID = 1
     private let canvas = NSView()
     private var webView: WKWebView?
     private var messages: MessageProxy?
@@ -120,7 +127,12 @@ final class YouTubeMediaView: WallpaperMediaView {
         injectionTime: .atDocumentStart, forMainFrameOnly: false
     )
 
-    init(candidate: WallpaperCandidate, videoID: String, start: TimeInterval, loops: Bool, plan: WallpaperPowerPlan, frame: NSRect) {
+    init(
+        candidate: WallpaperCandidate, videoID: String, start: TimeInterval, loops: Bool, plan: WallpaperPowerPlan, frame: NSRect,
+        playsWhenCovered: Bool = true, hearsSound: Bool = false
+    ) {
+        self.playsWhenCovered = playsWhenCovered
+        self.hearsSound = hearsSound
         self.videoID = videoID
         self.start = start
         self.loops = loops
@@ -168,6 +180,7 @@ final class YouTubeMediaView: WallpaperMediaView {
         configuration.userContentController.add(proxy, name: YouTubeEmbed.messageHandler)
         configuration.userContentController.addUserScript(Self.muteScript)
         configuration.userContentController.addUserScript(Self.pictureOnlyScript)
+        if hearsSound { Self.soundScripts.forEach(configuration.userContentController.addUserScript) }
         messages = proxy
         let webView = WKWebView(frame: canvas.bounds, configuration: configuration)
         webView.navigationDelegate = proxy
@@ -176,7 +189,7 @@ final class YouTubeMediaView: WallpaperMediaView {
         webView.allowsBackForwardNavigationGestures = false
         webView.allowsLinkPreview = false
         webView.setAccessibilityElement(false)
-        Self.keepPlayingWhenCovered(webView)
+        if playsWhenCovered { Self.keepPlayingWhenCovered(webView) }
         canvas.addSubview(webView)
         self.webView = webView
         layoutCanvas()
@@ -197,13 +210,119 @@ final class YouTubeMediaView: WallpaperMediaView {
     /// not to look at that. The setter is WebKit's own but not in its
     /// public headers: without it the video pauses as before.
     private static func keepPlayingWhenCovered(_ webView: WKWebView) {
-        let setter = NSSelectorFromString("_setWindowOcclusionDetectionEnabled:")
-        guard webView.responds(to: setter), let method = webView.method(for: setter) else {
+        if !setOcclusionDetection(false, in: webView) {
             log.info("This WebKit cannot keep a covered wallpaper video playing; it will pause while covered")
+        }
+    }
+
+    @discardableResult
+    private static func setOcclusionDetection(_ enabled: Bool, in webView: WKWebView) -> Bool {
+        let setter = NSSelectorFromString("_setWindowOcclusionDetectionEnabled:")
+        guard webView.responds(to: setter), let method = webView.method(for: setter) else { return false }
+        typealias Setter = @convention(c) (AnyObject, Selector, Bool) -> Void
+        unsafeBitCast(method, to: Setter.self)(webView, setter, enabled)
+        return true
+    }
+
+    // MARK: The player's sound
+
+    /// The extension's own scripts that hold a YouTube player's audio
+    /// stream as it is handed to the browser, and a reader that answers
+    /// with a stretch of it. Empty when the extension's files are not
+    /// there (then nothing is heard).
+    private static let soundScripts: [WKUserScript] = {
+        guard let sound = BrowserExtensionInstaller.script("lib/sound.js"), let hooks = BrowserExtensionInstaller.script("page/hooks.js") else { return [] }
+        let reader = """
+        (function () {
+          if (window.top === window || !/(^|\\.)youtube(-nocookie)?\\.com$/.test(location.hostname)) return;
+          var S = window.AhenkSound, hooks = window.__ahenkHooks;
+          var answer = function (message) {
+            try { window.webkit.messageHandlers.\(YouTubeEmbed.messageHandler).postMessage(message); } catch (e) {}
+          };
+          var samplesOf = async function (held) {
+            var known = held.decoded;
+            if (known && known.run === held.run && known.bytes === held.bytes) return known.samples;
+            var run = held.run, bytes = held.bytes;
+            var context = new OfflineAudioContext({ numberOfChannels: 1, length: 1, sampleRate: S.RATE });
+            var buffer = await context.decodeAudioData(S.stream(held).buffer);
+            var channels = [];
+            for (var i = 0; i < buffer.numberOfChannels; i += 1) channels.push(buffer.getChannelData(i));
+            var samples = S.mono(channels);
+            held.decoded = { run: run, bytes: bytes, samples: samples };
+            return samples;
+          };
+          window.addEventListener('message', async function (event) {
+            var ask = event.data && event.data.ahenkSound;
+            if (!ask) return;
+            var message = { type: 'sound', id: ask.id };
+            try {
+              var player = document.getElementById('movie_player');
+              var held = S && hooks && hooks.sound ? hooks.sound.held(document.querySelector('video')) : null;
+              if (!held) message.error = 'no sound is held (' + (hooks && hooks.sound && hooks.sound.describe ? hooks.sound.describe() : 'no hooks') + ')';
+              else if (player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'))) message.error = 'an advertisement plays';
+              else {
+                message.from = held.start;
+                message.until = held.until;
+                var from = Math.max(Number(ask.from) || 0, held.start);
+                var seconds = Math.max(1, Math.min(15, Number(ask.seconds) || 10));
+                if (held.until >= from + seconds - 0.05) {
+                  var run = held.run;
+                  var samples = await samplesOf(held);
+                  var piece = held.run === run ? S.cut(held.start, samples, from, seconds) : null;
+                  if (piece) {
+                    message.start = piece.start;
+                    message.rate = S.RATE;
+                    message.samples = S.pcm16(piece.samples);
+                  }
+                }
+              }
+            } catch (error) {
+              message.error = String(error);
+            }
+            answer(message);
+          });
+        })();
+        """
+        return [sound, hooks, reader].map { WKUserScript(source: $0, injectionTime: .atDocumentStart, forMainFrameOnly: false) }
+    }()
+
+    /// `seconds` of the video's sound from `from` (seconds of the video),
+    /// from what the player holds: the samples, `.notYet` while it holds
+    /// less, `.failed` when it cannot be read here.
+    func sound(from: TimeInterval, seconds: TimeInterval) async -> ClipSoundAnswer {
+        guard hearsSound, !Self.soundScripts.isEmpty, let webView else { return .failed("the player's sound is not held") }
+        let id = nextSoundID
+        nextSoundID += 1
+        return await withCheckedContinuation { continuation in
+            soundAnswers[id] = continuation
+            let ask = "{ahenkSound:{id:\(id),from:\(String(format: "%.2f", max(0, from))),seconds:\(String(format: "%.2f", seconds))}}"
+            webView.evaluateJavaScript("(function(){var f=document.querySelector('iframe');if(f&&f.contentWindow)f.contentWindow.postMessage(\(ask),'*');})()", completionHandler: nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
+                self?.soundAnswers.removeValue(forKey: id)?.resume(returning: .failed("no answer"))
+            }
+        }
+    }
+
+    private func receivedSound(_ message: [String: Any]) {
+        guard let id = (message["id"] as? NSNumber)?.intValue, let continuation = soundAnswers.removeValue(forKey: id) else { return }
+        if let error = message["error"] as? String {
+            continuation.resume(returning: .failed(error))
             return
         }
-        typealias Setter = @convention(c) (AnyObject, Selector, Bool) -> Void
-        unsafeBitCast(method, to: Setter.self)(webView, setter, false)
+        let sound = BridgeSound(
+            heldFrom: (message["from"] as? NSNumber)?.doubleValue, heldUntil: (message["until"] as? NSNumber)?.doubleValue,
+            start: (message["start"] as? NSNumber)?.doubleValue, rate: (message["rate"] as? NSNumber)?.doubleValue,
+            samples: message["samples"] as? String
+        )
+        continuation.resume(returning: sound.window.map(ClipSoundAnswer.sound) ?? .notYet(heldUntil: sound.heldUntil))
+    }
+
+    /// Whether the video goes on while its window is covered (see
+    /// `keepPlayingWhenCovered`): on while its sound is read, off after.
+    func setPlaysWhenCovered(_ on: Bool) {
+        guard on != playsWhenCovered, let webView else { return }
+        playsWhenCovered = on
+        Self.setOcclusionDetection(!on, in: webView)
     }
 
     // MARK: Control
@@ -260,6 +379,8 @@ final class YouTubeMediaView: WallpaperMediaView {
         super.tearDown()
         settle?.cancel()
         timeout?.cancel()
+        for continuation in soundAnswers.values { continuation.resume(returning: .failed("the player is gone")) }
+        soundAnswers = [:]
         if let webView {
             webView.navigationDelegate = nil
             webView.uiDelegate = nil
@@ -288,6 +409,10 @@ final class YouTubeMediaView: WallpaperMediaView {
                 Self.log.error("Wallpaper video element not silent (muted \(muted), volume \(volume)); muting again")
                 run("window.ahenk && window.ahenk.play()")
             }
+            return
+        }
+        if let message = body as? [String: Any], message["type"] as? String == "sound" {
+            receivedSound(message)
             return
         }
         if let message = body as? [String: Any], message["type"] as? String == "stats" {
@@ -360,4 +485,12 @@ private final class MessageProxy: NSObject, WKScriptMessageHandler, WKNavigation
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         nil
     }
+}
+
+/// What the embedded player answered when asked for a stretch of its sound.
+enum ClipSoundAnswer: Sendable {
+    case sound(HeldSound)
+    /// It holds less than was asked for (up to `heldUntil` seconds).
+    case notYet(heldUntil: Double?)
+    case failed(String)
 }

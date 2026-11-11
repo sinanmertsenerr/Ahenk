@@ -13,8 +13,10 @@
   const SILENCE_LIMIT = 50;
   const DEFAULT_PORT = 42617;
   const PORT_COUNT = 4;
+  /** Base64 characters of sound in one answer (15 s at 16 kHz, 16 bits). */
+  const MAX_SOUND = 640000;
 
-  const CAPABILITIES = ['playPause', 'next', 'previous', 'seek', 'shuffle', 'repeat', 'repeatOne', 'like', 'unlike', 'search', 'playlists', 'queue', 'queueEdit', 'volume', 'rate'];
+  const CAPABILITIES = ['playPause', 'next', 'previous', 'seek', 'shuffle', 'repeat', 'repeatOne', 'like', 'unlike', 'search', 'playlists', 'queue', 'queueEdit', 'volume', 'rate', 'sound', 'clip'];
   const KINDS = ['music', 'video', 'podcast', 'advertisement', 'unknown'];
   const STATES = ['playing', 'paused', 'stopped'];
   const REPEATS = ['off', 'all', 'one'];
@@ -129,7 +131,32 @@
     return { type: 'lyrics', lyrics: body };
   }
 
-  /** The answer to a command or request; `extra` adds playlists, songs, queue, volume. */
+  /** A stretch of the sound a tab's player holds (16-bit PCM in base64),
+   *  or only how far it holds (`from`, `until`) when it has no more yet. */
+  function sound(value) {
+    if (!value || typeof value !== 'object') return undefined;
+    const samples = typeof value.samples === 'string' && value.samples.length > 0 && value.samples.length <= MAX_SOUND ? value.samples : undefined;
+    return compact({
+      from: finite(value.from, 0),
+      until: finite(value.until, 0),
+      start: samples ? finite(value.start, 0) : undefined,
+      rate: samples ? finite(value.rate, 8000, 48000) : undefined,
+      samples,
+    });
+  }
+
+  /** Where a song falls in its video (`C.clipSegments`), numbers checked. */
+  function clip(value) {
+    if (!value || typeof value !== 'object' || !Array.isArray(value.segments)) return undefined;
+    const segments = value.segments
+      .map((segment) => ({ video: finite(segment && segment.video, 0), song: finite(segment && segment.song, 0), duration: finite(segment && segment.duration, 0) }))
+      .filter((segment) => segment.video !== undefined && segment.song !== undefined && segment.duration > 0)
+      .slice(0, 64);
+    if (!segments.length || !str(value.videoId, 20)) return undefined;
+    return compact({ videoId: str(value.videoId, 20), songId: str(value.songId, 20), songSeconds: finite(value.songSeconds, 0), segments });
+  }
+
+  /** The answer to a command or request; `extra` adds playlists, songs, queue, volume, sound, clip. */
   function result(id, ok, extra) {
     const base = { type: 'result', id, ok: !!ok };
     if (!extra) return base;
@@ -142,6 +169,8 @@
       songs: extra.songs ? extra.songs.map(song) : undefined,
       queue: extra.queue ? extra.queue.map((item) => compact({ index: item.index, song: song(item.song), current: !!item.current })) : undefined,
       volume: finite(extra.volume, 0, 1),
+      sound: sound(extra.sound),
+      clip: clip(extra.clip),
     });
   }
 
@@ -171,5 +200,12 @@
   }
 
   const api = { VERSION, MIN_VERSION, HEARTBEAT, SILENCE_LIMIT, DEFAULT_PORT, PORT_COUNT, CAPABILITIES, ports, hello, tab, tabs, tabUpdate, tabRemoved, lyrics, result, ping, pong, parse, acceptsWelcome, song };
-  if (!root.AhenkProtocol) Object.defineProperty(root, 'AhenkProtocol', { value: Object.freeze(api), configurable: false, enumerable: false });
+  // The newest scripts win: an updated extension puts its own over the
+  // ones a page still holds (a page from before 1.5.0 keeps its own
+  // until it loads again).
+  try {
+    Object.defineProperty(root, 'AhenkProtocol', { value: Object.freeze(api), configurable: true, enumerable: false });
+  } catch (_) {
+    // Held by scripts that cannot be replaced.
+  }
 })(typeof globalThis !== 'undefined' ? globalThis : this);

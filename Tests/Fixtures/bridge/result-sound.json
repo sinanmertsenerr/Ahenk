@@ -1,0 +1,13 @@
+{
+  "type": "result",
+  "id": "r12",
+  "ok": true,
+  "tabId": 41,
+  "sound": {
+    "from": 0,
+    "until": 39.8,
+    "start": 20,
+    "rate": 16000,
+    "samples": "AAD/fwCAAEAAwA=="
+  }
+}

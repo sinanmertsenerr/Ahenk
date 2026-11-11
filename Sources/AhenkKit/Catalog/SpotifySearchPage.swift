@@ -7,11 +7,19 @@ public struct SpotifySearchRow: Equatable, Sendable {
     public var title: String
     /// Everyone the row names; empty when the page did not say.
     public var artists: [String]
+    /// What the row also shows, when it does: the album, the song's length
+    /// in seconds and its cover (a small one; see `largeCover(of:)`).
+    public var album: String?
+    public var duration: TimeInterval?
+    public var artworkURL: String?
 
-    public init(id: String, title: String, artists: [String]) {
+    public init(id: String, title: String, artists: [String], album: String? = nil, duration: TimeInterval? = nil, artworkURL: String? = nil) {
         self.id = id
         self.title = title
         self.artists = artists
+        self.album = album
+        self.duration = duration
+        self.artworkURL = artworkURL
     }
 }
 
@@ -35,19 +43,37 @@ public enum SpotifySearchPage {
         return URL(string: "https://open.spotify.com/search/\(encoded)/tracks")
     }
 
+    /// The page that lists the songs for words somebody typed.
+    public static func url(forTerm term: String) -> URL? {
+        let text = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        guard let encoded = text.addingPercentEncoding(withAllowedCharacters: allowed) else { return nil }
+        return URL(string: "https://open.spotify.com/search/\(encoded)/tracks")
+    }
+
+    /// The cover at 640 pixels: Spotify names a cover's size in the first
+    /// part of its ID (`ab67616d00004851…` is 64 pixels, `…0000b273…` 640).
+    public static func largeCover(of url: URL) -> URL {
+        let text = url.absoluteString
+        guard url.host == "i.scdn.co", let range = text.range(of: #"/image/ab67616d0000[0-9a-f]{4}"#, options: .regularExpression) else { return url }
+        return URL(string: text.replacingCharacters(in: range, with: "/image/ab67616d0000b273")) ?? url
+    }
+
     /// Only this host is ever loaded in the reading web view.
     public static let host = "open.spotify.com"
 
     /// Run in the page: the first songs it lists, as JSON
-    /// (`{"rows": [{"id", "title", "artists"}]}`). A song is a link to
-    /// `/track/<id>`; its artists are the artist links of the same row.
+    /// (`{"rows": [{"id", "title", "artists", "album", "duration", "artwork"}]}`).
+    /// A song is a link to `/track/<id>`; its artists and album are the
+    /// links of the same row, its length the row's last cell ("3:06").
     /// Nothing is clicked and nothing plays.
     public static let readScript = """
     (function () {
       var rows = [];
       var seen = {};
       var links = document.querySelectorAll('a[href*="/track/"]');
-      for (var i = 0; i < links.length && rows.length < 12; i++) {
+      for (var i = 0; i < links.length && rows.length < 20; i++) {
         var link = links[i];
         var match = /\\/track\\/([A-Za-z0-9]{22})/.exec(link.getAttribute('href') || '');
         var title = (link.textContent || '').trim();
@@ -55,14 +81,22 @@ public enum SpotifySearchPage {
         seen[match[1]] = true;
         var row = link.closest('[data-testid="tracklist-row"]') || link.closest('[role="row"]');
         var artists = [];
+        var album = null, duration = null, artwork = null;
         if (row) {
           var names = row.querySelectorAll('a[href*="/artist/"]');
           for (var j = 0; j < names.length; j++) {
             var name = (names[j].textContent || '').trim();
             if (name) artists.push(name);
           }
+          var albumLink = row.querySelector('a[href*="/album/"]');
+          album = albumLink ? (albumLink.textContent || '').trim() : null;
+          var image = row.querySelector('img');
+          artwork = image ? image.getAttribute('src') : null;
+          var cells = row.querySelectorAll('[role="gridcell"]');
+          var clock = cells.length ? /(\\d{1,3}):(\\d{2})\\s*$/.exec((cells[cells.length - 1].textContent || '').trim()) : null;
+          duration = clock ? Number(clock[1]) * 60 + Number(clock[2]) : null;
         }
-        rows.push({ id: match[1], title: title, artists: artists });
+        rows.push({ id: match[1], title: title, artists: artists, album: album, duration: duration, artwork: artwork });
       }
       return JSON.stringify({ rows: rows });
     })()
@@ -81,7 +115,13 @@ public enum SpotifySearchPage {
             let artists = (item["artists"] as? [String] ?? [])
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
-            return SpotifySearchRow(id: id, title: title, artists: artists)
+            let album = (item["album"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let duration = (item["duration"] as? NSNumber)?.doubleValue
+            let artwork = (item["artwork"] as? String).flatMap { $0.hasPrefix("https://") ? $0 : nil }
+            return SpotifySearchRow(
+                id: id, title: title, artists: artists, album: album?.isEmpty == false ? album : nil,
+                duration: duration.flatMap { $0 > 0 && $0 < 86_400 ? $0 : nil }, artworkURL: artwork
+            )
         }
     }
 

@@ -24,7 +24,7 @@ function render(status) {
   const detail = document.getElementById('statusDetail');
   if (status && status.status === 'open') {
     title.textContent = t('statusOpen');
-    detail.textContent = t('listeningOn', status.port);
+    detail.textContent = status.newerVersion ? t('newerVersion', status.newerVersion) : t('listeningOn', status.port);
   } else if (status && status.status === 'connecting') {
     title.textContent = t('statusConnecting');
     detail.textContent = '';

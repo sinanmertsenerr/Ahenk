@@ -3,9 +3,9 @@ import AppKit
 import SwiftUI
 
 /// The player window's content, stacked from the bottom (where the window
-/// is anchored): the bar, the search field, then the albums or an open
-/// page, and the live wallpaper's dots on top. The large player always
-/// shows the field and the albums; the small one is its bar with round
+/// is anchored): the bar, the search field, then an open page (or the row
+/// a message appears in), and the live wallpaper's dots on top. The large
+/// player always shows the field; the small one is its bar with round
 /// buttons above, and grows a field and a page only on request.
 struct PlayerWidget: View {
     let model: DesktopPlayerModel
@@ -57,11 +57,6 @@ struct PlayerWidget: View {
         if state.showsPage {
             PageArea(model: model)
                 .transition(pageTransition)
-        } else if state.showsAlbums {
-            CoverFlowView(model: model)
-                .frame(height: PlayerLayout.albumsHeight)
-                .overlay(alignment: .top) { statusArea(theme: theme) }
-                .transition(.opacity)
         } else {
             statusArea(theme: theme)
                 .frame(height: PlayerLayout.accessoryHeight)

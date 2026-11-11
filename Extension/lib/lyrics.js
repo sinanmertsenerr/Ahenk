@@ -300,5 +300,12 @@
     fromYouTubeAutoCaptions,
     scanTimedLines, extract,
   };
-  if (!root.AhenkLyrics) Object.defineProperty(root, 'AhenkLyrics', { value: Object.freeze(api), configurable: false, enumerable: false });
+  // The newest scripts win: an updated extension puts its own over the
+  // ones a page still holds (a page from before 1.5.0 keeps its own
+  // until it loads again).
+  try {
+    Object.defineProperty(root, 'AhenkLyrics', { value: Object.freeze(api), configurable: true, enumerable: false });
+  } catch (_) {
+    // Held by scripts that cannot be replaced.
+  }
 })(typeof globalThis !== 'undefined' ? globalThis : this);

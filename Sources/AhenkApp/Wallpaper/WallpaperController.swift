@@ -184,6 +184,20 @@ final class WallpaperController {
     @ObservationIgnored private let power: PowerMonitor
     @ObservationIgnored private let demo: DemoProvider?
     @ObservationIgnored private let lookups: WallpaperLookups
+    /// Finds where a song falls in its clip (`nil` in the demo and in checks).
+    @ObservationIgnored private let clipTiming: SongClipTiming?
+    /// The song's place in each of its clips (by candidate), once known.
+    @ObservationIgnored private var clipMaps: [String: SongClipMap] = [:]
+    @ObservationIgnored private var clipTasks: [String: Task<Void, Never>] = [:]
+    /// Where the song most likely falls in a clip (`SongClip.guess`): the
+    /// clip runs from there until its map is known.
+    @ObservationIgnored private var clipGuesses: [String: SongClipMap] = [:]
+    /// Clips the site paired with no song: only hearing is left for them…
+    @ObservationIgnored private var clipsToHear: Set<String> = []
+    /// …and the ones that were heard (or are being heard) for this song.
+    @ObservationIgnored private var clipsHeard: Set<String> = []
+    /// The lead jumps are aimed with, learned from where they land.
+    @ObservationIgnored private static var learnedLead = VideoSync.jumpLead
     @ObservationIgnored private let songOverride: (title: String, artist: String, duration: Double)?
     @ObservationIgnored private let forcedKind: WallpaperCandidate.Kind?
     @ObservationIgnored private let desktop = DesktopWatcher()
@@ -230,8 +244,10 @@ final class WallpaperController {
 
     init(
         settings: AppSettings, nowPlaying: NowPlayingModel, power: PowerMonitor, demo: DemoProvider?, lookups: WallpaperLookups,
-        songOverride: (title: String, artist: String, duration: Double)? = nil, forcedKind: WallpaperCandidate.Kind? = nil
+        songOverride: (title: String, artist: String, duration: Double)? = nil, forcedKind: WallpaperCandidate.Kind? = nil,
+        clipTiming: SongClipTiming? = nil
     ) {
+        self.clipTiming = clipTiming
         self.settings = settings
         self.nowPlaying = nowPlaying
         self.power = power
@@ -489,6 +505,12 @@ final class WallpaperController {
         found = []
         failed = []
         pending = []
+        clipTasks.values.forEach { $0.cancel() }
+        clipTasks = [:]
+        clipMaps = [:]
+        clipGuesses = [:]
+        clipsToHear = []
+        clipsHeard = []
         lookupStarted = Date()
         artistName = request.artist
         isArtistTyped = request.artist != request.reportedArtist
@@ -636,6 +658,101 @@ final class WallpaperController {
     private func add(_ candidates: [WallpaperCandidate], for request: WallpaperRequest) {
         guard request == self.request, !candidates.isEmpty else { return }
         found.append(contentsOf: candidates)
+        candidates.forEach(prepareClip)
+        refresh()
+    }
+
+    // MARK: The song's place in its clip
+
+    /// The video of a candidate that is the song's clip beside a song that
+    /// plays as sound (see `SongClip`). The tab's own video is the song
+    /// itself and in step by definition.
+    private func clipVideoID(_ candidate: WallpaperCandidate) -> String? {
+        guard clipTiming != nil, candidate.kind == .songVideo, case .youtube(let id) = candidate.media,
+              request?.tabVideo?.id != candidate.id, let snapshot = nowPlaying.snapshot, SongClip.isWanted(for: snapshot)
+        else { return nil }
+        return id
+    }
+
+    /// What is kept about the clip, else the site's own pairing (about a
+    /// second, so the clip usually starts in step); hearing is left for
+    /// when its player is there (`hearClip`).
+    private func prepareClip(_ candidate: WallpaperCandidate) {
+        guard let clipTiming, let id = clipVideoID(candidate), clipMaps[candidate.id] == nil, clipTasks[candidate.id] == nil,
+              !clipsToHear.contains(candidate.id), let track = nowPlaying.snapshot?.track
+        else { return }
+        // At once: the likely place, from the two lengths.
+        if let guess = SongClip.guess(songDuration: track.duration, videoDuration: candidate.duration) {
+            clipGuesses[candidate.id] = guess
+        }
+        switch clipTiming.known(track: track, videoID: id) {
+        case .map(let map):
+            clipMaps[candidate.id] = map
+            Self.log.info("The song's place in its clip is known\(map.offset.map { " (\(String(format: "%+.1f", $0)) s into it)" } ?? "")")
+            return
+        case .unknown:
+            // Read before and not told: not asked or heard again for now.
+            clipsToHear.insert(candidate.id)
+            clipsHeard.insert(candidate.id)
+            return
+        case nil:
+            break
+        }
+        let asked = request
+        clipTasks[candidate.id] = Task { [weak self] in
+            let map = await clipTiming.ask(track: track, videoID: id)
+            guard let self, !Task.isCancelled, self.request == asked else { return }
+            self.clipTasks[candidate.id] = nil
+            if let map {
+                self.clipFound(map, for: candidate)
+            } else {
+                self.clipsToHear.insert(candidate.id)
+                self.hearClip(candidate)
+            }
+        }
+    }
+
+    /// Whether the clip's player should hold its sound: the site's pairing
+    /// is not known (yet), and this Mac can hear.
+    private func clipNeedsHearing(_ candidate: WallpaperCandidate) -> Bool {
+        guard let clipTiming, clipVideoID(candidate) != nil, clipMaps[candidate.id] == nil, !clipsHeard.contains(candidate.id) else { return false }
+        return clipTiming.canHear
+    }
+
+    /// Hears the clip through its player on a display, once per song.
+    private func hearClip(_ candidate: WallpaperCandidate) {
+        guard let clipTiming, let id = clipVideoID(candidate), clipMaps[candidate.id] == nil, clipTasks[candidate.id] == nil,
+              clipsToHear.contains(candidate.id), !clipsHeard.contains(candidate.id), let track = nowPlaying.snapshot?.track,
+              let media = screens.values.compactMap({ $0.media[candidate.id] as? YouTubeMediaView }).first(where: \.hearsSound)
+        else { return }
+        clipsHeard.insert(candidate.id)
+        let asked = request
+        clipTasks[candidate.id] = Task { [weak self, weak media] in
+            guard let media else { return }
+            let map = await clipTiming.hear(track: track, videoID: id, media: media) { [weak self] likely in
+                // Likely, not yet sure: the clip runs from there meanwhile.
+                guard let self, self.request == asked, self.clipMaps[candidate.id] == nil, self.clipGuesses[candidate.id] != likely else { return }
+                self.clipGuesses[candidate.id] = likely
+                self.screens.values.forEach { $0.media[candidate.id]?.lastJump = nil }
+                self.needsSync = true
+                self.refresh()
+            }
+            guard let self, !Task.isCancelled, self.request == asked else { return }
+            self.clipTasks[candidate.id] = nil
+            if let map { self.clipFound(map, for: candidate) }
+        }
+    }
+
+    /// The clip follows the song from here on, at the song's place in it.
+    private func clipFound(_ map: SongClipMap, for candidate: WallpaperCandidate) {
+        clipMaps[candidate.id] = map
+        for screen in screens.values {
+            guard let view = screen.media[candidate.id] else { continue }
+            view.setLoops(syncMode(of: candidate) != .followsSong)
+            // Moved at once, not after the last jump has settled.
+            view.lastJump = nil
+        }
+        needsSync = true
         refresh()
     }
 
@@ -932,14 +1049,19 @@ final class WallpaperController {
         let view: WallpaperMediaView
         switch candidate.media {
         case .youtube(let id):
-            let start = follows ? startPosition(lead: 1.5, duration: candidate.duration) : 0
-            view = YouTubeMediaView(candidate: candidate, videoID: id, start: start, loops: !follows, plan: power, frame: frame)
+            let start = follows ? startPosition(lead: 1.5, duration: candidate.duration, in: candidate) : 0
+            view = YouTubeMediaView(
+                candidate: candidate, videoID: id, start: start, loops: !follows, plan: power, frame: frame,
+                hearsSound: clipNeedsHearing(candidate)
+            )
+            // Once it is on its display: heard, when the site did not pair it.
+            DispatchQueue.main.async { [weak self] in self?.hearClip(candidate) }
         case .stream(let url), .file(let url):
             let shared = players[candidate.id] ?? {
                 let made = SharedVideoPlayer(candidate: candidate, url: url, plan: power)
                 made.onFailure = { [weak self] failure in self?.mediaFailed(candidate.id, failure) }
                 players[candidate.id] = made
-                if follows { made.seek(to: startPosition(lead: 0.3, duration: candidate.duration)) }
+                if follows { made.seek(to: startPosition(lead: 0.3, duration: candidate.duration, in: candidate)) }
                 return made
             }()
             shared.loops = !follows
@@ -951,7 +1073,7 @@ final class WallpaperController {
         case .generated(let look):
             let palette = nowPlaying.artwork?.palette ?? demoSong?.palette ?? .neutral
             let generated = GeneratedMotionView(candidate: candidate, look: look, colors: WallpaperDemo.colors(look: look, palette: palette), plan: power, frame: frame)
-            if follows { generated.seek(to: startPosition(lead: 0, duration: candidate.duration)) }
+            if follows { generated.seek(to: startPosition(lead: 0, duration: candidate.duration, in: candidate)) }
             view = generated
         }
         view.setLoops(!follows)
@@ -985,15 +1107,23 @@ final class WallpaperController {
 
     private func syncMode(of candidate: WallpaperCandidate?) -> VideoSyncMode {
         guard let candidate, nowPlaying.snapshot != nil else { return .loops }
+        // A clip whose place in the song is known follows it whatever its
+        // length (an intro, a scene in between).
+        if clipMaps[candidate.id] ?? clipGuesses[candidate.id] != nil, candidate.kind == .songVideo, settings.wallpaper.followSong { return .followsSong }
         return VideoSync.mode(
             isSongVideo: candidate.kind == .songVideo, syncEnabled: settings.wallpaper.followSong,
             songDuration: request?.duration ?? nowPlaying.snapshot?.track.duration, videoDuration: candidate.duration
         )
     }
 
-    private func startPosition(lead: TimeInterval, duration: TimeInterval?) -> TimeInterval {
+    private func startPosition(lead: TimeInterval, duration: TimeInterval?, in candidate: WallpaperCandidate) -> TimeInterval {
         guard let snapshot = nowPlaying.snapshot else { return 0 }
-        return VideoSync.startPosition(songPosition: snapshot.elapsed(at: Date()), lead: lead, videoDuration: duration)
+        return VideoSync.startPosition(songPosition: wantedPosition(in: candidate, song: snapshot.elapsed(at: Date())), lead: lead, videoDuration: duration)
+    }
+
+    /// Where the candidate's video is when the song is at `song`.
+    private func wantedPosition(in candidate: WallpaperCandidate, song: TimeInterval) -> TimeInterval {
+        (clipMaps[candidate.id] ?? clipGuesses[candidate.id])?.videoPosition(song: song) ?? song
     }
 
     /// While a following video shows and the song plays, compare the two
@@ -1032,12 +1162,22 @@ final class WallpaperController {
             view.position { time, length in
                 guard let time else { return }
                 let now = Date()
-                let song = snapshot.elapsed(at: now)
-                guard let target = VideoSync.correction(songPosition: song, videoPosition: time, videoDuration: length ?? duration) else { return }
+                let isMapped = self.clipMaps[view.candidate.id] != nil
+                let wanted = self.wantedPosition(in: view.candidate, song: snapshot.elapsed(at: now))
                 // The player is still settling after the last jump.
                 if let last = view.lastJump, now.timeIntervalSince(last) < VideoSync.settleTime { return }
+                // Where the last jump landed teaches the lead of the next.
+                if view.awaitsLanding {
+                    view.awaitsLanding = false
+                    Self.learnedLead = VideoSync.adjustedLead(Self.learnedLead, error: time - wanted)
+                }
+                guard let target = VideoSync.correction(
+                    songPosition: wanted, videoPosition: time, videoDuration: length ?? duration,
+                    tolerance: isMapped ? VideoSync.mappedTolerance : VideoSync.driftTolerance, lead: Self.learnedLead
+                ) else { return }
                 view.lastJump = now
-                Self.log.info("The song's video was \(String(format: "%+.1f", time - song)) s off; moved to \(String(format: "%.1f", target)) s")
+                view.awaitsLanding = true
+                Self.log.info("The song's video was \(String(format: "%+.1f", time - wanted)) s off; moved to \(String(format: "%.1f", target)) s (lead \(String(format: "%.1f", Self.learnedLead)) s)")
                 view.seek(to: target)
             }
         }

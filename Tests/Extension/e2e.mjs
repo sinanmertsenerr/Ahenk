@@ -11,6 +11,10 @@
 // 4. Ahenk sees the song, then drives the tab: pause, play, seek, like,
 //    shuffle, repeat, next, previous, the site's lyrics, volume, the queue,
 //    playlists, search and play. Its report says how it went.
+// 5. All of that happened in the one page that was opened: no other page
+//    was loaded and the site never asked whether to leave. A page Ahenk
+//    does load over one that plays is not asked about either, while one
+//    anybody else loads still is.
 //
 //   cd Tests/Extension && npm install && node e2e.mjs      (Scripts/bridge-e2e.sh does this)
 //   AHENK_APP=/path/Ahenk.app AHENK_E2E_PORT=45210 node e2e.mjs
@@ -118,7 +122,18 @@ try {
   page.on('console', (message) => {
     if (message.type() === 'error' && !/Failed to load resource/.test(message.text())) log(`page console: ${message.text()}`);
   });
+  // Pages loaded, and the times the site asked whether to leave (answered
+  // with "stay", so a question also keeps the page).
+  let loads = 0;
+  let questions = 0;
+  page.on('load', () => { loads += 1; });
+  page.on('dialog', (dialog) => {
+    if (dialog.type() === 'beforeunload') questions += 1;
+    dialog.dismiss().catch(() => {});
+  });
   await page.goto('https://music.youtube.com/watch?v=ahenkMock01');
+  // A browser asks before leaving only a page that was clicked in.
+  await page.mouse.click(400, 200);
   log('the mock site is open in the test browser');
   const pictured = shots ? picturePopup() : Promise.resolve();
 
@@ -126,6 +141,20 @@ try {
   const finished = await Promise.race([ahenkDone.then(() => true), new Promise((resolve) => setTimeout(() => resolve(false), limit))]);
   if (!finished) fail(`Ahenk did not finish within ${limit / 1000} s`);
   log(`the page ends on ${page.url()}`);
+  if (finished) {
+    if (loads !== 1 || questions !== 0) fail(`Ahenk's picks loaded ${loads - 1} more page(s) and the site asked to leave ${questions} time(s); expected neither`);
+    else log('every pick was shown in the one page; the site never asked whether to leave');
+    // The site does ask about a page somebody else loads over it …
+    await page.evaluate(() => { location.assign('/search?q=asked'); });
+    await page.waitForTimeout(1500);
+    if (questions !== 1 || loads !== 1) fail(`the mock site did not ask before leaving (${questions} question(s), ${loads} load(s)); the check above proves nothing`);
+    // … and not about one Ahenk's engine says it loads.
+    await page.evaluate(() => { window.__ahenkHooks.leaveQuietly(); location.assign('/search?q=quiet'); });
+    await page.waitForURL('**/search?q=quiet', { timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(500);
+    if (questions !== 1 || loads !== 2 || !page.url().endsWith('/search?q=quiet')) fail(`a page Ahenk loads was held up (${questions} question(s), ${loads} load(s), at ${page.url()})`);
+    else log('a page Ahenk loads is not asked about; one loaded by anybody else is');
+  }
   await pictured;
 } finally {
   await context.close().catch(() => {});

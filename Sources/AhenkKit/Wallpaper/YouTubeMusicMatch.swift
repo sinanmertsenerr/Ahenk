@@ -280,6 +280,14 @@ public final class YouTubeMusicMatcher: Sendable {
 
     // MARK: Asking
 
+    /// YouTube Music's songs for words somebody typed (its "Songs"
+    /// results); `nil` when it could not be asked.
+    public func songs(matching query: String) async -> [YouTubeMusicEntry]? {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        return await search(trimmed, filter: Self.songsFilter)
+    }
+
     private func search(_ query: String, filter: String) async -> [YouTubeMusicEntry]? {
         var country = region().uppercased()
         if country.count != 2 || !country.allSatisfy({ $0.isASCII && $0.isLetter }) { country = "US" }

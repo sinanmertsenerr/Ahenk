@@ -66,6 +66,14 @@ final class NowPlayingServices {
     /// Albums, songs and search for the desktop player (Apple's public
     /// catalog, or the demo library).
     @ObservationIgnored let catalog: any MusicCatalog
+    /// The sources that are searched for their own songs (none in the
+    /// demo, which never asks the network). The others list the catalog's.
+    @ObservationIgnored private let songSearches: [MusicSource: any SourceSongSearching]
+
+    /// The own search of `source`, when Ahenk can ask it.
+    func songSearch(for source: MusicSource) -> (any SourceSongSearching)? {
+        songSearches[source]
+    }
     /// Spotify track IDs for catalog songs (live only).
     @ObservationIgnored let spotifyFinder: (any SpotifyTrackFinding)?
     /// The Spotify sign-in that starts songs in the background (live only).
@@ -105,7 +113,8 @@ final class NowPlayingServices {
         makeLyricsChain: @escaping @Sendable (Set<String>) -> LyricsChain, features: (any AudioFeatureSource)?,
         recentlyPlayed: RecentlyPlayedStore, isDemo: Bool, mediaRemote: MediaRemoteProvider?, appleMusic: AppleMusicProvider?,
         spotify: SpotifyProvider?, resolver: ResolverBox, storefront: StorefrontBox, diskCache: ArtworkDiskCache?,
-        catalog: any MusicCatalog, catalogCache: CatalogCache?, spotifyFinder: (any SpotifyTrackFinding)?,
+        catalog: any MusicCatalog, catalogCache: CatalogCache?, songSearches: [MusicSource: any SourceSongSearching] = [:],
+        spotifyFinder: (any SpotifyTrackFinding)?,
         scripts: (any ScriptRunning)?, presence: (any AppPresenceMonitoring)?, fetcher: any HTTPFetching,
         bridgeServer: BrowserBridgeServer? = nil, siteLyrics: BrowserLyricsProvider? = nil,
         spotifyRemote: SpotifyRemoteSession? = nil
@@ -125,6 +134,7 @@ final class NowPlayingServices {
         self.diskCache = diskCache
         self.catalog = catalog
         self.catalogCache = catalogCache
+        self.songSearches = songSearches
         self.spotifyFinder = spotifyFinder
         self.spotifyRemote = spotifyRemote
         self.scripts = scripts
@@ -211,6 +221,19 @@ final class NowPlayingServices {
                 cache: catalogCache
             ),
             catalogCache: catalogCache,
+            // Each source is searched for its own songs where it can be
+            // asked without an account. A typed search asks more often than
+            // the wallpaper's lookups, so YouTube's keeps its own pace.
+            songSearches: [
+                .youtube: YouTubeSongSearch(videos: YouTubeVideoSearch(
+                    fetcher: fetcher, region: { storefront.code }, cache: catalogCache,
+                    throttle: RequestThrottle(limit: 24, per: 60, maximumWait: 2)
+                )),
+                .youtubeMusic: YouTubeMusicSongSearch(matcher: YouTubeMusicMatcher(fetcher: fetcher, region: { storefront.code }, cache: catalogCache)),
+                .spotify: SpotifySongSearch(reader: SpotifySearchWebReader(), source: .spotify),
+                .spotifyWeb: SpotifySongSearch(reader: SpotifySearchWebReader(), source: .spotifyWeb),
+                .deezer: DeezerSongSearch(fetcher: fetcher),
+            ],
             // Spotify's own search first (it knows every song it has); the
             // mapping service when its page cannot be read.
             spotifyFinder: spotifyFinder,

@@ -89,6 +89,8 @@ struct BridgeProtocolTests {
         #expect(object["mode"] as? String == "one" && object["id"] as? String == "c9")
         let welcome = try #require(try JSONSerialization.jsonObject(with: BridgeOutbound.welcome(BridgeWelcome(protocolVersion: 1, appVersion: "2")).encoded()) as? [String: Any])
         #expect(welcome["type"] as? String == "welcome" && welcome["protocol"] as? Int == 1 && welcome["app"] as? String == "Ahenk" && welcome["heartbeat"] as? Double == 20)
+        // The extension it carries: an older one takes itself up again on hearing it.
+        #expect(welcome["extensionVersion"] as? String == ExtensionVersion.shipped.description)
         let request = try #require(try JSONSerialization.jsonObject(with: BridgeOutbound.request(BridgeRequest(id: "r", kind: .play, site: "tidal", song: BridgeSong(title: "t", artist: "a"))).encoded()) as? [String: Any])
         #expect(request["request"] as? String == "play" && (request["song"] as? [String: Any])?["title"] as? String == "t")
     }
@@ -121,6 +123,50 @@ struct BridgeProtocolTests {
         #expect(BridgeCapability(rawValue: "rate") == .rate)
         // A command of another kind carries no rate.
         #expect(BridgeCommand(id: "x", tabID: 1, playback: .next).rate == nil)
+    }
+
+    @Test("The sound a tab's player holds: asked for by seconds, answered in 16-bit samples")
+    func heldSound() throws {
+        let request = BridgeRequest(id: "r12", kind: .sound, site: "youtubeMusic", tabID: 41, song: BridgeSong(title: "t", artist: "a", trackID: "ahenkMock01"), from: 20, seconds: 10)
+        let wire = try #require(try JSONSerialization.jsonObject(with: BridgeOutbound.request(request).encoded()) as? [String: Any])
+        #expect(wire["request"] as? String == "sound" && wire["from"] as? Double == 20 && wire["seconds"] as? Double == 10)
+        #expect((wire["song"] as? [String: Any])?["trackId"] as? String == "ahenkMock01")
+        #expect(try BridgeOutbound.decode(BridgeOutbound.request(request).encoded()) == .request(request))
+        #expect(BridgeCapability(rawValue: "sound") == .sound)
+
+        // The extension's answer (the fixture its own tests build): five samples.
+        guard case .result(let result) = try BridgeInbound.decode(fixture("result-sound")) else { Issue.record("not a result"); return }
+        let sound = try #require(result.sound)
+        #expect(result.ok && result.tabID == 41 && sound.heldFrom == 0 && sound.heldUntil == 39.8 && sound.start == 20 && sound.rate == 16_000)
+        #expect(sound.window == nil, "five samples are no stretch worth reading")
+        #expect(try BridgeInbound.decode(BridgeInbound.result(result).encoded()) == .result(result))
+
+        // Two seconds of a ramp, as the extension packs them.
+        var bytes = Data()
+        let values: [Int16] = (0..<32_000).map { Int16(truncatingIfNeeded: $0 - 16_000) }
+        for value in values { withUnsafeBytes(of: value.littleEndian) { bytes.append(contentsOf: $0) } }
+        let packed = BridgeSound(heldFrom: 0, heldUntil: 30, start: 12.5, rate: 16_000, samples: bytes.base64EncodedString())
+        let window = try #require(packed.window)
+        #expect(window.start == 12.5 && window.sampleRate == 16_000 && window.samples.count == 32_000 && window.seconds == 2)
+        #expect(window.samples[0] == Float(-16_000) / 32_768 && window.samples[16_000] == 0 && window.samples[31_999] == Float(15_999) / 32_768)
+
+        // How far the player holds, without sound: nothing to read yet.
+        guard case .result(let waiting) = try BridgeInbound.decode(json(#"{"type":"result","id":"r1","ok":true,"sound":{"from":0,"until":12.5}}"#)) else { Issue.record("not a result"); return }
+        #expect(waiting.sound?.heldUntil == 12.5 && waiting.sound?.samples == nil && waiting.sound?.window == nil)
+        // What cannot be sound is not read as sound.
+        var odd = packed
+        odd.samples = Data(bytes.dropLast()).base64EncodedString()
+        #expect(odd.window == nil, "half a sample")
+        odd.samples = "not base64 at all!"
+        #expect(odd.window == nil)
+        odd = packed
+        odd.start = nil
+        #expect(odd.window == nil, "no place in the song")
+        guard case .result(let wrong) = try BridgeInbound.decode(json(#"{"type":"result","id":"r2","ok":true,"sound":{"from":-4,"until":"far","start":1,"rate":3,"samples":""}}"#)) else { Issue.record("not a result"); return }
+        #expect(wrong.sound == BridgeSound(start: 1), "wrong values drop only themselves")
+        var long = packed
+        long.samples = Data(count: 2 * 16_000 * 17).base64EncodedString()
+        #expect(long.window == nil, "more than an answer may carry")
     }
 
     @Test("Unknown types and fields are ignored; wrong values drop only themselves")

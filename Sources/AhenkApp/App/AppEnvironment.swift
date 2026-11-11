@@ -73,6 +73,21 @@ final class AppEnvironment {
             guard let power = self?.power else { return false }
             return !power.isLowPowerMode && !power.isThermallyConstrained
         }
+        // A browser tab with the extension hands over the sound its player
+        // holds ahead of the song.
+        if let bridge = services.bridgeServer {
+            let tab: @Sendable (NowPlayingSnapshot) -> BrowserTabReport? = { song in
+                guard let instance = song.instanceIdentifier else { return nil }
+                return bridge.currentTabs.first { $0.tabID == instance && $0.snapshot.track.id == song.track.id }
+            }
+            sync.holdsSound = { tab($0)?.bridgeCapabilities.contains(.sound) ?? false }
+            sync.heldSound = { song, from, seconds in
+                guard let key = tab(song)?.tabID, let result = await bridge.heldSound(inTab: key, from: from, seconds: seconds), result.ok else {
+                    return .failed
+                }
+                return result.sound?.window.map { .sound($0) } ?? .notYet
+            }
+        }
         return sync
     }()
     /// The live wallpaper on every display (started with the services).
@@ -88,7 +103,13 @@ final class AppEnvironment {
         return WallpaperController(
             settings: settings, nowPlaying: nowPlaying, power: power, demo: demo, lookups: lookups,
             songOverride: demo == nil ? nil : options.wallpaperSong,
-            forcedKind: options.wallpaperSource.flatMap(WallpaperCandidate.Kind.init(rawValue:))
+            forcedKind: options.wallpaperSource.flatMap(WallpaperCandidate.Kind.init(rawValue:)),
+            clipTiming: demo == nil && !services.isDemo
+                ? SongClipTiming(
+                    settings: settings, lyrics: lyrics, bridge: services.browserPlayback as? BridgePlaybackRouter,
+                    cache: CatalogCache(directory: CatalogCache.standardDirectory)
+                )
+                : nil
         )
     }()
     /// The desktop widgets: clock, Continue Playing, the player and its

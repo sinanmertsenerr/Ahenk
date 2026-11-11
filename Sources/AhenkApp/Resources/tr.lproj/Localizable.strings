@@ -185,7 +185,7 @@
 "Custom" = "Özel";
 
 /* MARK: Desktop player */
-"A glass player on the desktop, under your windows: a big clock, Continue Playing, the artist's albums and search." = "Masaüstünde, pencerelerin altında duran cam bir oynatıcı: büyük bir saat, Çalmaya Devam Et listesi, sanatçının albümleri ve arama.";
+"A glass player on the desktop, under your windows: a big clock, Continue Playing and search." = "Masaüstünde, pencerelerin altında duran cam bir oynatıcı: büyük bir saat, Çalmaya Devam Et listesi ve arama.";
 "Show the desktop player" = "Masaüstü oynatıcıyı göster";
 "Size" = "Boyut";
 "Small" = "Küçük";
@@ -199,7 +199,6 @@
 "12-Hour" = "12 Saatlik";
 "24-Hour" = "24 Saatlik";
 "Continue Playing" = "Çalmaya Devam Et";
-"The artist's albums" = "Sanatçının albümleri";
 "Search bar" = "Arama çubuğu";
 "Player bar" = "Oynatıcı çubuğu";
 "Clock size" = "Saat boyutu";
@@ -242,17 +241,15 @@
 "Artist" = "Sanatçı";
 "Top Songs" = "Popüler Şarkılar";
 "Songs" = "Şarkılar";
+"Videos" = "Videolar";
+"Video" = "Video";
 "Explicit" = "Müstehcen";
-"Play the album" = "Albümü çal";
 "Play “%@”" = "“%@” şarkısını çal";
 "Shuffle" = "Karıştır";
 "More" = "Diğer";
 "Back" = "Geri";
 "Go to Album" = "Albüme Git";
 "Go to Artist" = "Sanatçıya Git";
-"Play a song to see the artist's albums here." = "Sanatçının albümlerini burada görmek için bir şarkı çalın.";
-"Loading the artist's albums…" = "Sanatçının albümleri yükleniyor…";
-"No albums found for this artist." = "Bu sanatçının albümü bulunamadı.";
 "Loading the songs…" = "Şarkılar yükleniyor…";
 "This album has no songs to play." = "Bu albümde çalınacak şarkı yok.";
 "Loading the artist…" = "Sanatçı yükleniyor…";
@@ -636,6 +633,8 @@
 "Playing on music sites needs the Ahenk browser extension." = "Müzik sitelerinde çalmak için Ahenk tarayıcı eklentisi gerekir.";
 "Open the site in your browser to see its playlists." = "Çalma listelerini görmek için siteyi tarayıcınızda açın.";
 "The site shows it now: press Play there." = "Site şimdi onu gösteriyor; oradan Çal düğmesine basın.";
+"Press Play on the site. The browser's Ahenk extension is out of date: reload it on the extensions page." = "Sitede Çal düğmesine basın. Tarayıcıdaki Ahenk uzantısı eski; uzantılar sayfasından yeniden yükleyin.";
+"The browser's Ahenk extension is out of date: reload it on the extensions page." = "Tarayıcıdaki Ahenk uzantısı eski; uzantılar sayfasından yeniden yükleyin.";
 "The site did not find this playlist." = "Site bu çalma listesini bulamadı.";
 "The site did not play this song." = "Site bu şarkıyı çalmadı.";
 "The site did not remove this song." = "Site bu şarkıyı çıkarmadı.";

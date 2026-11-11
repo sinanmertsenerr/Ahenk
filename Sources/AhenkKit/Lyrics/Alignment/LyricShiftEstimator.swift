@@ -14,6 +14,13 @@ public struct LyricShift: Sendable, Equatable {
     public var score: Double
     public var rivalScore: Double
 
+    /// Enough lines and words agree and no other answer has more: likely
+    /// right, though a refrain may still speak for another (not yet
+    /// `isConfident`). Good enough to act on while more is heard.
+    public var isLikely: Bool {
+        lines >= LyricShiftEstimator.minimumLines && words >= LyricShiftEstimator.minimumWords && score > rivalScore
+    }
+
     /// Enough lines and words agree, clearly ahead of any other answer.
     public var isConfident: Bool {
         lines >= LyricShiftEstimator.minimumLines && words >= LyricShiftEstimator.minimumWords
@@ -49,9 +56,12 @@ public enum LyricShiftEstimator {
     /// - Parameters:
     ///   - lines: the lyrics with their own timing.
     ///   - words: what the recogniser heard, at the song's own positions.
+    ///   - range: the shifts that are possible at all, when that is known
+    ///     (a song inside a clip of a known length): votes for any other
+    ///     are a refrain heard at another of its turns, and are left out.
     /// - Returns: the shift most of what was heard agrees on; `nil` when no
     ///   heard word is in the lyrics.
-    public static func estimate(lines: [LyricLine], words heard: [RecognizedWord]) -> LyricShift? {
+    public static func estimate(lines: [LyricLine], words heard: [RecognizedWord], within range: ClosedRange<Double>? = nil) -> LyricShift? {
         struct Place {
             var key: String
             var time: Double
@@ -86,7 +96,9 @@ public enum LyricShiftEstimator {
             for key in LyricAligner.words(of: word.text) {
                 let matches = places.indices.filter { LyricAligner.similarity(places[$0].key, key) >= LyricAligner.fuzzyThreshold }
                 for match in matches {
-                    votes.append(Vote(shift: word.start - places[match].time, weight: 1 / Double(matches.count), place: match, word: count))
+                    let shift = word.start - places[match].time
+                    if let range, !range.contains(shift) { continue }
+                    votes.append(Vote(shift: shift, weight: 1 / Double(matches.count), place: match, word: count))
                 }
                 count += 1
             }

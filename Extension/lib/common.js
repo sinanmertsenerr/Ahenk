@@ -151,8 +151,29 @@
     return core || normalize(title);
   }
 
+  /** A video's title often names its artist itself ("Artist - Song
+   *  (Official Video)", or the other way round), under a channel with a
+   *  name of its own. The song such a title names, when one of its halves
+   *  holds the wanted artist as whole words; null otherwise. */
+  function songOfVideoTitle(title, wantedArtist) {
+    const artist = normalize(wantedArtist);
+    const halves = String(title || '').match(/^(.+?)\s+[-–—]\s+(.+)$/);
+    if (!artist || !halves) return null;
+    const names = (half) => (' ' + normalize(half) + ' ').includes(' ' + artist + ' ');
+    if (names(halves[1])) return { title: halves[2], artist: halves[1] };
+    if (names(halves[2])) return { title: halves[1], artist: halves[2] };
+    return null;
+  }
+
   /** How well a search result matches the wanted song, 0…1. */
   function matchScore(wanted, candidate) {
+    const plain = scoreAsWritten(wanted, candidate);
+    const named = songOfVideoTitle(candidate.title, wanted.artist);
+    // A little less than the artist's own upload of it would score.
+    return named ? Math.max(plain, scoreAsWritten(wanted, Object.assign({}, candidate, named)) - 0.05) : plain;
+  }
+
+  function scoreAsWritten(wanted, candidate) {
     const wantedTitle = coreTitle(wanted.title);
     const title = coreTitle(candidate.title);
     if (!wantedTitle || !title) return 0;
@@ -201,6 +222,60 @@
   /** "Song title" + "Artist" as a search query. */
   function searchQuery(song) {
     return [song.title, song.artist].map((s) => String(s || '').trim()).filter(Boolean).join(' ');
+  }
+
+  /** True when the page at `shown` is the one `wanted` names: the same
+   *  site and path, with everything `wanted` asks for in its query (a site
+   *  adds parameters of its own, and writes a space its own way). */
+  function sameAddress(shown, wanted) {
+    let a;
+    let b;
+    try {
+      a = new URL(shown);
+      b = new URL(wanted);
+    } catch (_) {
+      return false;
+    }
+    if (a.origin !== b.origin || a.pathname.replace(/\/+$/, '') !== b.pathname.replace(/\/+$/, '')) return false;
+    for (const [name, value] of b.searchParams) if (a.searchParams.get(name) !== value) return false;
+    return true;
+  }
+
+  /** What YouTube's own page is told to show `address` without loading a
+   *  new page (the command a click on one of its links carries): a video, a
+   *  search or a playlist of `site`. Null for any other address. */
+  function youtubeEndpoint(site, address) {
+    if (site !== 'youtube' && site !== 'youtubeMusic') return null;
+    let url;
+    try {
+      url = new URL(address);
+    } catch (_) {
+      return null;
+    }
+    if (url.protocol !== 'https:' || siteForHost(url.hostname) !== site || url.hostname.toLowerCase() === 'youtu.be') return null;
+    const music = site === 'youtubeMusic';
+    const list = url.searchParams.get('list');
+    const listOK = /^[A-Za-z0-9_-]{2,}$/.test(list || '');
+    let endpoint = null;
+    let page = null;
+    if (url.pathname === '/watch') {
+      const id = youtubeVideoId(url.searchParams.get('v'));
+      if (!id || (list && !listOK)) return null;
+      endpoint = { watchEndpoint: list ? { videoId: id, playlistId: list } : { videoId: id } };
+      page = ['WEB_PAGE_TYPE_WATCH', 3832];
+    } else if (url.pathname === (music ? '/search' : '/results')) {
+      const query = String(url.searchParams.get(music ? 'q' : 'search_query') || '').trim();
+      if (!query) return null;
+      endpoint = { searchEndpoint: { query } };
+      page = ['WEB_PAGE_TYPE_SEARCH', 4724];
+    } else if (url.pathname === '/playlist' && listOK) {
+      endpoint = { browseEndpoint: { browseId: 'VL' + list } };
+      page = ['WEB_PAGE_TYPE_PLAYLIST', 5754];
+    }
+    if (!endpoint) return null;
+    // youtube.com reads where to go from the command's own page data.
+    if (!music) endpoint.commandMetadata = { webCommandMetadata: { url: url.pathname + url.search, webPageType: page[0], rootVe: page[1] } };
+    return endpoint;
   }
 
   /** Where each site searches, plays a track and starts. */
@@ -334,6 +409,82 @@
     return Math.abs(current - target) > 0.005 ? target : null;
   }
 
+  /**
+   * Where a song falls in its music video, from YouTube Music's own answer
+   * about the video (`/next`): the site keeps, for a listener who may
+   * switch between a song and its video, the stretches the two share
+   * ("the video from 41.0 s is the song from 0.6 s, for 186 s"). Null when
+   * the answer does not pair `videoId` with a song (no video of its own,
+   * or a listener the site does not offer the switch to).
+   */
+  function clipSegments(response, videoId) {
+    const clock = (text) => {
+      const parts = String(text || '').trim().split(':').map(Number);
+      if (parts.length < 2 || parts.length > 3 || parts.some((part) => !Number.isFinite(part) || part < 0)) return undefined;
+      return parts.reduce((total, part) => total * 60 + part, 0);
+    };
+    const seconds = (value) => {
+      const number = Number(value);
+      return Number.isFinite(number) && number >= 0 ? number / 1000 : null;
+    };
+    let found = null;
+    let visited = 0;
+    (function walk(node) {
+      if (found || !node || typeof node !== 'object' || (visited += 1) > 200000) return;
+      const wrapper = node.playlistPanelVideoWrapperRenderer;
+      if (wrapper && typeof wrapper === 'object') {
+        const primary = wrapper.primaryRenderer && wrapper.primaryRenderer.playlistPanelVideoRenderer;
+        const pair = Array.isArray(wrapper.counterpart) ? wrapper.counterpart[0] : null;
+        const other = pair && pair.counterpartRenderer && pair.counterpartRenderer.playlistPanelVideoRenderer;
+        const listed = pair && pair.segmentMap && Array.isArray(pair.segmentMap.segment) ? pair.segmentMap.segment : null;
+        if (primary && other && listed && primary.videoId === videoId && youtubeVideoId(other.videoId) === other.videoId) {
+          const segments = listed
+            .map((segment) => ({
+              video: seconds(segment.primaryVideoStartTimeMilliseconds),
+              song: seconds(segment.counterpartVideoStartTimeMilliseconds),
+              duration: seconds(segment.durationMilliseconds),
+            }))
+            .filter((segment) => segment.video !== null && segment.song !== null && segment.duration > 0)
+            .slice(0, 64);
+          const length = other.lengthText && Array.isArray(other.lengthText.runs) && other.lengthText.runs[0] ? clock(other.lengthText.runs[0].text) : undefined;
+          if (segments.length) found = { videoId, songId: other.videoId, songSeconds: length, segments };
+          return;
+        }
+      }
+      if (Array.isArray(node)) for (const child of node) walk(child);
+      else for (const key of Object.keys(node)) walk(node[key]);
+    })(response);
+    return found;
+  }
+
+  /** "1.5", "1.5.0" or "v1.10.3" as three numbers; null for anything else. */
+  function parseVersion(text) {
+    const parts = String(text ?? '').trim().replace(/^v/, '').split('.');
+    if (parts.length < 1 || parts.length > 3 || !parts.every((part) => /^\d{1,9}$/.test(part))) return null;
+    const numbers = parts.map(Number);
+    while (numbers.length < 3) numbers.push(0);
+    return numbers;
+  }
+
+  /** True when version `a` is newer than `b`; false when either is unreadable. */
+  function versionNewer(a, b) {
+    const first = parseVersion(a);
+    const second = parseVersion(b);
+    if (!first || !second) return false;
+    for (let i = 0; i < 3; i += 1) if (first[i] !== second[i]) return first[i] > second[i];
+    return false;
+  }
+
+  /**
+   * Whether an extension of version `own` takes itself up again on hearing
+   * that Ahenk carries `shipped`: when that is newer, and once per version
+   * (`triedFor` is the version it last did so for; a browser that keeps a
+   * copy of its own comes back as old as before).
+   */
+  function takesUpNewer(shipped, own, triedFor) {
+    return versionNewer(shipped, own) && String(shipped) !== String(triedFor ?? '');
+  }
+
   /** Seconds to wait before reconnect attempt `n` (0-based). */
   function backoff(attempt) {
     const steps = [1, 2, 4, 8, 15, 30];
@@ -373,6 +524,8 @@
     pickBest,
     searchQuery,
     siteURL,
+    sameAddress,
+    youtubeEndpoint,
     youtubeKind,
     musicVideoType,
     cleanYouTubeArtist,
@@ -381,9 +534,20 @@
     noticeableChange,
     playbackRate,
     rateCorrection,
+    clipSegments,
+    parseVersion,
+    versionNewer,
+    takesUpNewer,
     backoff,
     repeatFromState,
     boolAttr,
   };
-  if (!root.AhenkCommon) Object.defineProperty(root, 'AhenkCommon', { value: Object.freeze(api), configurable: false, enumerable: false });
+  // The newest scripts win: an updated extension puts its own over the
+  // ones a page still holds (a page from before 1.5.0 keeps its own
+  // until it loads again).
+  try {
+    Object.defineProperty(root, 'AhenkCommon', { value: Object.freeze(api), configurable: true, enumerable: false });
+  } catch (_) {
+    // Held by scripts that cannot be replaced.
+  }
 })(typeof globalThis !== 'undefined' ? globalThis : this);

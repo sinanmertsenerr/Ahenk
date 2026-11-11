@@ -3,11 +3,26 @@
 // page/sites.js), reports changes to the extension, and carries out
 // Ahenk's commands and requests. Talks to content/relay.js through
 // window.postMessage; never to the network.
+//
+// An updated extension puts its scripts into the pages that are open (see
+// background.js): the engine that ran here steps down (`retire`) and this
+// one goes on with the page's hooks, so a tab that plays needs no reload.
 (function () {
   'use strict';
-  if (window.__ahenkEngine || !window.__ahenkHooks || !window.__ahenkSites || !window.AhenkCommon) return;
+  const before = window.__ahenkEngine;
+  // An engine from before 1.5.0 cannot step down: the page keeps its
+  // scripts until it loads again.
+  if (before === true || !window.__ahenkHooks || !window.__ahenkSites || !window.AhenkCommon) return;
+  if (before && typeof before.retire === 'function') {
+    try {
+      before.retire();
+    } catch (_) {
+      // It is gone either way: its messages are no longer answered.
+    }
+  }
   const C = window.AhenkCommon;
   const L = window.AhenkLyrics;
+  const S = window.AhenkSound;
   const hooks = window.__ahenkHooks;
   const profile = window.__ahenkSites.forHost(location.hostname);
   if (!profile) return;
@@ -20,7 +35,11 @@
 
   // MARK: Messages to the extension
 
+  /** True once a newer engine took this page over. */
+  let retired = false;
+
   function post(message) {
+    if (retired) return;
     window.postMessage({ __ahenk: 'page', message }, location.origin);
   }
 
@@ -150,6 +169,8 @@
     const volume = readVolume(element);
     if (volume !== null) can.push('volume');
     if (element) can.push('rate');
+    if (heldSound(element)) can.push('sound');
+    if (profile.clip && profile.network && call(() => profile.network(), null)) can.push('clip');
 
     return {
       site,
@@ -195,6 +216,7 @@
   let timer = null;
 
   function report(force) {
+    if (retired) return;
     const state = read();
     const now = Date.now();
     if (!state) {
@@ -215,6 +237,7 @@
 
   function schedule() {
     clearTimeout(timer);
+    if (retired) return;
     const playing = last && last.state === 'playing';
     timer = setTimeout(() => {
       report(false);
@@ -223,7 +246,7 @@
   }
 
   let pending = false;
-  hooks.subscribe(() => {
+  const unsubscribe = hooks.subscribe(() => {
     if (pending) return;
     pending = true;
     setTimeout(() => {
@@ -231,11 +254,12 @@
       report(false);
     }, 120);
   });
-  document.addEventListener('visibilitychange', () => schedule());
+  const onVisibility = () => schedule();
+  document.addEventListener('visibilitychange', onVisibility);
 
   // MARK: Lyrics the site loads for itself
 
-  hooks.state.onJSON = {
+  const onJSON = {
     wants: (url) => L.wants(site, url),
     deliver(url, json) {
       const found = L.extract(site, url, json);
@@ -253,6 +277,7 @@
       });
     },
   };
+  hooks.state.onJSON = onJSON;
 
   // MARK: A video's own captions as lyrics
 
@@ -294,6 +319,57 @@
         });
       })
       .catch(() => {});
+  }
+
+  // MARK: The sound the player holds ahead
+
+  /** The audio stream the tab's player was handed for what it plays (see
+   *  page/hooks.js), or null: another site, a page that loaded before the
+   *  extension, a stream whose beginning is not known. */
+  function heldSound(element) {
+    if (!S || !hooks.sound || (site !== 'youtubeMusic' && site !== 'youtube')) return null;
+    return call(() => hooks.sound.held(element), null);
+  }
+
+  /** The stream as 16 kHz mono samples from its `start`. Decoded by the
+   *  browser, and again only once more of it arrived. */
+  async function heldSamples(held) {
+    const known = held.decoded;
+    if (known && known.run === held.run && known.bytes === held.bytes) return known.samples;
+    const run = held.run;
+    const bytes = held.bytes;
+    const context = new OfflineAudioContext({ numberOfChannels: 1, length: 1, sampleRate: S.RATE });
+    const buffer = await context.decodeAudioData(S.stream(held).buffer);
+    const channels = [];
+    for (let i = 0; i < buffer.numberOfChannels; i += 1) channels.push(buffer.getChannelData(i));
+    const samples = S.mono(channels);
+    held.decoded = { run, bytes, samples };
+    return samples;
+  }
+
+  /** `job.seconds` of the playing video's sound from `job.from` (seconds
+   *  of the video), or from where the held stream begins. Without
+   *  `samples` in the answer the player does not hold that much yet. */
+  async function readSound(job) {
+    const now = read();
+    const wanted = job.song && job.song.trackId;
+    if (!now || (wanted && String(wanted) !== String(now.trackId || ''))) return { ok: false, error: 'another song plays' };
+    const element = activeElement();
+    const held = heldSound(element);
+    if (!held) return { ok: false, error: 'no sound is held here' };
+    // An advertisement plays through the same player.
+    if (now.kind === 'advertisement' || $('.html5-video-player.ad-showing')) return { ok: true, sound: {} };
+    const seconds = Math.max(1, Math.min(15, Number(job.seconds) || 10));
+    const from = Math.max(Number(job.from) || 0, held.start);
+    const sound = { from: held.start, until: held.until };
+    if (held.until < from + seconds - 0.05) return { ok: true, sound };
+    const run = held.run;
+    const samples = await heldSamples(held);
+    // A seek while it was decoded: what was read is of another stretch.
+    if (held.run !== run) return { ok: true, sound: {} };
+    const piece = S.cut(held.start, samples, from, seconds);
+    if (!piece) return { ok: true, sound };
+    return { ok: true, sound: Object.assign(sound, { start: piece.start, rate: S.RATE, samples: S.pcm16(piece.samples) }) };
   }
 
   // MARK: Commands
@@ -420,6 +496,16 @@
     return C.matchScore(song, now) >= 0.5;
   }
 
+  /** Shows `url` in this page, without loading a new one, where the site
+   *  can (`profile.show`): what plays goes on, the site has nothing to ask
+   *  before leaving, and the browser lets the next song start by itself (a
+   *  newly loaded page may play only after a click in it). True once the
+   *  page is at that address. */
+  async function showInPage(url) {
+    if (!profile.show || !url || !call(() => profile.show(url), false)) return false;
+    return !!(await until(() => C.sameAddress(location.href, url), 3000, 100));
+  }
+
   async function confirmStarted(song) {
     const matched = await until(() => playsSong(song), 10000, 250);
     if (!matched) return { ok: false, outcome: 'failed', error: 'another song plays' };
@@ -441,6 +527,22 @@
     if (!song.title) return { ok: false, outcome: 'failed', error: 'no song' };
     if (playsSong(song) && (read() || {}).state === 'playing') return { ok: true, outcome: 'started' };
     const phase = job.phase || 1;
+    // The site's own page opens the song it knows by ID, in place.
+    let waited = false;
+    if (phase === 1 && song.trackId && profile.show && (await showInPage(C.siteURL(site, 'track', song.trackId)))) {
+      waited = true;
+      const answer = await confirmStarted(song);
+      if (answer.ok) return answer;
+      // An advertisement first: the song follows it. Anything else (the
+      // video is gone, or not for this listener): the site's search.
+      if ((read() || {}).kind === 'advertisement') return { ok: true, outcome: 'opened' };
+    }
+    // The page already shows that very song (a tab opened on it, or a pick
+    // repeated while it loads): it only has to start.
+    if (!waited && song.trackId && profile.trackId && String(call(() => profile.trackId(), '') || '') === String(song.trackId)) {
+      const answer = await confirmStarted(song);
+      if (answer.ok || phase > 1) return answer;
+    }
     const direct = profile.playByID ? call(() => profile.playByID(song), null) : null;
     if (direct) {
       if (location.href.split('?')[0] !== direct.split('?')[0]) {
@@ -454,9 +556,16 @@
     }
     if (!profile.search) return { ok: false, outcome: 'failed', error: 'the site cannot search' };
     const expected = C.siteURL(site, 'search', C.searchQuery(song));
-    if (phase === 1 && location.href !== expected) return { navigate: expected };
-    const results = await until(() => profile.search.results(), 10000, 300);
-    const best = C.pickBest(song, results || [], 0.5);
+    let best = null;
+    if (phase === 1 && !C.sameAddress(location.href, expected)) {
+      if (!(await showInPage(expected))) return { navigate: expected };
+      // The page before may have been a search too: its rows stay until
+      // the new ones arrive, so only a row that matches is waited for.
+      best = await until(() => C.pickBest(song, profile.search.results() || [], 0.5), 10000, 300);
+    } else {
+      const results = await until(() => profile.search.results(), 10000, 300);
+      best = C.pickBest(song, results || [], 0.5);
+    }
     if (!best) return { ok: false, outcome: 'notFound' };
     best.play();
     return confirmStarted(Object.assign({}, song, { trackId: best.trackId || song.trackId }));
@@ -489,8 +598,11 @@
         if (!profile.playlists) return { ok: false, outcome: 'failed', error: 'no playlists here' };
         if (!(await openPlaylist(job))) {
           const phase = job.phase || 1;
-          if (job.playlistUrl && phase === 1) return { navigate: job.playlistUrl };
-          if (!(await until(() => profile.playlists.rows().length > 0, 8000))) return { ok: false, outcome: 'notFound' };
+          const lists = profile.playlists;
+          // In place: the rows of a list shown before do not count.
+          const inPlace = !!job.playlistUrl && phase === 1 && (await showInPage(job.playlistUrl));
+          if (job.playlistUrl && phase === 1 && !inPlace) return { navigate: job.playlistUrl };
+          if (!(await until(() => (!inPlace || !lists.isOpen || lists.isOpen(job.playlistId)) && lists.rows().length > 0, 8000))) return { ok: false, outcome: 'notFound' };
         }
         const rows = profile.playlists.rows();
         const row = Number.isInteger(job.index) ? rows[job.index] : null;
@@ -514,6 +626,13 @@
       }
       case 'setVolume':
         return { ok: await setVolume(job.volume) };
+      case 'sound':
+        return readSound(job);
+      case 'clip': {
+        if (!profile.clip) return { ok: false, error: 'the site pairs no songs with videos' };
+        const clip = await profile.clip(String(job.videoId || ''));
+        return clip ? { ok: true, clip } : { ok: false, outcome: 'notFound' };
+      }
       default:
         return { ok: false, error: 'unknown request' };
     }
@@ -521,8 +640,8 @@
 
   // MARK: Messages from the extension
 
-  window.addEventListener('message', (event) => {
-    if (event.source !== window || !event.data || event.data.__ahenk !== 'ext') return;
+  function onMessage(event) {
+    if (retired || event.source !== window || !event.data || event.data.__ahenk !== 'ext') return;
     const message = event.data.message || {};
     if (message.kind === 'resync') {
       post({ kind: 'ready', site });
@@ -533,6 +652,7 @@
       Promise.resolve(runCommand(message))
         .catch(() => false)
         .then((ok) => {
+          if (retired) return;
           post({ kind: 'result', id: message.id, ok: !!ok });
           setTimeout(() => report(false), 150);
         });
@@ -542,18 +662,37 @@
       Promise.resolve(runRequest(message.job || {}))
         .catch((error) => ({ ok: false, outcome: 'failed', error: String((error && error.message) || error) }))
         .then((answer) => {
+          // A newer engine took the page over meanwhile: this answer is
+          // nobody's, and no page is loaded for it.
+          if (retired) return;
           if (answer && answer.navigate) {
             post({ kind: 'navigating', id: message.id });
-            setTimeout(() => location.assign(answer.navigate), 50);
+            setTimeout(() => {
+              // Ahenk's user picked this: the site does not ask about it.
+              if (hooks.leaveQuietly) hooks.leaveQuietly();
+              location.assign(answer.navigate);
+            }, 50);
             return;
           }
           post(Object.assign({ kind: 'result', id: message.id }, answer));
           setTimeout(() => report(false), 150);
         });
     }
-  });
+  }
+  window.addEventListener('message', onMessage);
 
-  Object.defineProperty(window, '__ahenkEngine', { value: true, enumerable: false });
+  /** Steps down for the engine of an updated extension: nothing is read,
+   *  reported or answered from here on. What the page plays is untouched. */
+  function retire() {
+    retired = true;
+    clearTimeout(timer);
+    window.removeEventListener('message', onMessage);
+    document.removeEventListener('visibilitychange', onVisibility);
+    if (typeof unsubscribe === 'function') unsubscribe();
+    if (hooks.state.onJSON === onJSON) hooks.state.onJSON = null;
+  }
+
+  Object.defineProperty(window, '__ahenkEngine', { value: Object.freeze({ retire }), enumerable: false, configurable: true });
   post({ kind: 'ready', site });
   report(true);
   schedule();

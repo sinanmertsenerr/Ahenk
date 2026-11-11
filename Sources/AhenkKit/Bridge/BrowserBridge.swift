@@ -36,6 +36,9 @@ public struct BrowserTabReport: Sendable, Equatable, Identifiable {
     public var connectionID: Int?
     /// What the extension can do in this tab beyond transport commands.
     public var bridgeCapabilities: Set<BridgeCapability> = []
+    /// The site's own ID of the song, as the page says it (a YouTube
+    /// video ID): what a request about this song names.
+    public var siteTrackID: String?
     public var volume: Double?
     /// The tab is the selected one in its window.
     public var isActiveTab = false
@@ -250,6 +253,9 @@ public protocol BrowserPlaybackRouting: AnyObject, Sendable {
     func hasVolume(on site: MusicSource) -> Bool
     /// An extension is connected.
     var isConnected: Bool { get }
+    /// A connected extension is older than the one Ahenk carries: what a
+    /// newer one does better (or at all) does not happen in that browser.
+    var extensionNeedsReload: Bool { get }
 }
 
 /// The songs of a site's own queue.

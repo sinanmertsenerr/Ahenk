@@ -3,74 +3,6 @@ import Foundation
 import Testing
 @testable import AhenkKit
 
-@Suite("Cover flow geometry")
-struct CoverFlowGeometryTests {
-    let geometry = CoverFlowGeometry()
-
-    @Test("The centre card faces the viewer; side cards turn away symmetrically")
-    func cards() {
-        let center = geometry.card(atOffset: 0)
-        #expect(center.x == 0 && center.angle == 0 && center.scale == 1 && center.shade == 0 && center.opacity == 1)
-        for offset in [0.25, 0.5, 1, 2, 3.5] {
-            let right = geometry.card(atOffset: offset)
-            let left = geometry.card(atOffset: -offset)
-            #expect(right.x == -left.x)
-            #expect(right.angle == -left.angle)
-            #expect(right.scale == left.scale && right.zIndex == left.zIndex)
-            #expect(right.angle < 0, "cards on the right face left")
-        }
-        #expect(geometry.card(atOffset: 1).angle == -geometry.maxAngle)
-        #expect(geometry.card(atOffset: 3).angle == -geometry.maxAngle, "the turn stops growing after the first card")
-        #expect(geometry.card(atOffset: 1).scale == geometry.sideScale)
-        #expect(geometry.card(atOffset: 1).x == geometry.centerGap)
-        #expect(geometry.card(atOffset: 2).x == geometry.centerGap + geometry.sideSpacing)
-        #expect(geometry.card(atOffset: 3).opacity == 1)
-        #expect(geometry.card(atOffset: 3.5).opacity == 0.5, "cards fade out over one card beyond the radius")
-        #expect(geometry.card(atOffset: 4).opacity == 0)
-        #expect(geometry.card(atOffset: .nan).opacity == 0)
-    }
-
-    @Test("Cards move outwards steadily and nearer cards stay in front")
-    func monotonic() {
-        var lastX = -Double.infinity
-        var lastZ = Double.infinity
-        for step in 0...40 {
-            let card = geometry.card(atOffset: Double(step) / 10)
-            #expect(card.x >= lastX)
-            #expect(card.zIndex <= lastZ)
-            #expect(card.shade <= CoverFlowGeometry.maximumShade)
-            lastX = card.x
-            lastZ = card.zIndex
-        }
-    }
-
-    @Test("Index math: nearest card, dragging with resistance at the ends, momentum")
-    func indexMath() {
-        #expect(CoverFlowGeometry.nearestIndex(to: 2.4, count: 5) == 2)
-        #expect(CoverFlowGeometry.nearestIndex(to: 2.6, count: 5) == 3)
-        #expect(CoverFlowGeometry.nearestIndex(to: -3, count: 5) == 0)
-        #expect(CoverFlowGeometry.nearestIndex(to: 99, count: 5) == 4)
-        #expect(CoverFlowGeometry.nearestIndex(to: 1, count: 0) == 0)
-        let step = geometry.dragStep
-        #expect(geometry.position(dragging: -step * 2, from: 1, count: 5) == 3, "dragging left moves to later cards")
-        #expect(geometry.position(dragging: step * 3, from: 1, count: 5) == -2.0 / 3, "past the first card at a third of the pace")
-        #expect(geometry.position(dragging: -step * 7, from: 1, count: 5) == 4 + 4.0 / 3)
-        #expect(geometry.restingIndex(position: 2.2, velocity: 0, count: 5) == 2)
-        #expect(geometry.restingIndex(position: 2.2, velocity: -900, count: 5) == 4, "a fast fling carries on")
-        #expect(geometry.restingIndex(position: 2.2, velocity: -1_000_000, count: 50) == 5, "at most three cards")
-        #expect(geometry.restingIndex(position: 0.3, velocity: 5_000, count: 5) == 0)
-    }
-
-    @Test("Only cards near the position are drawn")
-    func visibleRange() {
-        #expect(geometry.visibleIndices(around: 0, count: 10) == 0...4)
-        #expect(geometry.visibleIndices(around: 5.5, count: 10) == 2...9)
-        #expect(geometry.visibleIndices(around: 9, count: 10) == 5...9)
-        #expect(geometry.visibleIndices(around: 0, count: 0) == nil)
-        #expect(geometry.width > geometry.cardSide)
-    }
-}
-
 @Suite("Widget placement")
 struct WidgetPlacementTests {
     let screen = CGRect(x: 0, y: 70, width: 1512, height: 912)
@@ -188,30 +120,27 @@ struct ClockTextTests {
 
 @Suite("Player window layout")
 struct PlayerLayoutTests {
-    @Test("The large player stacks albums, search and bar; a page replaces the albums")
+    @Test("The large player stacks a row for messages, search and bar; a page replaces the row")
     func large() {
         let state = PlayerLayoutState(size: .large)
-        #expect(PlayerLayout.rows(state) == [PlayerLayout.albumsHeight, PlayerLayout.searchHeight, PlayerLayout.barHeight])
+        #expect(PlayerLayout.rows(state) == [PlayerLayout.accessoryHeight, PlayerLayout.searchHeight, PlayerLayout.barHeight])
         let size = PlayerLayout.size(state)
         #expect(Double(size.width) == PlayerLayout.largeWidth + 2 * PlayerLayout.margin)
-        let content = PlayerLayout.albumsHeight + PlayerLayout.searchHeight + PlayerLayout.barHeight + 2 * PlayerLayout.spacing
+        let content = PlayerLayout.accessoryHeight + PlayerLayout.searchHeight + PlayerLayout.barHeight + 2 * PlayerLayout.spacing
         #expect(Double(size.height) == content + 2 * PlayerLayout.margin)
         var page = state
         page.showsPage = true
         #expect(PlayerLayout.rows(page).first == PlayerLayout.pageHeight)
         #expect(PlayerLayout.size(page).height > size.height, "a page grows the window upwards")
-        var plain = state
-        plain.showsAlbums = false
-        #expect(PlayerLayout.rows(plain).first == PlayerLayout.accessoryHeight, "messages keep a row when the albums are off")
         let dots = PlayerLayoutState(size: .large, showsWallpaperPicker: true)
-        #expect(PlayerLayout.rows(dots) == [PlayerLayout.pickerHeight, PlayerLayout.albumsHeight, PlayerLayout.searchHeight, PlayerLayout.barHeight])
+        #expect(PlayerLayout.rows(dots) == [PlayerLayout.pickerHeight, PlayerLayout.accessoryHeight, PlayerLayout.searchHeight, PlayerLayout.barHeight])
         #expect(Double(PlayerLayout.size(dots).height) == Double(size.height) + PlayerLayout.pickerHeight + PlayerLayout.spacing, "the dots sit on top")
         #expect(PlayerLayout.rows(PlayerLayoutState(size: .small, showsWallpaperPicker: true)).first == PlayerLayout.pickerHeight)
-        #expect(!PlayerLayout.rows(PlayerLayoutState(size: .large, showsAlbums: false, showsSearch: false, showsBar: false, showsWallpaperPicker: true))
+        #expect(!PlayerLayout.rows(PlayerLayoutState(size: .large, showsSearch: false, showsBar: false, showsWallpaperPicker: true))
                 .contains(PlayerLayout.pickerHeight), "no dots without a player")
-        let nothing = PlayerLayoutState(size: .large, showsAlbums: false, showsSearch: false, showsBar: false)
+        let nothing = PlayerLayoutState(size: .large, showsSearch: false, showsBar: false)
         #expect(nothing.isEmpty)
-        #expect(!PlayerLayoutState(size: .small, showsAlbums: false, showsSearch: false, showsBar: false).isEmpty)
+        #expect(!PlayerLayoutState(size: .small, showsSearch: false, showsBar: false).isEmpty)
     }
 
     @Test("The small player is its bar and buttons; search opens on request and pages grow it")

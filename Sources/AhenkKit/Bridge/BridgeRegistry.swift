@@ -315,6 +315,7 @@ extension BrowserTabReport {
         browserTabID = tab.tabID
         connectionID = connection.id
         bridgeCapabilities = tab.capabilities
+        siteTrackID = tab.trackID
         volume = tab.volume
         isActiveTab = tab.isActive ?? false
         lastActive = tab.lastActive.map { Date(timeIntervalSince1970: $0 / 1000) }

@@ -49,8 +49,10 @@ class WallpaperMediaView: NSView {
     func setPlaying(_ playing: Bool) {}
     /// Jumps to `seconds` (the song's own video, in step with the song).
     func seek(to seconds: TimeInterval) {}
-    /// When the controller last moved it to the song's position.
+    /// When the controller last moved it to the song's position, and
+    /// whether where that jump landed has been looked at yet.
     var lastJump: Date?
+    var awaitsLanding = false
     /// Loops on its own, or holds its last frame at the end.
     func setLoops(_ loops: Bool) {}
     /// The current position and length, when the media knows them.

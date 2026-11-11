@@ -5,7 +5,8 @@
 // class names), never on button labels, which follow the site's language.
 (function () {
   'use strict';
-  if (window.__ahenkSites) return;
+  // A page whose scripts are from before 1.5.0 keeps them (see engine.js).
+  if (window.__ahenkEngine === true) return;
   const C = window.AhenkCommon;
 
   // DOM helpers.
@@ -139,6 +140,21 @@
     return !!player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'));
   }
 
+  /** Shows a video, a search or a playlist in YouTube's own page (its
+   *  `app` element), the way a click on one of its links does: no new page
+   *  loads, so what plays goes on until the new song starts and the site
+   *  has nothing to ask before leaving. False when the page cannot take
+   *  the address (the caller then loads it). */
+  function ytShow(site, app) {
+    return (url) => {
+      const endpoint = C.youtubeEndpoint(site, url);
+      const element = $(app);
+      if (!endpoint || !element) return false;
+      element.dispatchEvent(new CustomEvent('yt-navigate', { bubbles: true, composed: true, detail: { endpoint } }));
+      return true;
+    };
+  }
+
   const sites = {};
 
   // MARK: YouTube Music
@@ -159,6 +175,30 @@
     trackUrl() {
       const id = ytVideoID();
       return id ? C.siteURL('youtubeMusic', 'track', id) : null;
+    },
+    show: ytShow('youtubeMusic', 'ytmusic-app'),
+    /** The site's own way to ask its servers, as its listener (the app
+     *  element's network manager), or null. */
+    network() {
+      const app = $('ytmusic-app');
+      const manager = app && app.networkManager;
+      return manager && typeof manager.fetch === 'function' ? manager : null;
+    },
+    /** Where a song falls in its music video `videoId`: asked the way the
+     *  site asks when a video opens, and read by `C.clipSegments`. Nothing
+     *  on the page changes and nothing plays. */
+    async clip(videoId) {
+      const manager = this.network();
+      if (!manager || C.youtubeVideoId(videoId) !== videoId) return null;
+      const answer = await manager.fetch('/next', {
+        videoId,
+        playlistId: 'RDAMVM' + videoId,
+        enablePersistentPlaylistPanel: true,
+        isAudioOnly: true,
+        tunerSettingValue: 'AUTOMIX_SETTING_NORMAL',
+        watchEndpointMusicSupportedConfigs: { watchEndpointMusicConfig: { hasPersistentPlaylistPanel: true, musicVideoType: 'MUSIC_VIDEO_TYPE_OMV' } },
+      });
+      return C.clipSegments(answer, videoId);
     },
     kind() {
       if (ytIsAd()) return 'advertisement';
@@ -318,6 +358,7 @@
       const id = ytVideoID();
       return id ? C.siteURL('youtube', 'track', id) : null;
     },
+    show: ytShow('youtube', 'ytd-app'),
     kind() {
       const response = ytResponse() || {};
       const micro = (response.microformat || {}).playerMicroformatRenderer || {};
@@ -395,14 +436,16 @@
       isOpen: (id) => location.pathname === '/playlist' && new URLSearchParams(location.search).get('list') === id,
       link: (id) => $(`ytd-guide-renderer a[href*="list=${CSS.escape(id)}"]`),
       rows() {
-        return $$('ytd-playlist-video-list-renderer ytd-playlist-video-renderer')
+        // The list page as it was, then as it is drawn now (the same rows
+        // under other element names).
+        return $$(['ytd-playlist-video-list-renderer ytd-playlist-video-renderer', 'ytd-browse[page-subtype="playlist"] yt-lockup-view-model'])
           .map((item) => {
-            const link = $('a#video-title', item);
+            const link = $(['a#video-title', 'a.ytLockupMetadataViewModelTitle', 'yt-lockup-metadata-view-model a[href*="watch?v="]'], item);
             return {
               title: text(link),
-              artist: C.cleanYouTubeArtist(text($(['ytd-channel-name a', '#channel-name a'], item))),
+              artist: C.cleanYouTubeArtist(text($(['ytd-channel-name a', '#channel-name a', 'yt-content-metadata-view-model a[href^="/channel/"]', 'yt-content-metadata-view-model a[href^="/@"]'], item))),
               album: '',
-              duration: C.parseClock(text($(['ytd-thumbnail-overlay-time-status-renderer', '#time-status'], item))),
+              duration: C.parseClock(text($(['ytd-thumbnail-overlay-time-status-renderer', '#time-status', 'badge-shape .ytBadgeShapeText'], item))),
               trackId: link ? C.youtubeVideoId(absolute(link.getAttribute('href'))) : null,
               play: () => press(link),
             };
@@ -904,9 +947,13 @@
     return site ? sites[site] : null;
   }
 
-  Object.defineProperty(window, '__ahenkSites', {
-    value: Object.freeze({ sites, forHost, helpers: { $, $$, text, press, wait, until, toggleTo, absolute } }),
-    enumerable: false,
-    configurable: false,
-  });
+  try {
+    Object.defineProperty(window, '__ahenkSites', {
+      value: Object.freeze({ sites, forHost, helpers: { $, $$, text, press, wait, until, toggleTo, absolute } }),
+      enumerable: false,
+      configurable: true,
+    });
+  } catch (_) {
+    // Held by scripts that cannot be replaced.
+  }
 })();

@@ -47,7 +47,7 @@ public enum OnboardingPolicy {
 public struct ExtensionVersion: Comparable, Sendable, CustomStringConvertible {
     /// The extension this build of Ahenk carries (`Extension/manifest.json`;
     /// a test keeps the two equal). 1.2.0 added the speed command.
-    public static let shipped = ExtensionVersion(major: 1, minor: 3, patch: 0)
+    public static let shipped = ExtensionVersion(major: 1, minor: 6, patch: 1)
 
     public var major: Int
     public var minor: Int

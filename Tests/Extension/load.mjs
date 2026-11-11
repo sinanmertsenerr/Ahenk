@@ -11,7 +11,8 @@ export function load() {
   require('../../Extension/lib/common.js');
   require('../../Extension/lib/protocol.js');
   require('../../Extension/lib/lyrics.js');
-  return { C: globalThis.AhenkCommon, P: globalThis.AhenkProtocol, L: globalThis.AhenkLyrics };
+  require('../../Extension/lib/sound.js');
+  return { C: globalThis.AhenkCommon, P: globalThis.AhenkProtocol, L: globalThis.AhenkLyrics, S: globalThis.AhenkSound };
 }
 
 /** A shared fixture from Tests/Fixtures/bridge (the Swift tests read them too). */

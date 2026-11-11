@@ -40,11 +40,12 @@ final class SpotifySearchWebReader: SpotifySearchPageReading {
                 return await self.read(url)
             }
             last = Task { _ = await task.value }
-            return await task.value
+            // A search that was typed on is not read (nor waited for).
+            return await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
         }
 
         private func read(_ url: URL) async -> [SpotifySearchRow]? {
-            guard url.host == SpotifySearchPage.host else { return nil }
+            guard url.host == SpotifySearchPage.host, !Task.isCancelled else { return nil }
             release?.cancel()
             defer { scheduleRelease() }
             let webView = self.webView ?? makeWebView()
@@ -56,6 +57,10 @@ final class SpotifySearchWebReader: SpotifySearchPageReading {
             defer { current = nil }
             while Date().timeIntervalSince(started) < Self.timeout, !failed {
                 try? await Task.sleep(for: Self.pollInterval)
+                if Task.isCancelled {
+                    webView.loadHTMLString("", baseURL: nil)
+                    return nil
+                }
                 // The page of this search, not the one before it.
                 guard committed, webView.url?.path.contains("/search/") == true else { continue }
                 if let text = await evaluate(SpotifySearchPage.readScript, in: webView),

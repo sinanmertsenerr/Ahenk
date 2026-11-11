@@ -19,6 +19,14 @@ enum BrowserExtensionInstaller {
         return repositoryFolder
     }
 
+    /// One of the extension's scripts as text (`lib/sound.js`): Ahenk's own
+    /// embedded player holds a clip's sound with the same code the
+    /// extension holds a tab's with.
+    static func script(_ path: String) -> String? {
+        guard let folder = chromiumFolder else { return nil }
+        return try? String(contentsOf: folder.appendingPathComponent(path), encoding: .utf8)
+    }
+
     /// The folder whose `manifest.json` Firefox loads.
     static var firefoxFolder: URL? {
         guard let bundled = bundledFolder?.appendingPathComponent("Firefox", isDirectory: true), hasManifest(bundled) else { return nil }

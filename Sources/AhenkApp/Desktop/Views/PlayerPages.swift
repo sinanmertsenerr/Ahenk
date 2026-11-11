@@ -135,10 +135,15 @@ struct SearchResultsView: View {
         return filters
     }
 
-    private func title(of filter: Filter) -> String {
+    /// "Videos" while the songs are YouTube's own videos.
+    private func songsTitle(_ results: CatalogSearchResults) -> String {
+        results.songs.first.map(YouTubeSongs.isVideo) == true ? "Videos".l10n : "Songs".l10n
+    }
+
+    private func title(of filter: Filter, in results: CatalogSearchResults) -> String {
         switch filter {
         case .all: "All".l10n
-        case .songs: "Songs".l10n
+        case .songs: songsTitle(results)
         case .artists: "Artists".l10n
         case .albums: "Albums".l10n
         }
@@ -151,7 +156,7 @@ struct SearchResultsView: View {
                 Button {
                     withAnimation(.smooth(duration: 0.2)) { filter = item }
                 } label: {
-                    Text(title(of: item))
+                    Text(title(of: item, in: results))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(isOn ? Color.black.opacity(0.85) : .white.opacity(0.9))
                         .padding(.horizontal, 12)
@@ -221,7 +226,7 @@ struct SearchResultsView: View {
 
     private func songsHeader(_ results: CatalogSearchResults) -> some View {
         HStack {
-            WidgetSectionTitle(title: "Songs".l10n)
+            WidgetSectionTitle(title: songsTitle(results))
             if results.songs.count > 4 {
                 Button("Show All".l10n) {
                     withAnimation(.smooth(duration: 0.2)) { filter = .songs }
@@ -314,7 +319,7 @@ private struct TopResultCard: View {
     private var detail: String {
         switch top {
         case .artist: "Artist".l10n
-        case .song(let song): ["Song".l10n, song.artistName].filter { !$0.isEmpty }.joined(separator: " \u{00B7} ")
+        case .song(let song): [YouTubeSongs.isVideo(song) ? "Video".l10n : "Song".l10n, song.artistName].filter { !$0.isEmpty }.joined(separator: " \u{00B7} ")
         case .album(let album): ["Album".l10n, album.artistName].filter { !$0.isEmpty }.joined(separator: " \u{00B7} ")
         }
     }

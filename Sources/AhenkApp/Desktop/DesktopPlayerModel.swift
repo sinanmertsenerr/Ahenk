@@ -250,7 +250,7 @@ final class DesktopPlayerModel {
             trackChanged(nowPlaying.snapshot?.track)
             refreshPlaylists()
         } else {
-            artistTask?.cancel()
+                artistTask?.cancel()
             isVolumeOpen = false
             images.trim()
         }
@@ -958,12 +958,23 @@ final class DesktopPlayerModel {
             return
         }
         let catalog = self.catalog
+        // The source picks play in lists its own songs where Ahenk can ask
+        // it: what it has is found, and a pick is that very song there.
+        let source = listeningSource
+        let own = services.songSearch(for: source)
+        // Spotify is read from its search page, a page per search.
+        let pause: Duration = source == .spotify || source == .spotifyWeb ? .milliseconds(550) : .milliseconds(320)
         searchTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(320))
+            try? await Task.sleep(for: pause)
             guard !Task.isCancelled, let self else { return }
             if self.search.value == nil { self.search = .loading }
             do {
-                let results = try await catalog.search(term, limit: 50)
+                let results: CatalogSearchResults
+                if let own {
+                    results = try await SourceSearch.search(term, in: own, catalog: catalog, limit: 50)
+                } else {
+                    results = try await catalog.search(term, limit: 50)
+                }
                 guard !Task.isCancelled else { return }
                 self.search = .loaded(results)
             } catch {
@@ -1044,7 +1055,7 @@ final class DesktopPlayerModel {
         let player = settings.player
         let wallpaper = settings.wallpaper
         return PlayerLayoutState(
-            size: player.size, showsAlbums: player.showAlbums, showsSearch: player.showSearch,
+            size: player.size, showsSearch: player.showSearch,
             showsBar: player.showPlayerBar, showsPage: showsPage, isSearchOpen: isSearchOpen || isSearching,
             showsWallpaperPicker: self.wallpaper != nil && wallpaper.enabled && wallpaper.showPicker
         )

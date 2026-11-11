@@ -154,8 +154,6 @@ public struct PlayerSettings: Codable, Equatable, Sendable {
     public var clockFormat: ClockFormat = .system
     public var clockScale = 1.0
     public var showContinuePlaying = true
-    /// The artist's albums as a cover flow.
-    public var showAlbums = true
     public var showSearch = true
     public var showPlayerBar = true
     /// Where picks from search, albums and lists play (the source picker at
@@ -181,7 +179,6 @@ public struct PlayerSettings: Codable, Equatable, Sendable {
         clockFormat = c.lenient(.clockFormat, d.clockFormat)
         clockScale = c.lenient(.clockScale, d.clockScale, in: Self.clockScaleRange)
         showContinuePlaying = c.lenient(.showContinuePlaying, d.showContinuePlaying)
-        showAlbums = c.lenient(.showAlbums, d.showAlbums)
         showSearch = c.lenient(.showSearch, d.showSearch)
         showPlayerBar = c.lenient(.showPlayerBar, d.showPlayerBar)
         listeningSource = c.lenientOptional(.listeningSource)

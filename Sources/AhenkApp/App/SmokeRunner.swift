@@ -83,6 +83,10 @@ final class SmokeRunner {
         if let wait = environment.options.bridgeWait, let port = environment.options.bridgePort, selected("bridgeLive") {
             await report.check("bridgeLive") { try await BridgeCheck.runLive(port: port, wait: wait) }
         }
+        // Needs the network, YouTube and whisper: only when asked for by name, for one named song.
+        if only?.contains("clipLive") == true, let song = environment.options.wallpaperSong {
+            await report.check("clipLive") { try await SongClipCheck.runLive(song: song, settings: self.environment.settings) }
+        }
         // Last: it reuses the snapshots the checks above wrote.
         if let gallery = environment.options.galleryDirectory, selected("gallery") {
             let output = URL(fileURLWithPath: (gallery as NSString).expandingTildeInPath, isDirectory: true)
@@ -759,7 +763,7 @@ final class SmokeRunner {
         for language in AppLanguage.allCases {
             settings.general.language = language
             let scenes: [(String, () -> Void)] = [
-                ("albums", { model.closePages(); model.setSize(.large) }),
+                ("large", { model.closePages(); model.setSize(.large) }),
                 ("search", { model.query = "nova" }),
                 ("album", { model.query = ""; model.closePages(); model.open(.album(album)) }),
                 ("artist", { model.closePages(); model.open(.artist(artist)) }),

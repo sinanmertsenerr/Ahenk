@@ -25,6 +25,13 @@ import AppKit
 /// A window the song jumped in is not used: after a seek it is dropped at
 /// once and the next one starts there; a stall shows at the window's end.
 ///
+/// A browser tab with Ahenk's extension need not be listened to: its
+/// player holds the video's sound well before it plays it, and hands it
+/// over (`heldSound`). The same ten-second windows are then read from what
+/// is held, from the video's start, as fast as whisper reads them: the
+/// answer is there before the first line is sung. Listening is what is
+/// left when the tab cannot be asked.
+///
 /// Never runs on a tap that hears every app (the fallback), never for
 /// lyrics a provider proved for the exact recording, never over the user's
 /// own nudge. The audio stays in memory until measured (a video's window is
@@ -46,6 +53,14 @@ final class LyricsAutoSync {
     /// False while the Mac should run lighter (Low Power Mode, heat): a
     /// video's words are not recognised then.
     var mayRecognize: () -> Bool = { true }
+    /// The song's player holds its sound ahead and can be asked for it (a
+    /// browser tab with the extension).
+    var holdsSound: (NowPlayingSnapshot) -> Bool = { _ in false }
+    /// Seconds of the sound the song's player holds, from a place in the song.
+    var heldSound: ((_ song: NowPlayingSnapshot, _ from: Double, _ seconds: Double) async -> HeldSoundAnswer)?
+    /// The song and timeline whose held sound is being read, and the reading.
+    private var readingAhead: String?
+    private var reader: Task<Void, Never>?
     /// What was heard of a video's words, per song and timeline.
     private var hearings: [String: Hearing] = [:]
     /// whisper is reading a window…
@@ -91,6 +106,22 @@ final class LyricsAutoSync {
         var isSettled = false
         /// The words said how the video runs; nothing more is read.
         var isAnswered = false
+        /// Reading the sound the player holds: where the next window
+        /// starts, answers without sound in a row, and whether the player
+        /// is asked at all (it failed to answer, or stopped holding more).
+        var readFrom = 0.0
+        var misses = 0
+        var failures = 0
+        var cannotReadAhead = false
+    }
+
+    /// What a player says when asked for the sound it holds.
+    enum HeldSoundAnswer: Sendable {
+        case sound(HeldSound)
+        /// It does not hold that much yet.
+        case notYet
+        /// It could not be asked, or plays something else.
+        case failed
     }
 
     /// A window for a video's words, and how many of them at most. Short
@@ -110,6 +141,12 @@ final class LyricsAutoSync {
     /// A slip this large is a seek (or the page correcting where a new
     /// song stands): the window is dropped without waiting for its end.
     static let seekSlip = 1.0
+    /// A player that holds no more is asked again this often, and given
+    /// up (for listening) after this many times in a row, or after this
+    /// many answers that failed.
+    static let readAgainAfter = 2.0
+    static let maximumMisses = 45
+    static let maximumFailures = 3
     /// A video this close to the lyrics' timing is left to the onsets.
     static let smallestShift = 1.5
 
@@ -143,6 +180,7 @@ final class LyricsAutoSync {
         isStarted = false
         observers = []
         cancel()
+        stopReading()
     }
 
     private struct Trigger: Equatable {
@@ -162,14 +200,27 @@ final class LyricsAutoSync {
         guard settings.lyrics.autoSync, lyrics.phase == .synced, let synced = lyrics.lyrics, let query = lyrics.query,
               lyrics.timingAuthority.allowsAutomaticCorrection, lyrics.manualOffset == nil, lyrics.autoOffset == nil,
               let snapshot = nowPlaying.snapshot, snapshot.isPlaying, abs(snapshot.playbackRate - 1) < 0.01,
-              audio.hearsFollowedPlayer, !isSuspended()
+              !isSuspended()
         else {
             cancel()
+            stopReading()
             return
         }
         let key = query.cacheKey
         let fingerprint = synced.timingFingerprint
         let sessionKey = key + "\u{1}" + fingerprint
+        if readingAhead != nil, readingAhead != sessionKey { stopReading() }
+        // A video whose player holds its sound ahead is read, not listened to.
+        if Self.isVideo(snapshot), hearings[sessionKey]?.isSettled != true, let runner = readingRunner(sessionKey, snapshot: snapshot) {
+            cancel()
+            readAhead(sessionKey, snapshot: snapshot, lyrics: synced, query: query, fingerprint: fingerprint, runner: runner)
+            return
+        }
+        stopReading()
+        guard audio.hearsFollowedPlayer else {
+            cancel()
+            return
+        }
         if let context, context.session != sessionKey || context.snapshot.track.id != snapshot.track.id { cancel() }
         // A seek is seen as it happens: the rest of the window is not waited for.
         if let context, capture != nil {
@@ -360,25 +411,40 @@ final class LyricsAutoSync {
         }
     }
 
-    /// Adds a window's words to the song's and decides: the video runs
-    /// apart from the lyrics (they are moved), with them, or it cannot be
-    /// told yet.
+    /// A window that was listened to, read by whisper.
     private func heard(_ transcript: WhisperTranscript?, seconds: Double, took: Double, position: Double, context: Context) {
         isRecognizing = false
         defer { readNext() }
         guard let words = context.words else { return }
         var hearing = hearings[context.session] ?? Hearing()
         hearing.waiting = max(0, hearing.waiting - 1)
-        guard !hearing.isAnswered else {
-            hearings[context.session] = hearing
-            return
-        }
+        hearings[context.session] = hearing
+        guard !hearing.isAnswered else { return }
+        decide(
+            transcript, seconds: seconds, took: took, position: position, session: context.session, fingerprint: context.fingerprint,
+            lyrics: words.lyrics, query: words.query, ahead: false
+        )
+    }
+
+    /// Adds a window's words to the song's and decides: the video runs
+    /// apart from the lyrics (they are moved), with them, or it cannot be
+    /// told yet. `position` is the song's at the window's first sample;
+    /// `ahead`: the window was read from what the player holds.
+    private func decide(
+        _ transcript: WhisperTranscript?, seconds: Double, took: Double, position: Double, session: String, fingerprint: String,
+        lyrics synced: SyncedLyrics, query: LyricsQuery, ahead: Bool
+    ) {
+        var hearing = hearings[session] ?? Hearing()
         hearing.windows += 1
         // Counts only: words are never written to the log.
         let found = transcript?.words ?? []
         hearing.words += found.map { RecognizedWord(text: $0.text, start: $0.start + position, end: $0.end + position, confidence: $0.confidence) }
-        let shift = LyricShiftEstimator.estimate(lines: words.lyrics.lines, words: hearing.words)
-        let about = "Heard \(found.count) words in \(Int(seconds.rounded())) s of the video (\(transcript?.language ?? "?"), \(String(format: "%.1f", took)) s)"
+        let shift = LyricShiftEstimator.estimate(lines: synced.lines, words: hearing.words)
+        let stretch = "\(Int(seconds.rounded())) s of the video"
+        let read = "(\(transcript?.language ?? "?"), \(String(format: "%.1f", took)) s)"
+        let about = ahead
+            ? "Read \(found.count) words in \(stretch) from \(Self.clock(position)), before it plays \(read)"
+            : "Heard \(found.count) words in \(stretch) \(read)"
         let evidence = shift.map { "\($0.lines) lines and \($0.words) words say \(String(format: "%+.1f", $0.seconds)) s, \(String(format: "%.1f", $0.score)) against \(String(format: "%.1f", $0.rivalScore))" } ?? "none of them in the lyrics"
         var moved: Double?
         if let shift, shift.isConfident {
@@ -396,16 +462,114 @@ final class LyricsAutoSync {
         } else {
             log.info("\(about): \(evidence); not enough to tell yet")
         }
-        hearings[context.session] = hearing
+        hearings[session] = hearing
         // Nothing more is heard for a song that is settled.
-        if hearing.isSettled, self.context?.words != nil, self.context?.session == context.session { cancel() }
+        if hearing.isSettled, self.context?.words != nil, self.context?.session == session { cancel() }
         // The lyrics the words were looked up in must still be the ones shown.
-        guard let moved, lyrics.query == words.query, lyrics.lyrics?.timingFingerprint == context.fingerprint else {
+        guard let moved, lyrics.query == query, lyrics.lyrics?.timingFingerprint == fingerprint else {
             evaluate()
             return
         }
         let lyrics = self.lyrics
-        Task { await lyrics.adoptAligned(words.lyrics.shifted(by: moved), for: words.query) }
+        Task { await lyrics.adoptAligned(synced.shifted(by: moved), for: query) }
+    }
+
+    /// 0:42.
+    private static func clock(_ seconds: Double) -> String {
+        let whole = Int(max(0, seconds).rounded())
+        return "\(whole / 60):" + String(format: "%02d", whole % 60)
+    }
+
+    // MARK: A video's sound, read before it plays
+
+    /// whisper for the sound the song's player holds, when the player can
+    /// be asked for it and this song has not shown that it cannot.
+    private func readingRunner(_ session: String, snapshot: NowPlayingSnapshot) -> WhisperRunner? {
+        guard heldSound != nil, hearings[session]?.cannotReadAhead != true, mayRecognize(), holdsSound(snapshot) else { return nil }
+        let tools = WhisperLocator.system.locate(
+            executableOverride: settings.lyrics.whisperExecutablePath, modelOverride: settings.lyrics.whisperModelPath
+        )
+        // Without whisper, listening says so (and leaves the song to the onsets).
+        guard let executable = tools.executable, let model = tools.model else { return nil }
+        return WhisperRunner(executable: executable, model: model)
+    }
+
+    private func stopReading() {
+        reader?.cancel()
+        reader = nil
+        readingAhead = nil
+    }
+
+    /// Reads the sound the player holds, a window after the other from
+    /// where the last reading stopped, until the words answer, the windows
+    /// are used up or the player has no more to give.
+    private func readAhead(_ session: String, snapshot: NowPlayingSnapshot, lyrics synced: SyncedLyrics, query: LyricsQuery, fingerprint: String, runner: WhisperRunner) {
+        guard readingAhead == nil, let heldSound else { return }
+        readingAhead = session
+        if hearings.count > 64 { hearings = [:] }
+        if hearings[session] == nil {
+            hearings[session] = Hearing()
+            log.info("The browser holds the video's sound ahead of the song: reading it \(Int(Self.hearingSeconds)) s at a time")
+        }
+        reader = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, self.readingAhead == session else { return }
+                // One whisper at a time.
+                if self.isRecognizing {
+                    try? await Task.sleep(for: .milliseconds(300))
+                    continue
+                }
+                var hearing = self.hearings[session] ?? Hearing()
+                guard !hearing.isSettled, !hearing.cannotReadAhead, hearing.windows < Self.maximumHearings, self.mayRecognize() else { break }
+                let answer = await heldSound(snapshot, hearing.readFrom, Self.hearingSeconds)
+                guard !Task.isCancelled, self.readingAhead == session else { return }
+                hearing = self.hearings[session] ?? Hearing()
+                switch answer {
+                case .failed:
+                    hearing.failures += 1
+                    if hearing.failures >= Self.maximumFailures {
+                        hearing.cannotReadAhead = true
+                        self.log.info("The browser did not give the video's sound; listening instead")
+                    }
+                    self.hearings[session] = hearing
+                    try? await Task.sleep(for: .seconds(1))
+                case .notYet:
+                    hearing.misses += 1
+                    if hearing.misses >= Self.maximumMisses {
+                        hearing.cannotReadAhead = true
+                        self.log.info("The browser holds no more of the video's sound; listening instead")
+                    }
+                    self.hearings[session] = hearing
+                    try? await Task.sleep(for: .seconds(Self.readAgainAfter))
+                case .sound(let sound):
+                    let wav = FileManager.default.temporaryDirectory.appendingPathComponent("ahenk-sync-\(UUID().uuidString).wav")
+                    let started = Date()
+                    var transcript: WhisperTranscript?
+                    do {
+                        try await Task.detached(priority: .utility) { try WhisperAudio.write(sound.samples, rate: sound.sampleRate, to: wav) }.value
+                        transcript = try await runner.transcribe(wav, timeout: 180)
+                    } catch {
+                        self.log.error("whisper did not read a video's window: \(error)")
+                    }
+                    try? FileManager.default.removeItem(at: wav)
+                    // A reading that was stopped meanwhile is read again later.
+                    guard !Task.isCancelled, self.readingAhead == session else { return }
+                    hearing = self.hearings[session] ?? Hearing()
+                    hearing.misses = 0
+                    hearing.failures = 0
+                    hearing.readFrom = sound.start + sound.seconds
+                    self.hearings[session] = hearing
+                    self.decide(
+                        transcript, seconds: sound.seconds, took: Date().timeIntervalSince(started), position: sound.start,
+                        session: session, fingerprint: fingerprint, lyrics: synced, query: query, ahead: true
+                    )
+                }
+            }
+            guard let self, self.readingAhead == session else { return }
+            self.readingAhead = nil
+            self.reader = nil
+            self.evaluate()
+        }
     }
 
     /// Hands whisper the oldest window still worth reading: one of the

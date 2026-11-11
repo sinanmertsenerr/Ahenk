@@ -298,6 +298,36 @@ function toneURL() {
   return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
 }
 
+// MARK: Pages in place, and the question before leaving
+
+// The site's app element shows a video, a search or a playlist without
+// loading a page when it is told to (what a click on a link of its own
+// carries).
+$('ytmusic-app').addEventListener('yt-navigate', (event) => {
+  const endpoint = (event.detail && event.detail.endpoint) || {};
+  const watch = endpoint.watchEndpoint;
+  const search = endpoint.searchEndpoint;
+  const browse = endpoint.browseEndpoint;
+  if (watch && SONGS[watch.videoId]) {
+    const list = PLAYLISTS[watch.playlistId];
+    const queue = list ? list.songs : [watch.videoId];
+    load(queue, Math.max(0, queue.indexOf(watch.videoId)), { list: list ? watch.playlistId : null });
+  } else if (search && search.query) {
+    history.pushState(null, '', '/search?q=' + encodeURIComponent(search.query));
+    render();
+  } else if (browse && /^VL/.test(browse.browseId || '') && PLAYLISTS[browse.browseId.slice(2)]) {
+    history.pushState(null, '', '/playlist?list=' + browse.browseId.slice(2));
+    render();
+  }
+});
+
+// Like the site, it asks before a page that plays is replaced by another.
+window.addEventListener('beforeunload', (event) => {
+  if (!player.playing) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+
 // MARK: Start
 
 renderGuide();

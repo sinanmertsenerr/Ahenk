@@ -17,4 +17,6 @@ if [ ! -d node_modules/playwright ]; then
 fi
 # Playwright's own Chromium build (cached in ~/Library/Caches/ms-playwright).
 npx --no-install playwright install chromium
-exec node e2e.mjs
+node e2e.mjs
+# The extension's scripts taking over a page that plays (no Ahenk needed).
+exec node takeover.mjs

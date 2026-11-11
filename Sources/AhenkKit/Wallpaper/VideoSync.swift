@@ -30,6 +30,23 @@ public enum VideoSync {
     public static let jumpLead: TimeInterval = 0.9
     /// After a jump the player is left to settle this long before the next.
     public static let settleTime: TimeInterval = 4
+    /// Drift that brings a jump for a clip whose place in the song is
+    /// known (`SongClipMap`): lips are watched there, and half a second
+    /// off shows. Jumps stay rare all the same, because they are aimed
+    /// with a lead learned from where the ones before landed
+    /// (`adjustedLead`).
+    public static let mappedTolerance: TimeInterval = 0.6
+    public static let leadRange: ClosedRange<TimeInterval> = 0...3
+
+    /// The lead for the next jump, from where the last one landed: `error`
+    /// is how far the video was ahead of where it should be once it had
+    /// settled (negative: behind). Most of the error is taken out at once;
+    /// one that large was not a landing (the song was moved meanwhile) and
+    /// teaches nothing.
+    public static func adjustedLead(_ lead: TimeInterval, error: TimeInterval) -> TimeInterval {
+        guard lead.isFinite, error.isFinite, abs(error) < 3 else { return lead }
+        return min(leadRange.upperBound, max(leadRange.lowerBound, lead - error * 0.7))
+    }
 
     public static func mode(isSongVideo: Bool, syncEnabled: Bool, songDuration: TimeInterval?, videoDuration: TimeInterval?) -> VideoSyncMode {
         guard isSongVideo, syncEnabled else { return .loops }
@@ -50,7 +67,8 @@ public enum VideoSync {
     /// `jumpLead`), or `nil` when it is close enough. Past the video's end
     /// (a longer song), it holds its last moments.
     public static func correction(
-        songPosition: TimeInterval, videoPosition: TimeInterval, videoDuration: TimeInterval?, tolerance: TimeInterval = driftTolerance
+        songPosition: TimeInterval, videoPosition: TimeInterval, videoDuration: TimeInterval?, tolerance: TimeInterval = driftTolerance,
+        lead: TimeInterval = jumpLead
     ) -> TimeInterval? {
         guard songPosition.isFinite, videoPosition.isFinite else { return nil }
         var target = max(0, songPosition)
@@ -61,6 +79,6 @@ public enum VideoSync {
             target = min(target, last)
         }
         guard abs(videoPosition - target) > tolerance else { return nil }
-        return min(target + jumpLead, last)
+        return min(target + max(0, lead), last)
     }
 }

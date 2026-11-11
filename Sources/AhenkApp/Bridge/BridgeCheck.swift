@@ -124,6 +124,22 @@ enum BridgeCheck {
         try await client.send(.result(BridgeResult(id: request.id, ok: true, outcome: .started, tabID: 7)))
         guard await outcome == .started else { throw SmokeFailure("the pick's answer was not \u{201C}started\u{201D}") }
 
+        // The sound a tab's player holds ahead: asked for by seconds of the
+        // song, answered in one large frame (ten seconds, a generated tone).
+        let tone: [Int16] = (0..<160_000).map { Int16(12_000 * sin(2 * Double.pi * 440 * Double($0) / 16_000)) }
+        var packed = Data(capacity: tone.count * 2)
+        for value in tone { withUnsafeBytes(of: value.littleEndian) { packed.append(contentsOf: $0) } }
+        async let held = server.heldSound(inTab: "smoke/7", from: 20, seconds: 10)
+        guard case .request(let asked) = try await client.receive(), asked.kind == .sound, asked.tabID == 7,
+              asked.song?.trackID == "smokeVideo1", asked.from == 20, asked.seconds == 10
+        else { throw SmokeFailure("the request for the tab's held sound did not reach it") }
+        let answer = BridgeResult(id: asked.id, ok: true, tabID: 7, sound: BridgeSound(heldFrom: 0, heldUntil: 39.8, start: 20, rate: 16_000, samples: packed.base64EncodedString()))
+        let frame = try BridgeInbound.result(answer).encoded().count
+        try await client.send(.result(answer))
+        guard let sound = await held?.sound?.window, sound.start == 20, sound.samples.count == tone.count,
+              zip(sound.samples, tone).allSatisfy({ abs($0 - Float($1) / 32_768) < 1e-6 })
+        else { throw SmokeFailure("the tab's held sound did not come back whole") }
+
         // A connection that never says hello is told and closed.
         let silent = BridgeLoopbackClient(port: port, origin: BridgeLoopbackClient.extensionOrigin)
         guard case .error(let code, _) = try await silent.receive(timeout: 5), code == "noHello" else {
@@ -141,7 +157,7 @@ enum BridgeCheck {
         }
         return "127.0.0.1:\(port): web origin refused, extension welcomed (protocol \(welcome.protocolVersion)); the hub followed the tab "
             + "and hid the system's guess of the same song; pause round trip; site lyrics answered as the recording's own; "
-            + "a pick reached the tab; a silent connection closed; socket owner found; the tab left with its connection; \(packaged)"
+            + "a pick reached the tab; ten seconds of the tab's held sound came back whole (a frame of \(frame / 1000) kB); a silent connection closed; socket owner found; the tab left with its connection; \(packaged)"
             + (drawn.map { ", install steps drawn in \($0) languages" } ?? "")
     }
 
@@ -194,7 +210,7 @@ enum BridgeCheck {
         let gecko = (try manifest(firefox)["browser_specific_settings"] as? [String: Any])?["gecko"] as? [String: Any]
         guard gecko?["id"] is String else { throw SmokeFailure("the Firefox manifest has no add-on ID") }
         for folder in [chromium, firefox] {
-            for file in ["background.js", "lib/protocol.js", "page/engine.js", "content/relay.js", "popup/popup.html", "_locales/tr/messages.json"] {
+            for file in ["background.js", "lib/protocol.js", "lib/sound.js", "page/engine.js", "content/relay.js", "popup/popup.html", "_locales/tr/messages.json"] {
                 guard FileManager.default.fileExists(atPath: folder.appendingPathComponent(file).path) else {
                     throw SmokeFailure("\(folder.lastPathComponent) lacks \(file)")
                 }
